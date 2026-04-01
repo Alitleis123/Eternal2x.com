@@ -128,6 +128,17 @@ local REPO_ROOT = trim_trailing_sep(conf["repo_root"] or root or "")
 local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
+local CONF_PATH = (root ~= "" and (root .. "/") or "") .. "Eternal2x.conf"
+
+local function save_conf()
+    local f = io.open(CONF_PATH, "w")
+    if not f then return end
+    f:write("repo_root=" .. REPO_ROOT .. "\n")
+    f:write("python=" .. PYTHON .. "\n")
+    f:write("update_url=" .. UPDATE_URL .. "\n")
+    f:write("auto_update=" .. (AUTO_UPDATE and "true" or "false") .. "\n")
+    f:close()
+end
 
 local function read_version()
     local vf = io.open((REPO_ROOT ~= "" and (REPO_ROOT .. "/") or "") .. "VERSION", "r")
@@ -194,6 +205,9 @@ local win = disp:AddWindow({
             font-size: 11px;
         }
         QPushButton#UpdateBtn:hover { background-color: #201b45; }
+        QCheckBox { color: #9b8ec2; font-size: 11px; spacing: 6px; }
+        QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #4a3d8f; background: #12101f; }
+        QCheckBox::indicator:checked { background: #a78bfa; border-color: #c4b5fd; }
         QSlider::groove:horizontal {
             height: 6px;
             border-radius: 3px;
@@ -238,7 +252,10 @@ local win = disp:AddWindow({
     ui:Label{ID="StatusSection", Text="STATUS", ObjectName="Section"},
     ui:Label{ID="Status", Text="Ready.", ObjectName="Status", WordWrap=true},
     ui:Label{ID="Meta", Text="Repo: (not set)", ObjectName="Meta", WordWrap=true},
-    ui:Button{ID="UpdateBtn", Text="Check for Updates", ObjectName="UpdateBtn"},
+    ui:HGroup{
+        ui:Button{ID="UpdateBtn", Text="Check for Updates", ObjectName="UpdateBtn"},
+        ui:CheckBox{ID="AutoUpdateCB", Text="Auto-update", Checked=AUTO_UPDATE},
+    },
 })
 
 local items = win:GetItems()
@@ -357,6 +374,16 @@ end
 
 function win.On.UpdateBtn.Clicked(ev)
     run_update(false)
+end
+
+function win.On.AutoUpdateCB.Clicked(ev)
+    AUTO_UPDATE = items.AutoUpdateCB.Checked
+    save_conf()
+    if AUTO_UPDATE then
+        set_status("Auto-update enabled.")
+    else
+        set_status("Auto-update disabled. Use 'Check for Updates' manually.")
+    end
 end
 
 win:Show()
