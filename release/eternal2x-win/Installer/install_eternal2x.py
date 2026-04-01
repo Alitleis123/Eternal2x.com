@@ -7,7 +7,7 @@ import sys
 
 DEFAULT_UPDATE_URL = (
     "https://raw.githubusercontent.com/"
-    "Alitleis123/DaVinchi-Resolve-Smart-Upscale-Plugin/main/update/latest.json"
+    "Alitleis123/Eternal2x.com/main/update/latest.json"
 )
 
 

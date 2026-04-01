@@ -71,14 +71,20 @@
 
     <!-- Hero -->
     <div class="hero">
-        <h1>What is <span>Eternal2x</span> ?</h1>
+        <div class="badge">
+            <span class="badge-dot"></span>
+            DaVinci Resolve Plugin
+        </div>
+        <h1>Upscale smarter<br>with <span>Eternal2x</span></h1>
         <p>
-            Eternal2x is a <strong>plugin</strong> for DaVinci Resolve that improves the <strong>quality</strong>
-            and <strong>smoothness</strong> of clips with intelligent motion-aware upscaling — similar to what
-            Topaz and Flowframes do, but built right into your timeline.
+            Motion-aware upscaling and interpolation built directly into your DaVinci Resolve timeline.
+            No external tools. No render-export loops. Just 4 buttons.
         </p>
         <div class="hero-buttons">
-            <a href="download.html" class="btn btn-primary">Download</a>
+            <a href="download.html" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Download
+            </a>
             <a href="help.html" class="btn btn-secondary">Documentation</a>
         </div>
     </div>
@@ -88,11 +94,32 @@
         <div class="video-placeholder">
             <!-- Replace with your YouTube embed: -->
             <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID" allowfullscreen></iframe> -->
-            Video preview coming soon
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Demo video coming soon
         </div>
     </div>
 
-    <!-- Features -->
+    <!-- Stats -->
+    <div class="stats-row">
+        <div class="stat-card">
+            <div class="stat-value">2x</div>
+            <div class="stat-label">Super Scale</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">4</div>
+            <div class="stat-label">Button Workflow</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">0</div>
+            <div class="stat-label">External Tools</div>
+        </div>
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- How it works -->
     <div class="section">
         <h2 class="section-title">How it works</h2>
         <p class="section-subtitle">4 buttons. 1 slider. That's the entire UI.</p>
@@ -100,43 +127,69 @@
 
     <div class="features">
         <div class="feature-card">
-            <h3><span class="feature-icon">&#9201;</span> Detect Motion</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                Detect Motion
+            </h3>
             <p>Analyzes every frame using tile-based motion scoring. Places labeled markers on your timeline so you can preview and fine-tune exactly where motion happens.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#9986;</span> Sequence</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                Sequence
+            </h3>
             <p>Cuts at every marker position and converts clips into 1-frame segments for precise interpolation control. Your markers are the source of truth.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#9638;</span> Regroup</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Regroup
+            </h3>
             <p>Removes gaps left over from cutting and makes the entire sequence continuous again. Markers shift to match the new positions automatically.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#9889;</span> Upscale + Interpolate</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                Upscale + Interpolate
+            </h3>
             <p>Applies 2x Super Scale to every clip. Motion segments get Optical Flow interpolation. Static segments use Nearest for speed. Smart, not brute-force.</p>
         </div>
     </div>
 
-    <!-- How it's different -->
+    <div class="section-divider"></div>
+
+    <!-- Why Eternal2x -->
     <div class="section">
-        <h2 class="section-title">Why Eternal2x?</h2>
+        <h2 class="section-title">Why Eternal2x</h2>
     </div>
 
     <div class="features">
         <div class="feature-card">
-            <h3><span class="feature-icon">&#128268;</span> Built into Resolve</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                Built into Resolve
+            </h3>
             <p>No external software, no render-export-reimport loops. Eternal2x runs as a native Resolve script panel directly on your timeline.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#128296;</span> One-Click Install</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                One-Click Install
+            </h3>
             <p>Double-click the installer — it handles Python, packages, and Resolve setup automatically. No terminal commands, no manual file copying.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#128260;</span> Auto Updates</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                Auto Updates
+            </h3>
             <p>Install once, stay current forever. Eternal2x checks for updates every time you open it and applies them silently in the background.</p>
         </div>
         <div class="feature-card">
-            <h3><span class="feature-icon">&#127912;</span> Motion-Aware</h3>
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                Motion-Aware
+            </h3>
             <p>Only interpolates where it matters. Static areas stay fast. Motion areas get full Optical Flow treatment. You control the sensitivity.</p>
         </div>
     </div>
@@ -152,9 +205,14 @@
     </div>
 
     <!-- Footer -->
-    <div style="margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim);">
-        Eternal2x &middot; Questions? <a href="mailto:Justlighttbusiness@gmail.com">Justlighttbusiness@gmail.com</a>
-    </div>
+    <footer class="site-footer">
+        <span>&copy; 2026 Eternal2x</span>
+        <span>
+            <a href="contact.html">Contact</a> &middot;
+            <a href="help.html">Help</a> &middot;
+            <a href="download.html">Download</a>
+        </span>
+    </footer>
 
 </main>
 

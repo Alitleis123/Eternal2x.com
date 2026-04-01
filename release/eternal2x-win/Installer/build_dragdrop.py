@@ -23,7 +23,7 @@ def main() -> int:
         f"repo_root={dist_root}\n"
         "python=python\n"
         "update_url=https://raw.githubusercontent.com/"
-        "Alitleis123/DaVinchi-Resolve-Smart-Upscale-Plugin/main/update/latest.json\n"
+        "Alitleis123/Eternal2x.com/main/update/latest.json\n"
         "auto_update=true\n",
         encoding="utf-8",
     )
