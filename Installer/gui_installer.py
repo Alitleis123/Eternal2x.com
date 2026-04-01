@@ -53,15 +53,15 @@ DEFAULT_UPDATE_URL = (
 # UI colors
 # ---------------------------------------------------------------------------
 
-BG = "#0d131c"
-BG_CARD = "#101a28"
-FG = "#e6eefb"
-FG_DIM = "#8fa8c5"
-ACCENT = "#ff9a4d"
-BTN_BG = "#20354f"
-SUCCESS = "#4caf50"
+BG = "#09090f"
+BG_CARD = "#12101f"
+FG = "#e8e4f7"
+FG_DIM = "#9b8ec2"
+ACCENT = "#a78bfa"
+BTN_BG = "#1c1740"
+SUCCESS = "#4ade80"
 ERROR = "#ef5350"
-BORDER = "#2f455f"
+BORDER = "#2a2450"
 
 
 # ---------------------------------------------------------------------------
@@ -295,8 +295,8 @@ class InstallerApp:
 
         self.install_btn = tk.Button(
             btn_frame, text="Install", font=(font_family, 13, "bold"),
-            bg=ACCENT, fg="#0d131c", activebackground="#ffb374",
-            activeforeground="#0d131c", borderwidth=0, relief="flat",
+            bg=ACCENT, fg="#09090f", activebackground="#c4b5fd",
+            activeforeground="#09090f", borderwidth=0, relief="flat",
             padx=44, pady=10, cursor="hand2",
             command=self._start_install,
         )
@@ -304,7 +304,7 @@ class InstallerApp:
 
         self.close_btn = tk.Button(
             btn_frame, text="Close", font=(font_family, 11),
-            bg=BTN_BG, fg=FG, activebackground="#2b4a73",
+            bg=BTN_BG, fg=FG, activebackground="#2a2360",
             activeforeground=FG, borderwidth=0, relief="flat",
             padx=26, pady=10, cursor="hand2",
             command=self.root.destroy,

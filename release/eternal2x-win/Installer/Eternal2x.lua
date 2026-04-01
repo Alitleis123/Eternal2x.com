@@ -145,23 +145,23 @@ local win = disp:AddWindow({
     Geometry = {100, 100, 440, 480},
     StyleSheet = [[
         QWidget {
-            background-color: #0d131c;
-            color: #e6eefb;
+            background-color: #09090f;
+            color: #e8e4f7;
             font-size: 12px;
         }
         QLabel#Title {
             font-size: 20px;
             font-weight: 700;
-            color: #f7fbff;
+            color: #f0ecff;
             padding-top: 4px;
         }
         QLabel#SubTitle {
-            color: #9fb7d4;
+            color: #9b8ec2;
             font-size: 11px;
             padding-bottom: 6px;
         }
         QLabel#Section {
-            color: #b9cbe3;
+            color: #c4b8e0;
             font-size: 10px;
             font-weight: 700;
             padding-top: 8px;
@@ -169,54 +169,54 @@ local win = disp:AddWindow({
             letter-spacing: 0.5px;
         }
         QLabel#Meta {
-            color: #8fa8c5;
-            background-color: #101a28;
-            border: 1px solid #2f455f;
+            color: #9b8ec2;
+            background-color: #12101f;
+            border: 1px solid #2a2450;
             border-radius: 6px;
             padding: 6px 8px;
             font-size: 10px;
         }
         QPushButton {
-            background-color: #20354f;
-            border: 1px solid #4b78aa;
+            background-color: #1c1740;
+            border: 1px solid #4a3d8f;
             border-radius: 7px;
             min-height: 32px;
             padding: 6px 12px;
             font-weight: 600;
             font-size: 12px;
         }
-        QPushButton:hover { background-color: #2b4a73; }
-        QPushButton:pressed { background-color: #1b304b; }
+        QPushButton:hover { background-color: #2a2360; }
+        QPushButton:pressed { background-color: #151230; }
         QPushButton#UpdateBtn {
-            background-color: #1a2e44;
-            border: 1px solid #3a5a7e;
+            background-color: #16132e;
+            border: 1px solid #352d6b;
             min-height: 26px;
             font-size: 11px;
         }
-        QPushButton#UpdateBtn:hover { background-color: #253f5c; }
+        QPushButton#UpdateBtn:hover { background-color: #201b45; }
         QSlider::groove:horizontal {
             height: 6px;
             border-radius: 3px;
-            background: #2b3f59;
+            background: #2a2450;
         }
         QSlider::handle:horizontal {
             width: 16px;
             height: 16px;
-            background: #ff9a4d;
-            border: 1px solid #ffbf8f;
+            background: #a78bfa;
+            border: 1px solid #c4b5fd;
             border-radius: 8px;
             margin: -5px 0;
         }
         QSlider::sub-page:horizontal {
-            background: #ff9a4d;
+            background: #a78bfa;
             border-radius: 3px;
         }
         QLabel#Status {
-            background-color: #101a28;
-            border: 1px solid #2f455f;
+            background-color: #12101f;
+            border: 1px solid #2a2450;
             border-radius: 6px;
             padding: 8px;
-            color: #bcd0e8;
+            color: #c4b8e0;
             font-size: 11px;
         }
     ]]
