@@ -78,7 +78,7 @@ if (-not $SkipVersionFile) {
     Copy-Item $versionFile -Destination (Join-Path $macPayload "VERSION") -Force
 }
 
-$winInstaller = Join-Path $repoRoot "dist" "Eternal2xInstaller.exe"
+$winInstaller = Join-Path (Join-Path $repoRoot "dist") "Eternal2xInstaller.exe"
 if (Test-Path $winInstaller) {
     Copy-Item $winInstaller -Destination (Join-Path $winPayload "Eternal2xInstaller.exe") -Force
     Write-Host "Included Windows installer exe."
@@ -127,4 +127,4 @@ Write-Host "4) Create GitHub release tag v$Version and upload both zip files as 
 Write-Host "     $winZip"
 Write-Host "     $macZip"
 Write-Host ""
-Write-Host "Do NOT commit the .zip files to git — upload them as GitHub Release assets only."
+Write-Host "Do NOT commit the .zip files to git -- upload them as GitHub Release assets only."

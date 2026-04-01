@@ -153,26 +153,26 @@ local CURRENT_VERSION = read_version()
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
-    Geometry = {100, 100, 440, 480},
+    Geometry = {100, 100, 440, 500},
     StyleSheet = [[
         QWidget {
-            background-color: #09090f;
-            color: #e8e4f7;
+            background-color: #0b0b0f;
+            color: #e2e2ea;
             font-size: 12px;
         }
         QLabel#Title {
             font-size: 20px;
             font-weight: 700;
-            color: #f0ecff;
+            color: #ededf4;
             padding-top: 4px;
         }
         QLabel#SubTitle {
-            color: #9b8ec2;
+            color: #6e6e82;
             font-size: 11px;
             padding-bottom: 6px;
         }
         QLabel#Section {
-            color: #c4b8e0;
+            color: #9a9ab0;
             font-size: 10px;
             font-weight: 700;
             padding-top: 8px;
@@ -180,71 +180,94 @@ local win = disp:AddWindow({
             letter-spacing: 0.5px;
         }
         QLabel#Meta {
-            color: #9b8ec2;
-            background-color: #12101f;
-            border: 1px solid #2a2450;
+            color: #6e6e82;
+            background-color: #121216;
+            border: 1px solid #1e1e26;
             border-radius: 6px;
             padding: 6px 8px;
             font-size: 10px;
         }
         QPushButton {
-            background-color: #1c1740;
-            border: 1px solid #4a3d8f;
+            background-color: #16161e;
+            border: 1px solid #28283a;
             border-radius: 7px;
-            min-height: 32px;
-            padding: 6px 12px;
+            min-height: 34px;
+            padding: 6px 14px;
             font-weight: 600;
             font-size: 12px;
+            color: #e2e2ea;
         }
-        QPushButton:hover { background-color: #2a2360; }
-        QPushButton:pressed { background-color: #151230; }
+        QPushButton:hover {
+            background-color: #1e1e28;
+            border-color: #7c6fef;
+        }
+        QPushButton:pressed { background-color: #121218; }
+        QPushButton#StartBtn {
+            background-color: #7c6fef;
+            border: 1px solid #9b90f5;
+            color: #0b0b0f;
+            font-size: 13px;
+            font-weight: 700;
+            min-height: 38px;
+        }
+        QPushButton#StartBtn:hover { background-color: #9b90f5; }
+        QPushButton#StartBtn:pressed { background-color: #6a5ed6; }
         QPushButton#UpdateBtn {
-            background-color: #16132e;
-            border: 1px solid #352d6b;
+            background-color: #121216;
+            border: 1px solid #1e1e26;
             min-height: 26px;
             font-size: 11px;
+            color: #6e6e82;
         }
-        QPushButton#UpdateBtn:hover { background-color: #201b45; }
-        QCheckBox { color: #9b8ec2; font-size: 11px; spacing: 6px; }
-        QCheckBox::indicator { width: 14px; height: 14px; border-radius: 3px; border: 1px solid #4a3d8f; background: #12101f; }
-        QCheckBox::indicator:checked { background: #a78bfa; border-color: #c4b5fd; }
+        QPushButton#UpdateBtn:hover {
+            background-color: #1a1a22;
+            color: #9a9ab0;
+        }
+        QCheckBox { color: #6e6e82; font-size: 11px; spacing: 6px; }
+        QCheckBox::indicator {
+            width: 14px; height: 14px; border-radius: 3px;
+            border: 1px solid #28283a; background: #121216;
+        }
+        QCheckBox::indicator:checked {
+            background: #7c6fef; border-color: #9b90f5;
+        }
         QSlider::groove:horizontal {
             height: 6px;
             border-radius: 3px;
-            background: #2a2450;
+            background: #1e1e26;
         }
         QSlider::handle:horizontal {
             width: 16px;
             height: 16px;
-            background: #a78bfa;
-            border: 1px solid #c4b5fd;
+            background: #7c6fef;
+            border: 2px solid #9b90f5;
             border-radius: 8px;
             margin: -5px 0;
         }
         QSlider::sub-page:horizontal {
-            background: #a78bfa;
+            background: #7c6fef;
             border-radius: 3px;
         }
         QLabel#Status {
-            background-color: #12101f;
-            border: 1px solid #2a2450;
+            background-color: #121216;
+            border: 1px solid #1e1e26;
             border-radius: 6px;
             padding: 8px;
-            color: #c4b8e0;
+            color: #9a9ab0;
             font-size: 11px;
         }
     ]]
 }, ui:VGroup{
     ui:Label{ID="Title", Text="Eternal2x", ObjectName="Title"},
-    ui:Label{ID="SubTitle", Text="Smart Upscale  ·  v" .. CURRENT_VERSION, ObjectName="SubTitle"},
+    ui:Label{ID="SubTitle", Text="Smart Upscale  \xC2\xB7  v" .. CURRENT_VERSION, ObjectName="SubTitle"},
     ui:Label{ID="WorkflowSection", Text="WORKFLOW", ObjectName="Section"},
     ui:HGroup{
-        ui:Button{ID="DetectBtn", Text="Detect"},
-        ui:Button{ID="CutFrameBtn", Text="Sequence"},
+        ui:Button{ID="DetectBtn", Text="\xE2\x97\x89  Detect"},
+        ui:Button{ID="CutFrameBtn", Text="\xE2\x9C\x82  Sequence"},
     },
     ui:HGroup{
-        ui:Button{ID="RegroupBtn", Text="Regroup"},
-        ui:Button{ID="UpscaleBtn", Text="Upscale + Interpolate"},
+        ui:Button{ID="RegroupBtn", Text="\xE2\x8A\x9E  Regroup"},
+        ui:Button{ID="UpscaleBtn", Text="\xE2\x96\xB2  Upscale + Interpolate", ObjectName="StartBtn"},
     },
     ui:Label{ID="SensitivitySection", Text="SENSITIVITY", ObjectName="Section"},
     ui:Label{ID="SensLabel", Text="Interpolate Sensitivity: 0.20"},
@@ -253,7 +276,7 @@ local win = disp:AddWindow({
     ui:Label{ID="Status", Text="Ready.", ObjectName="Status", WordWrap=true},
     ui:Label{ID="Meta", Text="Repo: (not set)", ObjectName="Meta", WordWrap=true},
     ui:HGroup{
-        ui:Button{ID="UpdateBtn", Text="Check for Updates", ObjectName="UpdateBtn"},
+        ui:Button{ID="UpdateBtn", Text="\xE2\x86\xBB  Check for Updates", ObjectName="UpdateBtn"},
         ui:CheckBox{ID="AutoUpdateCB", Text="Auto-update", Checked=AUTO_UPDATE},
     },
 })

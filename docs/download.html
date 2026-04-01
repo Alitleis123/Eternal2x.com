@@ -75,37 +75,11 @@
     </div>
     <h1 class="section-title" style="font-size: 32px; margin-bottom: 32px;">Download Eternal2x</h1>
 
-    <!-- Latest Version -->
-    <div class="download-card latest">
-        <div class="download-card-header">
-            <h3>Eternal2x</h3>
-            <span class="version">0.2.0</span>
-        </div>
-
-        <div class="download-platform">
-            <div class="download-platform-label">Windows</div>
-            <div class="download-links">
-                <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/0.2.0/eternal2x-win.zip" class="download-link" download>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download .zip
-                </a>
-            </div>
-        </div>
-
-        <div class="download-platform">
-            <div class="download-platform-label">macOS</div>
-            <div class="download-links">
-                <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/0.2.0/eternal2x-mac.zip" class="download-link" download>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    Download .zip
-                </a>
-            </div>
-        </div>
-
-        <div class="download-note">
-            Compatible with DaVinci Resolve 18 and newer. Includes one-click installer.
-        </div>
+    <div id="loading-state" style="text-align: center; padding: 40px 0; color: #aaa;">
+        Loading releases...
     </div>
+
+    <div id="latest-release"></div>
 
     <!-- Installation note -->
     <div class="compat-note">
@@ -114,65 +88,13 @@
     </div>
 
     <!-- Older Versions -->
-    <div style="margin-top: 40px;">
-        <button class="btn btn-secondary" onclick="document.getElementById('older-versions').style.display = document.getElementById('older-versions').style.display === 'none' ? 'block' : 'none'; this.textContent = document.getElementById('older-versions').style.display === 'none' ? 'Show Older Versions' : 'Hide Older Versions';" style="font-size: 13px; padding: 10px 22px; cursor: pointer;">
+    <div id="older-toggle" style="margin-top: 40px; display: none;">
+        <button class="btn btn-secondary" id="older-btn" style="font-size: 13px; padding: 10px 22px; cursor: pointer;">
             Show Older Versions
         </button>
     </div>
 
-    <div id="older-versions" style="display: none; margin-top: 20px;">
-
-        <div class="download-card">
-            <div class="download-card-header">
-                <h3>Eternal2x</h3>
-                <span class="version">0.1.2</span>
-            </div>
-            <div class="download-platform">
-                <div class="download-platform-label">Windows</div>
-                <div class="download-links">
-                    <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/0.1.2/eternal2x-win.zip" class="download-link" download>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download .zip
-                    </a>
-                </div>
-            </div>
-            <div class="download-platform">
-                <div class="download-platform-label">macOS</div>
-                <div class="download-links">
-                    <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/0.1.2/eternal2x-mac.zip" class="download-link" download>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download .zip
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <div class="download-card">
-            <div class="download-card-header">
-                <h3>Eternal2x</h3>
-                <span class="version">0.1.1</span>
-            </div>
-            <div class="download-platform">
-                <div class="download-platform-label">Windows</div>
-                <div class="download-links">
-                    <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/v0.1.1/eternal2x-win.zip" class="download-link" download>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download .zip
-                    </a>
-                </div>
-            </div>
-            <div class="download-platform">
-                <div class="download-platform-label">macOS</div>
-                <div class="download-links">
-                    <a href="https://github.com/Alitleis123/Eternal2x.com/releases/download/v0.1.1/eternal2x-mac.zip" class="download-link" download>
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                        Download .zip
-                    </a>
-                </div>
-            </div>
-        </div>
-
-    </div>
+    <div id="older-versions" style="display: none; margin-top: 20px;"></div>
 
     <footer class="site-footer">
         <span>&copy; 2026 Eternal2x</span>
@@ -190,6 +112,92 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('overlay').classList.toggle('open');
 }
+
+var DOWNLOAD_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+var REPO = 'Alitleis123/Eternal2x.com';
+
+function findAsset(assets, name) {
+    for (var i = 0; i < assets.length; i++) {
+        if (assets[i].name === name) return assets[i].browser_download_url;
+    }
+    return null;
+}
+
+function versionFromTag(tag) {
+    return tag.replace(/^v/, '');
+}
+
+function buildCard(release, isLatest) {
+    var version = versionFromTag(release.tag_name);
+    var winUrl = findAsset(release.assets, 'eternal2x-win.zip');
+    var macUrl = findAsset(release.assets, 'eternal2x-mac.zip');
+
+    var card = document.createElement('div');
+    card.className = 'download-card' + (isLatest ? ' latest' : '');
+
+    var html = '<div class="download-card-header">' +
+        '<h3>Eternal2x</h3>' +
+        '<span class="version">' + version + '</span>' +
+        '</div>';
+
+    if (winUrl) {
+        html += '<div class="download-platform">' +
+            '<div class="download-platform-label">Windows</div>' +
+            '<div class="download-links">' +
+            '<a href="' + winUrl + '" class="download-link" download>' + DOWNLOAD_SVG + ' Download .zip</a>' +
+            '</div></div>';
+    }
+
+    if (macUrl) {
+        html += '<div class="download-platform">' +
+            '<div class="download-platform-label">macOS</div>' +
+            '<div class="download-links">' +
+            '<a href="' + macUrl + '" class="download-link" download>' + DOWNLOAD_SVG + ' Download .zip</a>' +
+            '</div></div>';
+    }
+
+    if (isLatest) {
+        html += '<div class="download-note">Compatible with DaVinci Resolve 18 and newer. Includes one-click installer.</div>';
+    }
+
+    card.innerHTML = html;
+    return card;
+}
+
+fetch('https://api.github.com/repos/' + REPO + '/releases')
+    .then(function(res) { return res.json(); })
+    .then(function(releases) {
+        var published = releases.filter(function(r) { return !r.draft && !r.prerelease; });
+        if (published.length === 0) {
+            document.getElementById('loading-state').textContent = 'No releases found.';
+            return;
+        }
+
+        document.getElementById('loading-state').style.display = 'none';
+
+        var latest = published[0];
+        document.getElementById('latest-release').appendChild(buildCard(latest, true));
+
+        if (published.length > 1) {
+            var olderContainer = document.getElementById('older-versions');
+            for (var i = 1; i < published.length; i++) {
+                olderContainer.appendChild(buildCard(published[i], false));
+            }
+
+            var toggleWrap = document.getElementById('older-toggle');
+            var btn = document.getElementById('older-btn');
+            toggleWrap.style.display = 'block';
+
+            btn.addEventListener('click', function() {
+                var showing = olderContainer.style.display !== 'none';
+                olderContainer.style.display = showing ? 'none' : 'block';
+                btn.textContent = showing ? 'Show Older Versions' : 'Hide Older Versions';
+            });
+        }
+    })
+    .catch(function() {
+        document.getElementById('loading-state').textContent = 'Could not load releases. Visit our GitHub page directly.';
+    });
 </script>
 
 </body>
