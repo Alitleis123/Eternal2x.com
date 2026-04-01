@@ -129,10 +129,20 @@ local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 
+local function read_version()
+    local vf = io.open((REPO_ROOT ~= "" and (REPO_ROOT .. "/") or "") .. "VERSION", "r")
+    if not vf then return "?" end
+    local v = vf:read("*l") or "?"
+    vf:close()
+    return v:match("^%s*(.-)%s*$") or "?"
+end
+
+local CURRENT_VERSION = read_version()
+
 local win = disp:AddWindow({
     ID = "Eternal2x",
-    WindowTitle = "Eternal2x",
-    Geometry = {100, 100, 430, 420},
+    WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
+    Geometry = {100, 100, 440, 480},
     StyleSheet = [[
         QWidget {
             background-color: #0d131c;
@@ -140,50 +150,66 @@ local win = disp:AddWindow({
             font-size: 12px;
         }
         QLabel#Title {
-            font-size: 18px;
+            font-size: 20px;
             font-weight: 700;
             color: #f7fbff;
+            padding-top: 4px;
         }
         QLabel#SubTitle {
             color: #9fb7d4;
-            padding-bottom: 4px;
+            font-size: 11px;
+            padding-bottom: 6px;
         }
         QLabel#Section {
             color: #b9cbe3;
-            font-size: 11px;
+            font-size: 10px;
             font-weight: 700;
-            padding-top: 6px;
+            padding-top: 8px;
             padding-bottom: 2px;
-            letter-spacing: 0.3px;
+            letter-spacing: 0.5px;
         }
         QLabel#Meta {
             color: #8fa8c5;
             background-color: #101a28;
             border: 1px solid #2f455f;
             border-radius: 6px;
-            padding: 6px;
+            padding: 6px 8px;
+            font-size: 10px;
         }
         QPushButton {
             background-color: #20354f;
             border: 1px solid #4b78aa;
             border-radius: 7px;
-            min-height: 30px;
-            padding: 6px 10px;
+            min-height: 32px;
+            padding: 6px 12px;
             font-weight: 600;
+            font-size: 12px;
         }
         QPushButton:hover { background-color: #2b4a73; }
         QPushButton:pressed { background-color: #1b304b; }
+        QPushButton#UpdateBtn {
+            background-color: #1a2e44;
+            border: 1px solid #3a5a7e;
+            min-height: 26px;
+            font-size: 11px;
+        }
+        QPushButton#UpdateBtn:hover { background-color: #253f5c; }
         QSlider::groove:horizontal {
             height: 6px;
             border-radius: 3px;
             background: #2b3f59;
         }
         QSlider::handle:horizontal {
-            width: 14px;
+            width: 16px;
+            height: 16px;
             background: #ff9a4d;
             border: 1px solid #ffbf8f;
-            border-radius: 7px;
+            border-radius: 8px;
             margin: -5px 0;
+        }
+        QSlider::sub-page:horizontal {
+            background: #ff9a4d;
+            border-radius: 3px;
         }
         QLabel#Status {
             background-color: #101a28;
@@ -191,11 +217,12 @@ local win = disp:AddWindow({
             border-radius: 6px;
             padding: 8px;
             color: #bcd0e8;
+            font-size: 11px;
         }
     ]]
 }, ui:VGroup{
     ui:Label{ID="Title", Text="Eternal2x", ObjectName="Title"},
-    ui:Label{ID="SubTitle", Text="DaVinci Resolve Smart Upscale", ObjectName="SubTitle"},
+    ui:Label{ID="SubTitle", Text="Smart Upscale  ·  v" .. CURRENT_VERSION, ObjectName="SubTitle"},
     ui:Label{ID="WorkflowSection", Text="WORKFLOW", ObjectName="Section"},
     ui:HGroup{
         ui:Button{ID="DetectBtn", Text="Detect"},
@@ -205,14 +232,13 @@ local win = disp:AddWindow({
         ui:Button{ID="RegroupBtn", Text="Regroup"},
         ui:Button{ID="UpscaleBtn", Text="Upscale + Interpolate"},
     },
-    ui:Label{ID="UpdateSection", Text="UPDATES", ObjectName="Section"},
-    ui:Button{ID="UpdateBtn", Text="Check for Updates"},
     ui:Label{ID="SensitivitySection", Text="SENSITIVITY", ObjectName="Section"},
     ui:Label{ID="SensLabel", Text="Interpolate Sensitivity: 0.20"},
     ui:Slider{ID="SensSlider", Orientation="Horizontal", Minimum=0, Maximum=100, Value=20},
-    ui:Label{ID="Meta", Text="Repo: (not set)", ObjectName="Meta", WordWrap=true},
     ui:Label{ID="StatusSection", Text="STATUS", ObjectName="Section"},
     ui:Label{ID="Status", Text="Ready.", ObjectName="Status", WordWrap=true},
+    ui:Label{ID="Meta", Text="Repo: (not set)", ObjectName="Meta", WordWrap=true},
+    ui:Button{ID="UpdateBtn", Text="Check for Updates", ObjectName="UpdateBtn"},
 })
 
 local items = win:GetItems()

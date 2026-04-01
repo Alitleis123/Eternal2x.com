@@ -62,7 +62,7 @@ if (Test-Path $macZip) {
 New-Item -ItemType Directory -Force -Path $winPayload | Out-Null
 New-Item -ItemType Directory -Force -Path $macPayload | Out-Null
 
-$payloadItems = @("Installer", "Pipeline", "Stages", "README.md", "VERSION")
+$payloadItems = @("Installer", "Pipeline", "Stages", "README.md", "VERSION", "requirements.txt")
 foreach ($item in $payloadItems) {
     $src = Join-Path $repoRoot $item
     if (-not (Test-Path $src)) {
@@ -76,6 +76,16 @@ if (-not $SkipVersionFile) {
     [System.IO.File]::WriteAllText($versionFile, $Version + [Environment]::NewLine, [System.Text.Encoding]::UTF8)
     Copy-Item $versionFile -Destination (Join-Path $winPayload "VERSION") -Force
     Copy-Item $versionFile -Destination (Join-Path $macPayload "VERSION") -Force
+}
+
+$winInstaller = Join-Path $repoRoot "dist" "Eternal2xInstaller.exe"
+if (Test-Path $winInstaller) {
+    Copy-Item $winInstaller -Destination (Join-Path $winPayload "Eternal2xInstaller.exe") -Force
+    Write-Host "Included Windows installer exe."
+} else {
+    Write-Host "WARNING: dist/Eternal2xInstaller.exe not found. Build it first with:"
+    Write-Host "  pip install pyinstaller"
+    Write-Host "  python Installer/build_installer.py"
 }
 
 Compress-Archive -Path (Join-Path $winPayload "*") -DestinationPath $winZip -Force
@@ -110,7 +120,11 @@ if (-not $SkipVersionFile) {
 }
 Write-Host ""
 Write-Host "Next:"
-Write-Host "1) Create GitHub release tag v$Version and upload both zip files."
-Write-Host "2) git add VERSION update/latest.json eternal2x-win.zip eternal2x-mac.zip release"
-Write-Host "3) git commit -m ""Prepare release v$Version"""
-Write-Host "4) git push origin main"
+Write-Host "1) git add VERSION update/latest.json"
+Write-Host "2) git commit -m ""Prepare release v$Version"""
+Write-Host "3) git push origin main"
+Write-Host "4) Create GitHub release tag v$Version and upload both zip files as release assets:"
+Write-Host "     $winZip"
+Write-Host "     $macZip"
+Write-Host ""
+Write-Host "Do NOT commit the .zip files to git — upload them as GitHub Release assets only."

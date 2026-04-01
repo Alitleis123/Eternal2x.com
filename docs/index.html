@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eternal2x | Smart Upscale for DaVinci Resolve</title>
+    <meta name="description" content="Eternal2x is a smart upscale plugin for DaVinci Resolve. Detect motion, refine cuts, and upscale with interpolation — all from one simple panel.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Mobile Header -->
+<div class="mobile-header">
+    <div class="logo">Eternal<span>2x</span></div>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+</div>
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">Eternal<span>2x</span></div>
+    <div class="sidebar-tagline">Smart Upscale for DaVinci Resolve</div>
+
+    <div class="sidebar-section">Navigation</div>
+    <ul class="sidebar-nav">
+        <li><a href="index.html" class="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            About
+        </a></li>
+        <li><a href="download.html">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+        </a></li>
+    </ul>
+
+    <div class="sidebar-section">Docs</div>
+    <ul class="sidebar-nav">
+        <li><a href="help.html">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Help
+        </a></li>
+        <li><a href="help.html#windows">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Windows
+        </a></li>
+        <li><a href="help.html#macos">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            macOS
+        </a></li>
+    </ul>
+
+    <div class="sidebar-section">Community</div>
+    <ul class="sidebar-nav">
+        <li><a href="mailto:Justlighttbusiness@gmail.com">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Contact
+        </a></li>
+    </ul>
+
+    <div class="sidebar-bottom">
+        <a href="download.html">Download</a>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<main class="main">
+
+    <!-- Hero -->
+    <div class="hero">
+        <h1>What is <span>Eternal2x</span> ?</h1>
+        <p>
+            Eternal2x is a <strong>plugin</strong> for DaVinci Resolve that improves the <strong>quality</strong>
+            and <strong>smoothness</strong> of clips with intelligent motion-aware upscaling — similar to what
+            Topaz and Flowframes do, but built right into your timeline.
+        </p>
+        <div class="hero-buttons">
+            <a href="download.html" class="btn btn-primary">Download</a>
+            <a href="help.html" class="btn btn-secondary">Documentation</a>
+        </div>
+    </div>
+
+    <!-- Video -->
+    <div class="video-container">
+        <div class="video-placeholder">
+            <!-- Replace with your YouTube embed: -->
+            <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID" allowfullscreen></iframe> -->
+            Video preview coming soon
+        </div>
+    </div>
+
+    <!-- Features -->
+    <div class="section">
+        <h2 class="section-title">How it works</h2>
+        <p class="section-subtitle">4 buttons. 1 slider. That's the entire UI.</p>
+    </div>
+
+    <div class="features">
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#9201;</span> Detect Motion</h3>
+            <p>Analyzes every frame using tile-based motion scoring. Places labeled markers on your timeline so you can preview and fine-tune exactly where motion happens.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#9986;</span> Sequence</h3>
+            <p>Cuts at every marker position and converts clips into 1-frame segments for precise interpolation control. Your markers are the source of truth.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#9638;</span> Regroup</h3>
+            <p>Removes gaps left over from cutting and makes the entire sequence continuous again. Markers shift to match the new positions automatically.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#9889;</span> Upscale + Interpolate</h3>
+            <p>Applies 2x Super Scale to every clip. Motion segments get Optical Flow interpolation. Static segments use Nearest for speed. Smart, not brute-force.</p>
+        </div>
+    </div>
+
+    <!-- How it's different -->
+    <div class="section">
+        <h2 class="section-title">Why Eternal2x?</h2>
+    </div>
+
+    <div class="features">
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#128268;</span> Built into Resolve</h3>
+            <p>No external software, no render-export-reimport loops. Eternal2x runs as a native Resolve script panel directly on your timeline.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#128296;</span> One-Click Install</h3>
+            <p>Double-click the installer — it handles Python, packages, and Resolve setup automatically. No terminal commands, no manual file copying.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#128260;</span> Auto Updates</h3>
+            <p>Install once, stay current forever. Eternal2x checks for updates every time you open it and applies them silently in the background.</p>
+        </div>
+        <div class="feature-card">
+            <h3><span class="feature-icon">&#127912;</span> Motion-Aware</h3>
+            <p>Only interpolates where it matters. Static areas stay fast. Motion areas get full Optical Flow treatment. You control the sensitivity.</p>
+        </div>
+    </div>
+
+    <!-- Requirements -->
+    <div class="section">
+        <h2 class="section-title">Requirements</h2>
+        <div class="feature-card" style="max-width: 480px;">
+            <p><strong>DaVinci Resolve 18+</strong> (Free or Studio)</p>
+            <p class="mt-8"><strong>Windows 10/11</strong> or <strong>macOS 12+</strong></p>
+            <p class="mt-8 text-dim">Python is handled automatically by the installer — you don't need to install it yourself.</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim);">
+        Eternal2x &middot; Questions? <a href="mailto:Justlighttbusiness@gmail.com">Justlighttbusiness@gmail.com</a>
+    </div>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+}
+</script>
+
+</body>
+</html>

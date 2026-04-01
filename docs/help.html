@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Help | Eternal2x</title>
+    <meta name="description" content="Installation guides and troubleshooting for Eternal2x.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- Mobile Header -->
+<div class="mobile-header">
+    <div class="logo">Eternal<span>2x</span></div>
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+</div>
+<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+
+<!-- Sidebar -->
+<nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo">Eternal<span>2x</span></div>
+    <div class="sidebar-tagline">Smart Upscale for DaVinci Resolve</div>
+
+    <div class="sidebar-section">Navigation</div>
+    <ul class="sidebar-nav">
+        <li><a href="index.html">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+            About
+        </a></li>
+        <li><a href="download.html">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+        </a></li>
+    </ul>
+
+    <div class="sidebar-section">Docs</div>
+    <ul class="sidebar-nav">
+        <li><a href="help.html" class="active">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            Help
+        </a></li>
+        <li><a href="#windows">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            Windows
+        </a></li>
+        <li><a href="#macos">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+            macOS
+        </a></li>
+    </ul>
+
+    <div class="sidebar-section">Community</div>
+    <ul class="sidebar-nav">
+        <li><a href="mailto:Justlighttbusiness@gmail.com">
+            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+            Contact
+        </a></li>
+    </ul>
+
+    <div class="sidebar-bottom">
+        <a href="download.html">Download</a>
+    </div>
+</nav>
+
+<!-- Main Content -->
+<main class="main">
+
+    <h1 class="section-title" style="font-size: 32px; margin-bottom: 8px;">Help</h1>
+    <p class="text-dim mb-24">Installation guides and troubleshooting.</p>
+
+    <!-- ============================================================ -->
+    <!-- TROUBLESHOOTING FAQ -->
+    <!-- ============================================================ -->
+
+    <div class="section">
+        <h2 class="section-title">Troubleshooting</h2>
+        <p class="section-subtitle">Common issues and their solutions.</p>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                The plugin doesn't appear in Resolve
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                Make sure you ran the installer and it completed successfully. The plugin should appear at
+                <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>. If it's not there, restart Resolve.
+                If it still doesn't appear, re-run the installer.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                "Missing repo root" error
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                This means the plugin can't find the folder where you extracted it. The most common cause is
+                moving or renaming the plugin folder after installing. Re-run the installer from the new location.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                "Could not import DaVinciResolveScript"
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                This error means the script is not running inside DaVinci Resolve. Make sure you're opening it from
+                <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong> inside Resolve, not by double-clicking the
+                Lua file directly.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                Detect is slow on long clips
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                This is expected. Motion detection analyzes every frame of the clip using OpenCV. A 30-second clip at
+                60fps means 1,800 frames to process. The sensitivity slider does not affect speed &mdash; only which
+                frames are marked as motion.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                No markers appear after Detect
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                Your clip may have very subtle motion that falls below the sensitivity threshold.
+                Lower the sensitivity slider (closer to 0) and try again. Also make sure you have a clip
+                selected on the timeline before clicking Detect.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                The installer says "Python not found"
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                On Windows, the installer automatically downloads and sets up a private Python for you &mdash;
+                no action needed. If this fails, check your internet connection. On macOS, the installer does
+                the same with a portable Python build. If all else fails, install Python manually from
+                <a href="https://www.python.org/downloads/">python.org</a> and re-run the installer.
+            </div>
+        </div>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- WINDOWS GUIDE -->
+    <!-- ============================================================ -->
+
+    <div class="section" id="windows">
+        <h2 class="section-title">Windows Guide</h2>
+        <p class="section-subtitle">One-click installation. No terminal required.</p>
+
+        <div class="guide-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Download the plugin</h3>
+                <p>Go to the <a href="download.html">Download</a> page and grab the Windows zip.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Extract the zip</h3>
+                <p>Right-click the downloaded file and select <strong>Extract All</strong>. Put it somewhere permanent &mdash;
+                   don't leave it in your Downloads folder.</p>
+                <div class="compat-note" style="margin-top: 12px;">
+                    Do not move this folder after installing. If you do, re-run the installer.
+                </div>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Run the installer</h3>
+                <p>Double-click <strong>Eternal2xInstaller.exe</strong> inside the extracted folder.</p>
+                <p>Click the <strong>Install</strong> button and wait for it to finish. The installer will:</p>
+                <ul style="color: var(--text-dim); font-size: 14px; padding-left: 20px; margin-top: 8px; line-height: 2;">
+                    <li>Set up Python automatically if you don't have it</li>
+                    <li>Install required Python packages</li>
+                    <li>Copy the plugin into DaVinci Resolve</li>
+                    <li>Write the configuration file</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Open in Resolve</h3>
+                <p>Restart DaVinci Resolve, then go to:</p>
+                <div class="code-block">
+                    Workspace &rarr; Scripts &rarr; Eternal2x
+                </div>
+            </div>
+        </div>
+
+        <h3 class="mb-16 mt-24">Manual install (alternative)</h3>
+        <p class="text-dim text-sm mb-16">If the GUI installer doesn't work, you can install manually via the command line.</p>
+
+        <div class="code-block">
+            pip install numpy opencv-python
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+
+        <div class="code-block">
+            python Installer/install_eternal2x.py
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+
+        <p class="text-dim text-sm mt-8">Then restart Resolve.</p>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- MACOS GUIDE -->
+    <!-- ============================================================ -->
+
+    <div class="section" id="macos">
+        <h2 class="section-title">macOS Guide</h2>
+        <p class="section-subtitle">Same process — extract, install, done.</p>
+
+        <div class="guide-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Download the plugin</h3>
+                <p>Go to the <a href="download.html">Download</a> page and grab the macOS zip.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Extract the zip</h3>
+                <p>Double-click the zip file to extract it. Move the folder somewhere permanent, like your
+                   home directory or Applications.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Run the installer</h3>
+                <p>Open Terminal and run:</p>
+                <div class="code-block">
+                    cd ~/path/to/eternal2x-mac<br>
+                    python3 Installer/gui_installer.py
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
+                <p>Or if you have a compiled <strong>.app</strong> installer, just double-click it.</p>
+                <p class="text-dim text-sm mt-8">
+                    The installer downloads a portable Python automatically if your system doesn't have one.
+                    Works on both Apple Silicon (M1/M2/M3) and Intel Macs.
+                </p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Open in Resolve</h3>
+                <p>Restart DaVinci Resolve, then go to:</p>
+                <div class="code-block">
+                    Workspace &rarr; Scripts &rarr; Eternal2x
+                </div>
+            </div>
+        </div>
+
+        <h3 class="mb-16 mt-24">Manual install (alternative)</h3>
+
+        <div class="code-block">
+            pip3 install numpy opencv-python
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+
+        <div class="code-block">
+            python3 Installer/install_eternal2x.py
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+
+        <p class="text-dim text-sm mt-8">Then restart Resolve.</p>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- USAGE GUIDE -->
+    <!-- ============================================================ -->
+
+    <div class="section" id="usage">
+        <h2 class="section-title">How to Use</h2>
+        <p class="section-subtitle">The full workflow in 4 steps.</p>
+
+        <div class="guide-step">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <h3>Detect</h3>
+                <p>Select a clip on your timeline. Adjust the sensitivity slider, then click <strong>Detect</strong>.
+                   Blue <code>[DSU]</code> markers will appear on your clip wherever motion was found.
+                   You can drag, delete, or add markers manually before continuing.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <h3>Sequence</h3>
+                <p>Click <strong>Sequence</strong> to cut the clip at every marker position and convert each
+                   segment into a 1-frame clip for precise interpolation control.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <h3>Regroup</h3>
+                <p>Click <strong>Regroup</strong> to close all the gaps left over from cutting. Your timeline
+                   becomes continuous again and markers shift to match.</p>
+            </div>
+        </div>
+
+        <div class="guide-step">
+            <div class="step-number">4</div>
+            <div class="step-content">
+                <h3>Upscale + Interpolate</h3>
+                <p>Click <strong>Upscale + Interpolate</strong>. Every clip gets 2x Super Scale.
+                   Motion segments get Optical Flow interpolation for smoothness. Static segments
+                   use Nearest for speed. Done.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="margin-top: 64px; padding-top: 24px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-dim);">
+        Eternal2x &middot; Questions? <a href="mailto:Justlighttbusiness@gmail.com">Justlighttbusiness@gmail.com</a>
+    </div>
+
+</main>
+
+<script>
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('overlay').classList.toggle('open');
+}
+
+function copyCode(btn) {
+    const block = btn.parentElement;
+    const text = block.innerText.replace('Copy', '').trim();
+    navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+    });
+}
+</script>
+
+</body>
+</html>
