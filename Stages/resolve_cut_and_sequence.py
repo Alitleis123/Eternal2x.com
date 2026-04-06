@@ -78,12 +78,15 @@ def main():
         print("Clip at playhead has no media pool item.")
         return
 
-    # Read [DSU] markers from the clip itself
+    # Read Eternal2x markers from the clip
     marker_dict = target.GetMarkers() or {}
     dsu_frames = []
     for frame_id, info in marker_dict.items():
+        custom = (info or {}).get("customData", "")
         name = (info or {}).get("name", "")
-        if isinstance(name, str) and name.startswith("[DSU]"):
+        is_dsu = (isinstance(custom, str) and custom == "[DSU]") or \
+                 (isinstance(name, str) and name.startswith("[DSU]"))
+        if is_dsu:
             try:
                 dsu_frames.append(int(frame_id))
             except Exception:
@@ -91,16 +94,30 @@ def main():
     dsu_frames = sorted(set(dsu_frames))
 
     if not dsu_frames:
-        print("No [DSU] markers found on clip. Run Detect first.")
+        print("No markers found on clip. Run Detect first.")
         return
 
     clip_start = int(target.GetStart())
     clip_end = int(target.GetEnd())
 
-    # Clip markers are relative to clip start — convert to absolute timeline positions for cutting
-    cut_frames = [clip_start + f for f in dsu_frames if clip_start + f > clip_start and clip_start + f < clip_end]
+    # Clip markers use source-absolute frames — convert to timeline positions for cutting
+    # source_start (LeftOffset) tells us where in the source the clip begins
+    source_start = 0
+    if hasattr(target, "GetLeftOffset"):
+        try:
+            source_start = int(target.GetLeftOffset())
+        except Exception:
+            pass
+
+    # Convert source frame to timeline frame: clip_start + (source_frame - source_start)
+    cut_frames = []
+    for f in dsu_frames:
+        tl_frame = clip_start + (f - source_start)
+        if tl_frame > clip_start and tl_frame < clip_end:
+            cut_frames.append(tl_frame)
+
     if not cut_frames:
-        print("No [DSU] markers fall within the clip range.")
+        print("No markers fall within the visible clip range.")
         return
 
     # Perform splits at each marker position

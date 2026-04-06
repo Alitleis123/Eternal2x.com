@@ -1,6 +1,8 @@
 """Shared helpers for Resolve stage scripts."""
 from __future__ import annotations
 
+import re
+
 
 def get_resolve():
     """Connect to DaVinci Resolve."""
@@ -19,18 +21,44 @@ def get_resolve():
     return resolve
 
 
+def _timecode_to_frames(tc_str, fps):
+    """Convert 'HH:MM:SS:FF' or 'HH:MM:SS;FF' timecode to a frame number."""
+    m = re.match(r"(\d+)[;:](\d+)[;:](\d+)[;:](\d+)", tc_str)
+    if not m:
+        return None
+    h, mi, s, f = int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4))
+    return int((h * 3600 + mi * 60 + s) * fps + f)
+
+
+def _get_timeline_fps(timeline):
+    """Get the timeline frame rate as a float."""
+    fps = 24.0
+    try:
+        setting = timeline.GetSetting("timelineFrameRate")
+        if setting:
+            fps = float(setting)
+    except Exception:
+        pass
+    return fps
+
+
 def get_clip_at_playhead(timeline):
     """Find the topmost enabled clip at the playhead position.
 
     Returns (item, track_index) or (None, None).
     """
+    fps = _get_timeline_fps(timeline)
+
     playhead = None
     try:
         tc = timeline.GetCurrentTimecode()
         if isinstance(tc, (int, float)):
             playhead = int(tc)
         elif isinstance(tc, str):
-            playhead = int(tc) if tc.isdigit() else None
+            if tc.isdigit():
+                playhead = int(tc)
+            else:
+                playhead = _timecode_to_frames(tc, fps)
     except Exception:
         pass
 
@@ -50,9 +78,20 @@ def get_clip_at_playhead(timeline):
         track_items = timeline.GetItemListInTrack("video", t) or []
         for ti in track_items:
             try:
-                s = int(ti.GetStart())
-                e = int(ti.GetEnd())
+                s = ti.GetStart()
+                e = ti.GetEnd()
+                # Convert to frames if timecode strings
+                if isinstance(s, str) and not s.isdigit():
+                    s = _timecode_to_frames(s, fps)
+                else:
+                    s = int(s)
+                if isinstance(e, str) and not e.isdigit():
+                    e = _timecode_to_frames(e, fps)
+                else:
+                    e = int(e)
             except Exception:
+                continue
+            if s is None or e is None:
                 continue
             if playhead >= s and playhead < e:
                 # Check if clip is enabled

@@ -12,11 +12,20 @@ from Stages.resolve_helpers import get_resolve, get_clip_at_playhead
 MARKER_PREFIX = "[DSU]"
 
 
+def _is_dsu_marker(info) -> bool:
+    custom = (info or {}).get("customData", "")
+    if isinstance(custom, str) and custom == MARKER_PREFIX:
+        return True
+    name = (info or {}).get("name", "")
+    if isinstance(name, str) and name.startswith(MARKER_PREFIX):
+        return True
+    return False
+
+
 def _ranges_from_markers(marker_dict, base_tl_start: int) -> List[Tuple[int, int]]:
     ranges = []
     for frame_id, info in (marker_dict or {}).items():
-        name = (info or {}).get("name", "")
-        if isinstance(name, str) and not name.startswith(MARKER_PREFIX):
+        if not _is_dsu_marker(info):
             continue
         try:
             start = int(frame_id)
@@ -88,10 +97,9 @@ def main():
         return
     clip_start = int(selected.GetStart())
 
-    # Read [DSU] markers from the clip (placed by Detect stage)
+    # Read markers from the clip at playhead
     ranges: List[Tuple[int, int]] = []
     if hasattr(selected, "GetMarkers"):
-        # Clip markers are relative to clip start — convert to absolute timeline positions
         ranges = _ranges_from_markers(selected.GetMarkers(), clip_start)
 
     if not ranges and args.video:

@@ -130,18 +130,21 @@ def compute_motion_scores(
     video_path: Path,
     cfg: UpscaleConfig,
     *,
-    max_width: int = 640
+    max_width: int = 640,
+    start_frame: int = 0,
+    end_frame: int = -1,
 ) -> Tuple[List[float], float]:
     """
     Returns (scores_per_frame, fps).
+
+    If start_frame/end_frame are given, only that range is scanned.
+    Frame indices in the returned list are relative to start_frame (index 0 = start_frame).
 
     Uses cfg.sample_every_n:
       - only *scores* every Nth frame (faster)
       - repeats that score for the skipped frames
       - divides by N so scores stay closer to per-frame scale
     """
-    import sys as _sys
-
     cap = _open_video(video_path)
 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
@@ -149,6 +152,16 @@ def compute_motion_scores(
         fps = 30.0  # fallback
 
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+
+    # Seek to start_frame if specified
+    if start_frame > 0:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
+
+    # Determine how many frames to scan
+    if end_frame >= 0:
+        scan_count = end_frame - start_frame + 1
+    else:
+        scan_count = total_frames - start_frame if total_frames > 0 else 0
 
     n = max(1, int(getattr(cfg, "sample_every_n", 1)))
     mode = str(getattr(cfg, "motion_mode", "detail")).lower()
@@ -163,6 +176,10 @@ def compute_motion_scores(
     last_pct = -1
 
     while True:
+        # Stop if we've scanned enough frames
+        if scan_count > 0 and len(scores) >= scan_count:
+            break
+
         grabbed = 0
 
         # Grab n frames quickly, decode only the last one
@@ -188,8 +205,10 @@ def compute_motion_scores(
         prev = curr
 
         # Progress reporting
-        if total_frames > 0:
-            pct = int(len(scores) * 100 / total_frames)
+        report_total = scan_count if scan_count > 0 else total_frames
+        if report_total > 0:
+            pct = int(len(scores) * 100 / report_total)
+            pct = min(pct, 100)
             if pct != last_pct and pct % 5 == 0:
                 print(f"[PROGRESS] {pct}%", flush=True)
                 last_pct = pct
@@ -202,4 +221,9 @@ def compute_motion_scores(
             os.unlink(temp_path)
         except OSError:
             pass
+
+    # Trim to exact scan count
+    if scan_count > 0 and len(scores) > scan_count:
+        scores = scores[:scan_count]
+
     return scores, fps
