@@ -36,6 +36,11 @@ def _compute_segments_from_video(video_path: Path, cfg: UpscaleConfig) -> Dict:
 
 def _get_resolve():
     try:
+        import os, sys
+        if sys.platform == "win32":
+            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
+            if lib:
+                os.add_dll_directory(os.path.dirname(lib))
         import DaVinciResolveScript as bmd  # type: ignore
     except Exception as exc:
         raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc

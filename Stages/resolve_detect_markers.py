@@ -36,6 +36,11 @@ def _compute_segments_from_video(video_path: Path, cfg: UpscaleConfig) -> Dict:
 
 def _get_resolve():
     try:
+        import os, sys
+        if sys.platform == "win32":
+            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
+            if lib:
+                os.add_dll_directory(os.path.dirname(lib))
         import DaVinciResolveScript as bmd  # type: ignore
     except Exception as exc:
         raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
@@ -101,6 +106,11 @@ def main():
         help="Optional video path. If provided, compute segments directly.",
     )
     parser.add_argument(
+        "--video-file",
+        default=None,
+        help="Path to a text file containing the video path (avoids cmd.exe Unicode issues).",
+    )
+    parser.add_argument(
         "--color",
         default=DEFAULT_COLOR,
         help="Resolve marker color (default: Blue)",
@@ -113,11 +123,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # Resolve the video path: --video-file takes priority (Unicode-safe)
+    video_path = args.video
+    if args.video_file:
+        vf = Path(args.video_file)
+        if vf.exists():
+            video_path = vf.read_text(encoding="utf-8").strip()
+
     cfg = UpscaleConfig()
     if args.sensitivity is not None:
         cfg.sensitivity = args.sensitivity
-    if args.video:
-        payload = _compute_segments_from_video(Path(args.video), cfg)
+    if video_path:
+        payload = _compute_segments_from_video(Path(video_path), cfg)
     else:
         payload = _load_segments(Path(args.segments))
 

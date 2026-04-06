@@ -92,26 +92,19 @@ local function get_selected_clip_path(resolve)
             break
         end
     end
-    if not item and timeline.GetCurrentVideoItem then
-        item = timeline:GetCurrentVideoItem()
-    end
-    if not item then return nil, "No selected clip." end
+    if not item then return nil, "Please select a clip on the timeline." end
 
     local mpi = item:GetMediaPoolItem()
-    if not mpi then return nil, "No media pool item for clip." end
+    if not mpi then return nil, "Please select a clip with a valid media source." end
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then
-        return nil, "Clip file path not available."
+        return nil, "Please select a clip with a valid media source."
     end
     return path, nil
 end
 
 local function get_resolve()
-    local ok, bmd = pcall(require, "DaVinciResolveScript")
-    if not ok or not bmd then
-        return nil, "Could not import DaVinciResolveScript."
-    end
     local resolve = bmd.scriptapp("Resolve")
     if not resolve then
         return nil, "Could not connect to Resolve."
@@ -310,16 +303,75 @@ function win.On.SensSlider.ValueChanged(ev)
     end
 end
 
+local function find_resolve_install_dir()
+    -- Try to find Resolve's install directory by locating fusionscript
+    if is_windows() then
+        -- Check the app module path via Fusion
+        local app_path = nil
+        if app and app.GetPath then
+            app_path = app:GetPath()
+        end
+        if app_path and app_path ~= "" then
+            return trim_trailing_sep(app_path:gsub("\\", "/"))
+        end
+        -- Fallback: scan common locations
+        local candidates = {}
+        -- Try to get it from the running process
+        local handle = io.popen('wmic process where "name=\'Resolve.exe\'" get ExecutablePath /value 2>nul')
+        if handle then
+            local out = handle:read("*a") or ""
+            handle:close()
+            local exe = out:match("ExecutablePath=(.-)%s*$")
+            if exe and exe ~= "" then
+                local dir = exe:gsub("\\[^\\]+$", "")
+                if dir ~= "" then
+                    table.insert(candidates, 1, dir)
+                end
+            end
+        end
+        table.insert(candidates, "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve")
+        table.insert(candidates, "E:\\Davinchi resolve")
+        for _, dir in ipairs(candidates) do
+            local test = dir .. "\\fusionscript.dll"
+            local f = io.open(test, "r")
+            if f then
+                f:close()
+                return dir
+            end
+        end
+    else
+        return "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion"
+    end
+    return ""
+end
+
+local function resolve_script_modules_dir()
+    if is_windows() then
+        local pd = os.getenv("PROGRAMDATA") or "C:\\ProgramData"
+        return pd .. "\\Blackmagic Design\\DaVinci Resolve\\Support\\Developer\\Scripting\\Modules"
+    end
+    return "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
+end
+
+local RESOLVE_DIR = find_resolve_install_dir()
+
 local function build_command(module_name, extra_args)
     local args = extra_args or ""
+    local modules = resolve_script_modules_dir()
     if is_windows() then
-        return "cd /d " .. shell_quote(REPO_ROOT)
+        local resolve_lib = RESOLVE_DIR .. "\\fusionscript.dll"
+        return "chcp 65001 >nul && cd /d " .. shell_quote(REPO_ROOT)
+            .. " && set PYTHONPATH=" .. shell_quote(modules) .. ";%PYTHONPATH%"
+            .. " && set RESOLVE_SCRIPT_LIB=" .. shell_quote(resolve_lib)
+            .. " && set PATH=" .. shell_quote(RESOLVE_DIR) .. ";%PATH%"
             .. " && " .. shell_quote(PYTHON)
             .. " -m " .. module_name
             .. args
     end
     return "cd " .. shell_quote(REPO_ROOT)
-        .. " && " .. shell_quote(PYTHON)
+        .. " && PYTHONPATH=" .. shell_quote(modules) .. ":$PYTHONPATH"
+        .. " RESOLVE_SCRIPT_LIB=" .. shell_quote(RESOLVE_DIR .. "/fusionscript.so")
+        .. " " .. shell_quote(PYTHON)
         .. " -m " .. module_name
         .. args
 end
@@ -375,8 +427,16 @@ function win.On.DetectBtn.Clicked(ev)
         set_status(perr)
         return
     end
+    -- Write video path to a temp file (UTF-8) to avoid cmd.exe encoding issues
+    local tmp = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
+    local argfile = tmp .. "/eternal2x_video_path.txt"
+    local af = io.open(argfile, "wb")
+    if af then
+        af:write(path)
+        af:close()
+    end
     local v = sensitivity_value()
-    local args = " --video " .. shell_quote(path)
+    local args = " --video-file " .. shell_quote(argfile)
         .. " --sensitivity " .. string.format("%.4f", v)
     run_stage("Detect", "Stages.resolve_detect_markers", args)
 end

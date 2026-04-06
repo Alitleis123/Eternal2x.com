@@ -70,16 +70,15 @@ BORDER = "#1e1e26"
 
 def _resolve_comp_dir() -> Path:
     if sys.platform.startswith("win"):
-        appdata = os.environ.get("APPDATA")
-        if not appdata:
-            raise RuntimeError("APPDATA is not set.")
+        programdata = os.environ.get("PROGRAMDATA", "C:\\ProgramData")
         return (
-            Path(appdata)
+            Path(programdata)
             / "Blackmagic Design"
             / "DaVinci Resolve"
             / "Fusion"
             / "Scripts"
             / "Comp"
+            / "Eternal2x"
         )
     if sys.platform == "darwin":
         return (
@@ -91,6 +90,7 @@ def _resolve_comp_dir() -> Path:
             / "Fusion"
             / "Scripts"
             / "Comp"
+            / "Eternal2x"
         )
     return (
         Path.home()
@@ -100,6 +100,7 @@ def _resolve_comp_dir() -> Path:
         / "Fusion"
         / "Scripts"
         / "Comp"
+        / "Eternal2x"
     )
 
 
