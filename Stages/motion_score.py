@@ -140,11 +140,15 @@ def compute_motion_scores(
       - repeats that score for the skipped frames
       - divides by N so scores stay closer to per-frame scale
     """
+    import sys as _sys
+
     cap = _open_video(video_path)
 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
     if fps <= 0:
         fps = 30.0  # fallback
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
     n = max(1, int(getattr(cfg, "sample_every_n", 1)))
     mode = str(getattr(cfg, "motion_mode", "detail")).lower()
@@ -156,6 +160,7 @@ def compute_motion_scores(
 
     prev = _preprocess(first, max_width=max_width)
     scores: List[float] = [0.0]  # frame 0 has no previous frame
+    last_pct = -1
 
     while True:
         grabbed = 0
@@ -181,6 +186,13 @@ def compute_motion_scores(
         scores.extend([score] * grabbed)
 
         prev = curr
+
+        # Progress reporting
+        if total_frames > 0:
+            pct = int(len(scores) * 100 / total_frames)
+            if pct != last_pct and pct % 5 == 0:
+                print(f"[PROGRESS] {pct}%", flush=True)
+                last_pct = pct
 
     cap.release()
     # Clean up temp file if one was created for Unicode workaround

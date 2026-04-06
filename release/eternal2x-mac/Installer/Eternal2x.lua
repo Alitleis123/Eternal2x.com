@@ -65,9 +65,85 @@ local function shell_quote(s)
     return '"' .. s:gsub('"', '\\"') .. '"'
 end
 
-local function run_command(cmd)
+local function run_command(cmd, status_prefix)
     print("[Eternal2x] " .. cmd)
-    return os.execute(cmd)
+    if is_windows() then
+        -- Run via a temp .bat that redirects output to a temp file,
+        -- launched hidden through wscript so no cmd window appears.
+        local tmp = os.getenv("TEMP") or "."
+        local out_file = tmp .. "\\eternal2x_output.log"
+        local rc_file = tmp .. "\\eternal2x_rc.txt"
+        local bat_file = tmp .. "\\eternal2x_run.bat"
+        local vbs_file = tmp .. "\\eternal2x_run.vbs"
+
+        -- Write .bat that runs the command and saves the exit code
+        local bf = io.open(bat_file, "w")
+        if bf then
+            bf:write("@echo off\r\n")
+            bf:write(cmd .. " > " .. shell_quote(out_file) .. " 2>&1\r\n")
+            bf:write("echo %errorlevel% > " .. shell_quote(rc_file) .. "\r\n")
+            bf:close()
+        end
+
+        -- Write .vbs that launches the .bat hidden (no window)
+        local vf = io.open(vbs_file, "w")
+        if vf then
+            vf:write('Set ws = CreateObject("WScript.Shell")\r\n')
+            vf:write('ws.Run "cmd /c """ & "' .. bat_file:gsub("\\", "\\\\") .. '" & """", 0, True\r\n')
+            vf:close()
+        end
+
+        -- Delete old output files
+        os.remove(out_file)
+        os.remove(rc_file)
+
+        -- Run the vbs (wscript is always available, runs hidden)
+        os.execute('wscript //nologo "' .. vbs_file .. '"')
+
+        -- Read output
+        local output = ""
+        local of = io.open(out_file, "r")
+        if of then
+            output = of:read("*a") or ""
+            of:close()
+        end
+        if output ~= "" then print(output) end
+
+        -- Read return code
+        local code = 1
+        local rf = io.open(rc_file, "r")
+        if rf then
+            local rc_str = rf:read("*l") or "1"
+            rf:close()
+            code = tonumber(rc_str:match("%d+")) or 1
+        end
+
+        -- Clean up temp files
+        os.remove(bat_file)
+        os.remove(vbs_file)
+
+        if code == 0 then return 0, output end
+        return code, output
+    end
+
+    -- macOS / Linux: io.popen is fine, no window issues
+    local handle = io.popen(cmd .. " 2>&1")
+    if not handle then return false, "" end
+    local lines = {}
+    for line in handle:lines() do
+        table.insert(lines, line)
+        print(line)
+        if status_prefix then
+            local pct = line:match("%[PROGRESS%] (%d+)%%")
+            if pct and items and items.Status then
+                items.Status.Text = status_prefix .. " " .. pct .. "%"
+            end
+        end
+    end
+    local ok, _, code = handle:close()
+    local output = table.concat(lines, "\n")
+    if ok then return 0, output end
+    return code or 1, output
 end
 
 local function is_windows()
@@ -92,26 +168,20 @@ local function get_selected_clip_path(resolve)
             break
         end
     end
-    if not item and timeline.GetCurrentVideoItem then
-        item = timeline:GetCurrentVideoItem()
-    end
-    if not item then return nil, "No selected clip." end
+    if not item then return nil, nil, "Please select a clip on the timeline." end
 
     local mpi = item:GetMediaPoolItem()
-    if not mpi then return nil, "No media pool item for clip." end
+    if not mpi then return nil, nil, "Please select a clip with a valid media source." end
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then
-        return nil, "Clip file path not available."
+        return nil, nil, "Please select a clip with a valid media source."
     end
-    return path, nil
+    local name = props["Clip Name"] or props["File Name"] or path:match("([^/\\]+)$") or path
+    return path, name, nil
 end
 
 local function get_resolve()
-    local ok, bmd = pcall(require, "DaVinciResolveScript")
-    if not ok or not bmd then
-        return nil, "Could not import DaVinciResolveScript."
-    end
     local resolve = bmd.scriptapp("Resolve")
     if not resolve then
         return nil, "Could not connect to Resolve."
@@ -310,31 +380,88 @@ function win.On.SensSlider.ValueChanged(ev)
     end
 end
 
+local function find_resolve_install_dir()
+    if is_windows() then
+        -- Try Fusion's app path first (no subprocess needed)
+        local app_path = nil
+        if app and app.GetPath then
+            app_path = app:GetPath()
+        end
+        if app_path and app_path ~= "" then
+            return trim_trailing_sep(app_path:gsub("\\", "/"))
+        end
+        -- Fallback: scan common install locations by checking for fusionscript.dll
+        local candidates = {
+            "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve",
+            "E:\\Davinchi resolve",
+            "D:\\Program Files\\Blackmagic Design\\DaVinci Resolve",
+        }
+        for _, dir in ipairs(candidates) do
+            local f = io.open(dir .. "\\fusionscript.dll", "r")
+            if f then
+                f:close()
+                return dir
+            end
+        end
+    else
+        return "/Applications/DaVinci Resolve/DaVinci Resolve.app/Contents/Libraries/Fusion"
+    end
+    return ""
+end
+
+local function resolve_script_modules_dir()
+    if is_windows() then
+        local pd = os.getenv("PROGRAMDATA") or "C:\\ProgramData"
+        return pd .. "\\Blackmagic Design\\DaVinci Resolve\\Support\\Developer\\Scripting\\Modules"
+    end
+    return "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Developer/Scripting/Modules"
+end
+
+local RESOLVE_DIR = find_resolve_install_dir()
+
 local function build_command(module_name, extra_args)
     local args = extra_args or ""
+    local modules = resolve_script_modules_dir()
     if is_windows() then
-        return "cd /d " .. shell_quote(REPO_ROOT)
+        local resolve_lib = RESOLVE_DIR .. "\\fusionscript.dll"
+        -- Use set "VAR=value" syntax so paths with spaces don't leak quotes into the value
+        return "chcp 65001 >nul && cd /d " .. shell_quote(REPO_ROOT)
+            .. ' && set "PYTHONPATH=' .. modules .. ';%PYTHONPATH%"'
+            .. ' && set "RESOLVE_SCRIPT_LIB=' .. resolve_lib .. '"'
+            .. ' && set "PATH=' .. RESOLVE_DIR .. ';%PATH%"'
             .. " && " .. shell_quote(PYTHON)
             .. " -m " .. module_name
             .. args
     end
     return "cd " .. shell_quote(REPO_ROOT)
-        .. " && " .. shell_quote(PYTHON)
+        .. " && PYTHONPATH=" .. shell_quote(modules) .. ":$PYTHONPATH"
+        .. " RESOLVE_SCRIPT_LIB=" .. shell_quote(RESOLVE_DIR .. "/fusionscript.so")
+        .. " " .. shell_quote(PYTHON)
         .. " -m " .. module_name
         .. args
 end
 
 local function run_stage(stage_label, module_name, extra_args)
     if REPO_ROOT == "" then
-        set_status("Missing repo root. Reinstall using Installer/install_eternal2x.py.")
+        set_status("Plugin not configured. Please reinstall.")
         return
     end
     set_status(stage_label .. " running...")
-    local ok = run_command(build_command(module_name, extra_args))
-    if ok == true or ok == 0 then
-        set_status(stage_label .. " finished.")
+    local code, output = run_command(build_command(module_name, extra_args), stage_label)
+    if code == true or code == 0 then
+        set_status(stage_label .. " complete.")
     else
-        set_status(stage_label .. " failed. Check Console for details.")
+        -- Extract a useful error from Python output
+        local err_msg = nil
+        if output then
+            err_msg = output:match("([A-Z]%w+Error: [^\n]+)")
+                   or output:match("Error: ([^\n]+)")
+        end
+        if err_msg then
+            set_status(stage_label .. " failed: " .. err_msg)
+        else
+            set_status(stage_label .. " failed. See Resolve Console for details.")
+        end
     end
 end
 
@@ -354,12 +481,12 @@ local function run_update(auto_mode)
     if not auto_mode then
         set_status("Checking for updates...")
     end
-    local ok = run_command(build_command("Stages.resolve_update", args))
+    local code = run_command(build_command("Stages.resolve_update", args))
     if not auto_mode then
-        if ok == true or ok == 0 then
-            set_status("Update check complete. See Console for details.")
+        if code == true or code == 0 then
+            set_status("You're up to date.")
         else
-            set_status("Update failed. See Console for details.")
+            set_status("Update check failed. Check your connection.")
         end
     end
 end
@@ -370,13 +497,22 @@ function win.On.DetectBtn.Clicked(ev)
         set_status(err)
         return
     end
-    local path, perr = get_selected_clip_path(resolve)
+    local path, clip_name, perr = get_selected_clip_path(resolve)
     if not path then
         set_status(perr)
         return
     end
+    -- Write video path to temp file (UTF-8) to avoid cmd.exe encoding issues
+    local tmp = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
+    local argfile = tmp .. "/eternal2x_video_path.txt"
+    local af = io.open(argfile, "wb")
+    if af then
+        af:write(path)
+        af:close()
+    end
+    set_status("Detecting motion in: " .. (clip_name or "clip") .. "...")
     local v = sensitivity_value()
-    local args = " --video " .. shell_quote(path)
+    local args = " --video-file " .. shell_quote(argfile)
         .. " --sensitivity " .. string.format("%.4f", v)
     run_stage("Detect", "Stages.resolve_detect_markers", args)
 end

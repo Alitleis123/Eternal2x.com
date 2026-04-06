@@ -3,36 +3,7 @@ from __future__ import annotations
 import argparse
 from typing import List, Tuple
 
-
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
-
-
-def _pick_target(timeline):
-    if hasattr(timeline, "GetSelectedItems"):
-        items = timeline.GetSelectedItems()
-        if items:
-            if isinstance(items, dict):
-                return next(iter(items.values())), "clip"
-            if isinstance(items, list):
-                return items[0], "clip"
-    if hasattr(timeline, "GetCurrentVideoItem"):
-        item = timeline.GetCurrentVideoItem()
-        if item:
-            return item, "clip"
-    return timeline, "timeline"
+from Stages.resolve_helpers import get_resolve, get_clip_at_playhead
 
 
 def _markers_to_frames(marker_dict) -> List[int]:
@@ -88,7 +59,7 @@ def main():
     )
     args = parser.parse_args()
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")
@@ -96,52 +67,50 @@ def main():
     if timeline is None:
         raise RuntimeError("No active timeline.")
 
-    target, target_type = _pick_target(timeline)
-
-    marker_dict = target.GetMarkers() if hasattr(target, "GetMarkers") else {}
-    if not marker_dict:
-        print("No markers found on selected clip/timeline.")
-        return
-
-    frames = _markers_to_frames(marker_dict)
-    if not frames:
-        print("Markers present but no usable frames.")
-        return
-
-    if target_type != "clip":
-        print("No selected clip; cannot map markers to source frames.")
+    # Find the clip at the playhead
+    target, target_track = get_clip_at_playhead(timeline)
+    if target is None:
+        print("No clip at playhead. Move the playhead over a clip and run Sequence.")
         return
 
     mpi = target.GetMediaPoolItem()
     if mpi is None:
-        print("Selected clip has no media pool item.")
+        print("Clip at playhead has no media pool item.")
+        return
+
+    # Read [DSU] markers from the clip itself
+    marker_dict = target.GetMarkers() or {}
+    dsu_frames = []
+    for frame_id, info in marker_dict.items():
+        name = (info or {}).get("name", "")
+        if isinstance(name, str) and name.startswith("[DSU]"):
+            try:
+                dsu_frames.append(int(frame_id))
+            except Exception:
+                continue
+    dsu_frames = sorted(set(dsu_frames))
+
+    if not dsu_frames:
+        print("No [DSU] markers found on clip. Run Detect first.")
         return
 
     clip_start = int(target.GetStart())
-    clip_duration = int(target.GetDuration())
-    clip_end = clip_start + clip_duration - 1
+    clip_end = int(target.GetEnd())
 
-    # Marker frameIds on a clip are relative to clip start.
-    cut_frames = []
-    for f in frames:
-        abs_frame = clip_start + f
-        if abs_frame <= clip_start or abs_frame >= clip_end:
-            continue
-        cut_frames.append(abs_frame)
-    cut_frames = sorted(set(cut_frames))
-
+    # Clip markers are relative to clip start — convert to absolute timeline positions for cutting
+    cut_frames = [clip_start + f for f in dsu_frames if clip_start + f > clip_start and clip_start + f < clip_end]
     if not cut_frames:
-        print("No valid cut frames inside the selected clip.")
+        print("No [DSU] markers fall within the clip range.")
         return
 
-    # Perform splits at each marker position.
+    # Perform splits at each marker position
     split_ok = 0
     for frame in cut_frames:
         if _split_at_frame(timeline, target, frame):
             split_ok += 1
 
-    # After splitting, shrink each resulting clip segment to 1 frame.
-    track_items = timeline.GetItemListInTrack("video", 1) or []
+    # After splitting, shrink each resulting clip segment to 1 frame
+    track_items = timeline.GetItemListInTrack("video", target_track) or []
     one_frame_ok = 0
     for it in track_items:
         try:

@@ -18,6 +18,11 @@ import sys
 import tarfile
 import threading
 import urllib.request
+
+# Hide console windows on Windows for all subprocess calls
+_SUBPROCESS_FLAGS = {}
+if sys.platform == "win32":
+    _SUBPROCESS_FLAGS["creationflags"] = subprocess.CREATE_NO_WINDOW
 import zipfile
 from pathlib import Path
 import tkinter as tk
@@ -122,6 +127,7 @@ def _check_python(path: str) -> bool:
         result = subprocess.run(
             [path, "--version"],
             capture_output=True, text=True, timeout=10,
+            **_SUBPROCESS_FLAGS,
         )
         return result.returncode == 0
     except Exception:
@@ -158,6 +164,7 @@ def _python_version_str(python_path: str) -> str:
         r = subprocess.run(
             [python_path, "--version"],
             capture_output=True, text=True, timeout=10,
+            **_SUBPROCESS_FLAGS,
         )
         return (r.stdout + r.stderr).strip()
     except Exception:
@@ -417,7 +424,7 @@ class InstallerApp:
             result = subprocess.run(
                 [python_exe, str(get_pip_path), "--no-warn-script-location"],
                 capture_output=True, text=True, timeout=120,
-                cwd=str(python_dir),
+                cwd=str(python_dir), **_SUBPROCESS_FLAGS,
             )
             if result.returncode != 0:
                 self.root.after(0, self._log,
@@ -525,7 +532,7 @@ class InstallerApp:
                        "numpy", "opencv-python", "--no-warn-script-location", "--quiet"]
 
         try:
-            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600, **_SUBPROCESS_FLAGS)
             if result.returncode != 0:
                 stderr = result.stderr.strip()
                 self.root.after(0, self._log, f"  Failed: {stderr[:200]}", "err")

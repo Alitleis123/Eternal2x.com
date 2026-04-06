@@ -3,20 +3,7 @@ from __future__ import annotations
 import argparse
 
 
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
+from Stages.resolve_helpers import get_resolve
 
 
 def _get_video_items(timeline, track_index: int):
@@ -90,7 +77,7 @@ def main():
     parser.add_argument("--track", type=int, default=1, help="Video track index (default: 1)")
     args = parser.parse_args()
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")

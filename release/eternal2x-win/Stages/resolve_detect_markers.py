@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from Pipeline.config import UpscaleConfig
 from Stages.frame_detect import detect_motion_segments, segments_to_dict
 from Stages.motion_score import compute_motion_scores
+from Stages.resolve_helpers import get_resolve, get_clip_at_playhead
 
 
 MARKER_PREFIX = "[DSU]"
@@ -32,38 +33,6 @@ def _compute_segments_from_video(video_path: Path, cfg: UpscaleConfig) -> Dict:
         "frame_count": len(scores),
         "segments": segments_to_dict(segments),
     }
-
-
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
-
-
-def _pick_target(timeline):
-    # Prefer a selected clip if available, else fallback to timeline markers.
-    if hasattr(timeline, "GetSelectedItems"):
-        items = timeline.GetSelectedItems()
-        if items:
-            if isinstance(items, dict):
-                return next(iter(items.values())), "clip"
-            if isinstance(items, list):
-                return items[0], "clip"
-    if hasattr(timeline, "GetCurrentVideoItem"):
-        item = timeline.GetCurrentVideoItem()
-        if item:
-            return item, "clip"
-    return timeline, "timeline"
 
 
 def _clear_dsu_markers(target) -> int:
@@ -106,6 +75,11 @@ def main():
         help="Optional video path. If provided, compute segments directly.",
     )
     parser.add_argument(
+        "--video-file",
+        default=None,
+        help="Path to a text file containing the video path (avoids cmd.exe Unicode issues).",
+    )
+    parser.add_argument(
         "--color",
         default=DEFAULT_COLOR,
         help="Resolve marker color (default: Blue)",
@@ -118,11 +92,18 @@ def main():
     )
     args = parser.parse_args()
 
+    # Resolve the video path: --video-file takes priority (Unicode-safe)
+    video_path = args.video
+    if args.video_file:
+        vf = Path(args.video_file)
+        if vf.exists():
+            video_path = vf.read_text(encoding="utf-8").strip()
+
     cfg = UpscaleConfig()
     if args.sensitivity is not None:
         cfg.sensitivity = args.sensitivity
-    if args.video:
-        payload = _compute_segments_from_video(Path(args.video), cfg)
+    if video_path:
+        payload = _compute_segments_from_video(Path(video_path), cfg)
     else:
         payload = _load_segments(Path(args.segments))
 
@@ -131,7 +112,7 @@ def main():
         print("No segments found. Nothing to mark.")
         return
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")
@@ -139,12 +120,20 @@ def main():
     if timeline is None:
         raise RuntimeError("No active timeline.")
 
-    target, target_type = _pick_target(timeline)
-    removed = _clear_dsu_markers(target)
-    added = _add_segment_markers(target, segments, args.color)
+    # Place markers on the timeline (visible regardless of track)
+    removed = _clear_dsu_markers(timeline)
+    added = _add_segment_markers(timeline, segments, args.color)
 
-    print(f"Target: {target_type}. Removed {removed} old markers. Added {added} markers.")
+    print(f"Removed {removed} old markers. Added {added} new markers.")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback, os
+        log = os.path.join(os.environ.get("TEMP", "."), "eternal2x_error.log")
+        with open(log, "w") as f:
+            traceback.print_exc(file=f)
+        traceback.print_exc()
+        raise

@@ -1,6 +1,10 @@
 # Stages/motion_score.py
 from __future__ import annotations
 
+import os
+import shutil
+import sys
+import tempfile
 from pathlib import Path
 from typing import List, Tuple, Union
 
@@ -8,6 +12,54 @@ import numpy as np
 import cv2
 
 from Pipeline.config import UpscaleConfig
+
+
+def _open_video(video_path: Path) -> cv2.VideoCapture:
+    """Open video with Unicode filename support on Windows."""
+    cap = cv2.VideoCapture(str(video_path))
+    if cap.isOpened():
+        return cap
+
+    # Workaround: OpenCV on Windows can't handle non-ASCII filenames.
+    # Try opening via a short 8.3 path or a temp symlink/copy.
+    if sys.platform.startswith("win"):
+        try:
+            short = os.path.normpath(str(video_path))
+            # Try Windows short path via ctypes
+            import ctypes
+            buf = ctypes.create_unicode_buffer(512)
+            ctypes.windll.kernel32.GetShortPathNameW(short, buf, 512)
+            if buf.value and buf.value != short:
+                cap2 = cv2.VideoCapture(buf.value)
+                if cap2.isOpened():
+                    return cap2
+                cap2.release()
+        except Exception:
+            pass
+
+    # Last resort: create a temp symlink with ASCII name (avoids copying large files)
+    suffix = video_path.suffix or ".mp4"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, prefix="e2x_", delete=False)
+    tmp_path = tmp.name
+    tmp.close()
+    os.unlink(tmp_path)
+    try:
+        os.symlink(str(video_path.resolve()), tmp_path)
+    except OSError:
+        # Symlinks may require elevated privileges on Windows; fall back to binary copy
+        with open(video_path, "rb") as src, open(tmp_path, "wb") as dst:
+            while True:
+                chunk = src.read(1 << 20)
+                if not chunk:
+                    break
+                dst.write(chunk)
+    cap3 = cv2.VideoCapture(tmp_path)
+    if cap3.isOpened():
+        cap3._temp_path = tmp_path  # type: ignore
+        return cap3
+    cap3.release()
+    os.unlink(tmp_path)
+    raise FileNotFoundError(f"Could not open video: {video_path}")
 
 
 def _parse_tile_grid(tile_grid: Union[int, tuple, list, str]) -> Tuple[int, int]:
@@ -88,13 +140,15 @@ def compute_motion_scores(
       - repeats that score for the skipped frames
       - divides by N so scores stay closer to per-frame scale
     """
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise FileNotFoundError(f"Could not open video: {video_path}")
+    import sys as _sys
+
+    cap = _open_video(video_path)
 
     fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
     if fps <= 0:
         fps = 30.0  # fallback
+
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
 
     n = max(1, int(getattr(cfg, "sample_every_n", 1)))
     mode = str(getattr(cfg, "motion_mode", "detail")).lower()
@@ -106,6 +160,7 @@ def compute_motion_scores(
 
     prev = _preprocess(first, max_width=max_width)
     scores: List[float] = [0.0]  # frame 0 has no previous frame
+    last_pct = -1
 
     while True:
         grabbed = 0
@@ -132,5 +187,19 @@ def compute_motion_scores(
 
         prev = curr
 
+        # Progress reporting
+        if total_frames > 0:
+            pct = int(len(scores) * 100 / total_frames)
+            if pct != last_pct and pct % 5 == 0:
+                print(f"[PROGRESS] {pct}%", flush=True)
+                last_pct = pct
+
     cap.release()
+    # Clean up temp file if one was created for Unicode workaround
+    temp_path = getattr(cap, "_temp_path", None)
+    if temp_path:
+        try:
+            os.unlink(temp_path)
+        except OSError:
+            pass
     return scores, fps

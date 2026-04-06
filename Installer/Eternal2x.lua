@@ -56,52 +56,305 @@ local function short_path(path, max_len)
     return "..." .. path:sub(#path - limit + 4)
 end
 
+local function is_windows()
+    return package.config:sub(1, 1) == "\\"
+end
+
 local function shell_quote(s)
     if not s then return "" end
-    if package.config:sub(1, 1) == "\\" then
-        -- cmd.exe escaping: double internal quotes
+    if is_windows() then
         return '"' .. s:gsub('"', '""') .. '"'
     end
     return '"' .. s:gsub('"', '\\"') .. '"'
 end
 
-local function run_command(cmd)
-    print("[Eternal2x] " .. cmd)
-    return os.execute(cmd)
+-- LuaJIT FFI: call CreateProcessW directly with CREATE_NO_WINDOW (Windows only)
+local _ffi_ready = false
+local _ffi = nil
+local _kernel32 = nil
+
+if is_windows() then
+    local setup_ok = pcall(function()
+        _ffi = require("ffi")
+        _ffi.cdef[[
+            typedef unsigned long DWORD;
+            typedef unsigned short WORD;
+            typedef int BOOL;
+            typedef void* HANDLE;
+            typedef const char* LPCSTR;
+            typedef const wchar_t* LPCWSTR;
+            typedef wchar_t* LPWSTR;
+
+            typedef struct {
+                DWORD cb;
+                LPWSTR lpReserved;
+                LPWSTR lpDesktop;
+                LPWSTR lpTitle;
+                DWORD dwX;
+                DWORD dwY;
+                DWORD dwXSize;
+                DWORD dwYSize;
+                DWORD dwXCountChars;
+                DWORD dwYCountChars;
+                DWORD dwFillAttribute;
+                DWORD dwFlags;
+                WORD wShowWindow;
+                WORD cbReserved2;
+                void* lpReserved2;
+                HANDLE hStdInput;
+                HANDLE hStdOutput;
+                HANDLE hStdError;
+            } STARTUPINFOW;
+
+            typedef struct {
+                HANDLE hProcess;
+                HANDLE hThread;
+                DWORD dwProcessId;
+                DWORD dwThreadId;
+            } PROCESS_INFORMATION;
+
+            BOOL CreateProcessW(
+                LPCWSTR lpApplicationName,
+                LPWSTR lpCommandLine,
+                void* lpProcessAttributes,
+                void* lpThreadAttributes,
+                BOOL bInheritHandles,
+                DWORD dwCreationFlags,
+                void* lpEnvironment,
+                LPCWSTR lpCurrentDirectory,
+                STARTUPINFOW* lpStartupInfo,
+                PROCESS_INFORMATION* lpProcessInformation
+            );
+
+            DWORD WaitForSingleObject(HANDLE hHandle, DWORD dwMilliseconds);
+            BOOL GetExitCodeProcess(HANDLE hProcess, DWORD* lpExitCode);
+            BOOL CloseHandle(HANDLE hObject);
+
+            int MultiByteToWideChar(
+                unsigned int CodePage, DWORD dwFlags,
+                LPCSTR lpMultiByteStr, int cbMultiByte,
+                LPWSTR lpWideCharStr, int cchWideChar
+            );
+        ]]
+        _kernel32 = _ffi.load("kernel32")
+        _ffi_ready = true
+    end)
+    if not setup_ok then
+        print("[Eternal2x] FFI not available, using VBS fallback.")
+    end
 end
 
-local function is_windows()
-    return package.config:sub(1, 1) == "\\"
+local function _utf8_to_wide(str)
+    local CP_UTF8 = 65001
+    local len = _kernel32.MultiByteToWideChar(CP_UTF8, 0, str, #str, nil, 0)
+    if len <= 0 then return nil end
+    local buf = _ffi.new("wchar_t[?]", len + 1)
+    _kernel32.MultiByteToWideChar(CP_UTF8, 0, str, #str, buf, len + 1)
+    buf[len] = 0
+    return buf
 end
 
-local function get_selected_clip_path(resolve)
-    local project = resolve:GetProjectManager():GetCurrentProject()
-    if not project then return nil, "No active project." end
-    local timeline = project:GetCurrentTimeline()
-    if not timeline then return nil, "No active timeline." end
+local function _run_bat_and_read(bat_file, out_file, rc_file)
+    -- Read output
+    local output = ""
+    local of = io.open(out_file, "r")
+    if of then
+        output = of:read("*a") or ""
+        of:close()
+    end
+    if output ~= "" then print(output) end
 
-    local items = nil
-    if timeline.GetSelectedItems then
-        items = timeline:GetSelectedItems()
+    -- Read return code
+    local code = 1
+    local rf = io.open(rc_file, "r")
+    if rf then
+        local rc_str = rf:read("*l") or ""
+        rf:close()
+        code = tonumber(rc_str:match("%d+")) or 1
     end
 
-    local item = nil
-    if items and type(items) == "table" then
-        for _, v in pairs(items) do
-            item = v
-            break
+    os.remove(bat_file)
+    return code, output
+end
+
+local function run_command(cmd, status_prefix)
+    print("[Eternal2x] " .. cmd)
+    if is_windows() then
+        local tmp = os.getenv("TEMP") or "."
+        local out_file = tmp .. "\\eternal2x_output.log"
+        local rc_file = tmp .. "\\eternal2x_rc.txt"
+        local bat_file = tmp .. "\\eternal2x_run.bat"
+
+        os.remove(out_file)
+        os.remove(rc_file)
+
+        -- Write .bat that runs the command and captures output + exit code
+        local bf = io.open(bat_file, "w")
+        if bf then
+            bf:write("@echo off\r\n")
+            bf:write(cmd .. " > \"" .. out_file .. "\" 2>&1\r\n")
+            bf:write("echo %errorlevel% > \"" .. rc_file .. "\"\r\n")
+            bf:close()
+        end
+
+        -- Try FFI first (no cmd window at all)
+        if _ffi_ready then
+            local cmdline = "cmd.exe /c \"" .. bat_file .. "\""
+            local wcmd = _utf8_to_wide(cmdline)
+            if wcmd then
+                local si = _ffi.new("STARTUPINFOW")
+                _ffi.fill(si, _ffi.sizeof(si))
+                si.cb = _ffi.sizeof(si)
+
+                local pi = _ffi.new("PROCESS_INFORMATION")
+                _ffi.fill(pi, _ffi.sizeof(pi))
+
+                local CREATE_NO_WINDOW = 0x08000000
+                local ok = _kernel32.CreateProcessW(
+                    nil, wcmd, nil, nil, 0,
+                    CREATE_NO_WINDOW, nil, nil, si, pi
+                )
+
+                if ok ~= 0 then
+                    _kernel32.WaitForSingleObject(pi.hProcess, 600000)
+                    local exit_code = _ffi.new("DWORD[1]")
+                    _kernel32.GetExitCodeProcess(pi.hProcess, exit_code)
+                    _kernel32.CloseHandle(pi.hProcess)
+                    _kernel32.CloseHandle(pi.hThread)
+
+                    local code, output = _run_bat_and_read(bat_file, out_file, rc_file)
+                    -- Prefer bat exit code, fall back to process exit code
+                    if code == 1 then
+                        local pcode = tonumber(exit_code[0])
+                        if pcode and pcode == 0 then code = 0 end
+                    end
+                    if code == 0 then return 0, output end
+                    return code, output
+                end
+            end
+            -- FFI launch failed, fall through to VBS
+        end
+
+        -- VBS fallback: runs hidden but io.popen may briefly flash
+        local vbs_file = tmp .. "\\eternal2x_run.vbs"
+        local vf = io.open(vbs_file, "w")
+        if vf then
+            local escaped_bat = bat_file:gsub("\\", "\\\\")
+            vf:write("Set ws = CreateObject(\"WScript.Shell\")\r\n")
+            vf:write("ws.Run \"cmd /c \"\"" .. escaped_bat .. "\"\"\", 0, True\r\n")
+            vf:close()
+        end
+
+        local wh = io.popen("wscript //nologo \"" .. vbs_file .. "\" 2>nul", "r")
+        if wh then
+            wh:read("*a")
+            wh:close()
+        end
+
+        os.remove(vbs_file)
+        local code, output = _run_bat_and_read(bat_file, out_file, rc_file)
+        if code == 0 then return 0, output end
+        return code, output
+    end
+
+    -- macOS / Linux: io.popen is fine, no window issues
+    local handle = io.popen(cmd .. " 2>&1")
+    if not handle then return false, "" end
+    local lines = {}
+    for line in handle:lines() do
+        table.insert(lines, line)
+        print(line)
+        if status_prefix then
+            local pct = line:match("%[PROGRESS%] (%d+)%%")
+            if pct and items and items.Status then
+                items.Status.Text = status_prefix .. " " .. pct .. "%"
+            end
         end
     end
-    if not item then return nil, "Please select a clip on the timeline." end
+    local ok, _, code = handle:close()
+    local output = table.concat(lines, "\n")
+    if ok then return 0, output end
+    return code or 1, output
+end
+
+local function get_clip_at_playhead(resolve)
+    local project = resolve:GetProjectManager():GetCurrentProject()
+    if not project then return nil, nil, "No active project." end
+    local timeline = project:GetCurrentTimeline()
+    if not timeline then return nil, nil, "No active timeline." end
+
+    local item = nil
+
+    -- Try GetCurrentVideoItem first (returns clip at playhead on some versions)
+    if timeline.GetCurrentVideoItem then
+        local ok, vi = pcall(timeline.GetCurrentVideoItem, timeline)
+        if ok and vi then
+            -- Check if clip is enabled
+            local enabled = true
+            if vi.GetClipEnabled then
+                local eok, ev = pcall(vi.GetClipEnabled, vi)
+                if eok then enabled = ev end
+            end
+            if enabled then item = vi end
+        end
+    end
+
+    -- Walk tracks top-down to find the topmost enabled clip at the playhead
+    if not item then
+        local playhead_frame = timeline:GetCurrentTimecode()
+        local pf = nil
+        if type(playhead_frame) == "number" then
+            pf = playhead_frame
+        elseif type(playhead_frame) == "string" then
+            pf = tonumber(playhead_frame)
+        end
+
+        local track_count = timeline:GetTrackCount("video") or 0
+        for t = track_count, 1, -1 do
+            -- Skip disabled/muted tracks
+            local track_enabled = true
+            if timeline.GetIsTrackEnabled then
+                local tok, tv = pcall(timeline.GetIsTrackEnabled, timeline, "video", t)
+                if tok then track_enabled = tv end
+            end
+            if track_enabled then
+                local track_items = timeline:GetItemListInTrack("video", t)
+                if track_items then
+                    for _, ti in ipairs(track_items) do
+                        local s = ti:GetStart()
+                        local e = ti:GetEnd()
+                        if s and e and pf and pf >= s and pf < e then
+                            -- Check if clip itself is enabled
+                            local clip_enabled = true
+                            if ti.GetClipEnabled then
+                                local cok, cv = pcall(ti.GetClipEnabled, ti)
+                                if cok then clip_enabled = cv end
+                            end
+                            if clip_enabled then
+                                item = ti
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+            if item then break end
+        end
+    end
+
+    if not item then
+        return nil, nil, "No clip at playhead. Move the playhead over a clip and try again."
+    end
 
     local mpi = item:GetMediaPoolItem()
-    if not mpi then return nil, "Please select a clip with a valid media source." end
+    if not mpi then return nil, nil, "Clip at playhead has no valid media source." end
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then
-        return nil, "Please select a clip with a valid media source."
+        return nil, nil, "Clip at playhead has no valid media source."
     end
-    return path, nil
+    local name = props["Clip Name"] or props["File Name"] or path:match("([^/\\]+)$") or path
+    return path, name, nil
 end
 
 local function get_resolve()
@@ -304,9 +557,8 @@ function win.On.SensSlider.ValueChanged(ev)
 end
 
 local function find_resolve_install_dir()
-    -- Try to find Resolve's install directory by locating fusionscript
     if is_windows() then
-        -- Check the app module path via Fusion
+        -- Try Fusion's app path first (no subprocess needed)
         local app_path = nil
         if app and app.GetPath then
             app_path = app:GetPath()
@@ -314,26 +566,14 @@ local function find_resolve_install_dir()
         if app_path and app_path ~= "" then
             return trim_trailing_sep(app_path:gsub("\\", "/"))
         end
-        -- Fallback: scan common locations
-        local candidates = {}
-        -- Try to get it from the running process
-        local handle = io.popen('wmic process where "name=\'Resolve.exe\'" get ExecutablePath /value 2>nul')
-        if handle then
-            local out = handle:read("*a") or ""
-            handle:close()
-            local exe = out:match("ExecutablePath=(.-)%s*$")
-            if exe and exe ~= "" then
-                local dir = exe:gsub("\\[^\\]+$", "")
-                if dir ~= "" then
-                    table.insert(candidates, 1, dir)
-                end
-            end
-        end
-        table.insert(candidates, "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve")
-        table.insert(candidates, "E:\\Davinchi resolve")
+        -- Fallback: scan common install locations by checking for fusionscript.dll
+        local candidates = {
+            "C:\\Program Files\\Blackmagic Design\\DaVinci Resolve",
+            "E:\\Davinchi resolve",
+            "D:\\Program Files\\Blackmagic Design\\DaVinci Resolve",
+        }
         for _, dir in ipairs(candidates) do
-            local test = dir .. "\\fusionscript.dll"
-            local f = io.open(test, "r")
+            local f = io.open(dir .. "\\fusionscript.dll", "r")
             if f then
                 f:close()
                 return dir
@@ -360,10 +600,11 @@ local function build_command(module_name, extra_args)
     local modules = resolve_script_modules_dir()
     if is_windows() then
         local resolve_lib = RESOLVE_DIR .. "\\fusionscript.dll"
+        -- Use set "VAR=value" syntax so paths with spaces don't leak quotes into the value
         return "chcp 65001 >nul && cd /d " .. shell_quote(REPO_ROOT)
-            .. " && set PYTHONPATH=" .. shell_quote(modules) .. ";%PYTHONPATH%"
-            .. " && set RESOLVE_SCRIPT_LIB=" .. shell_quote(resolve_lib)
-            .. " && set PATH=" .. shell_quote(RESOLVE_DIR) .. ";%PATH%"
+            .. ' && set "PYTHONPATH=' .. modules .. ';%PYTHONPATH%"'
+            .. ' && set "RESOLVE_SCRIPT_LIB=' .. resolve_lib .. '"'
+            .. ' && set "PATH=' .. RESOLVE_DIR .. ';%PATH%"'
             .. " && " .. shell_quote(PYTHON)
             .. " -m " .. module_name
             .. args
@@ -378,15 +619,25 @@ end
 
 local function run_stage(stage_label, module_name, extra_args)
     if REPO_ROOT == "" then
-        set_status("Missing repo root. Reinstall using Installer/install_eternal2x.py.")
+        set_status("Plugin not configured. Please reinstall.")
         return
     end
     set_status(stage_label .. " running...")
-    local ok = run_command(build_command(module_name, extra_args))
-    if ok == true or ok == 0 then
-        set_status(stage_label .. " finished.")
+    local code, output = run_command(build_command(module_name, extra_args), stage_label)
+    if code == true or code == 0 then
+        set_status(stage_label .. " complete.")
     else
-        set_status(stage_label .. " failed. Check Console for details.")
+        -- Extract a useful error from Python output
+        local err_msg = nil
+        if output then
+            err_msg = output:match("([A-Z]%w+Error: [^\n]+)")
+                   or output:match("Error: ([^\n]+)")
+        end
+        if err_msg then
+            set_status(stage_label .. " failed: " .. err_msg)
+        else
+            set_status(stage_label .. " failed. See Resolve Console for details.")
+        end
     end
 end
 
@@ -406,12 +657,12 @@ local function run_update(auto_mode)
     if not auto_mode then
         set_status("Checking for updates...")
     end
-    local ok = run_command(build_command("Stages.resolve_update", args))
+    local code = run_command(build_command("Stages.resolve_update", args))
     if not auto_mode then
-        if ok == true or ok == 0 then
-            set_status("Update check complete. See Console for details.")
+        if code == true or code == 0 then
+            set_status("You're up to date.")
         else
-            set_status("Update failed. See Console for details.")
+            set_status("Update check failed. Check your connection.")
         end
     end
 end
@@ -422,12 +673,12 @@ function win.On.DetectBtn.Clicked(ev)
         set_status(err)
         return
     end
-    local path, perr = get_selected_clip_path(resolve)
+    local path, clip_name, perr = get_clip_at_playhead(resolve)
     if not path then
         set_status(perr)
         return
     end
-    -- Write video path to a temp file (UTF-8) to avoid cmd.exe encoding issues
+    -- Write video path to temp file (UTF-8) to avoid cmd.exe encoding issues
     local tmp = os.getenv("TEMP") or os.getenv("TMPDIR") or "/tmp"
     local argfile = tmp .. "/eternal2x_video_path.txt"
     local af = io.open(argfile, "wb")
@@ -435,6 +686,7 @@ function win.On.DetectBtn.Clicked(ev)
         af:write(path)
         af:close()
     end
+    set_status("Detecting motion in: " .. (clip_name or "clip") .. "...")
     local v = sensitivity_value()
     local args = " --video-file " .. shell_quote(argfile)
         .. " --sensitivity " .. string.format("%.4f", v)

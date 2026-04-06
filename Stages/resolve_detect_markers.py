@@ -3,11 +3,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, List, Tuple
 
 from Pipeline.config import UpscaleConfig
 from Stages.frame_detect import detect_motion_segments, segments_to_dict
 from Stages.motion_score import compute_motion_scores
+from Stages.resolve_helpers import get_resolve, get_clip_at_playhead
 
 
 MARKER_PREFIX = "[DSU]"
@@ -34,42 +35,10 @@ def _compute_segments_from_video(video_path: Path, cfg: UpscaleConfig) -> Dict:
     }
 
 
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
-
-
-def _pick_target(timeline):
-    # Prefer a selected clip if available, else fallback to timeline markers.
-    if hasattr(timeline, "GetSelectedItems"):
-        items = timeline.GetSelectedItems()
-        if items:
-            if isinstance(items, dict):
-                return next(iter(items.values())), "clip"
-            if isinstance(items, list):
-                return items[0], "clip"
-    if hasattr(timeline, "GetCurrentVideoItem"):
-        item = timeline.GetCurrentVideoItem()
-        if item:
-            return item, "clip"
-    return timeline, "timeline"
-
-
 def _clear_dsu_markers(target) -> int:
     markers = target.GetMarkers() or {}
     removed = 0
-    for frame_id, info in markers.items():
+    for frame_id, info in list(markers.items()):
         name = (info or {}).get("name", "")
         if isinstance(name, str) and name.startswith(MARKER_PREFIX):
             target.DeleteMarkerAtFrame(frame_id)
@@ -77,23 +46,38 @@ def _clear_dsu_markers(target) -> int:
     return removed
 
 
-def _add_segment_markers(target, segments, color: str) -> int:
+def _add_segment_markers(target, segments, color: str, source_start: int, source_end: int) -> int:
+    """Add markers to a clip. Frame positions are relative to clip source start (frame 0 = first frame of clip)."""
     added = 0
     for idx, seg in enumerate(segments):
-        start = int(seg["start"])
-        end = int(seg["end"])
-        length = int(seg.get("length", end - start + 1))
-        label = f"{MARKER_PREFIX} seg {idx:03d}: {start}-{end}"
-        note = f"len {length} frames"
-        ok = target.AddMarker(start, color, label, note, length, "")
+        raw_start = int(seg["start"])
+        raw_end = int(seg["end"])
+
+        # Skip segments outside the clip's source range
+        if raw_end < source_start or raw_start > source_end:
+            continue
+
+        # Clamp to clip boundaries
+        clamped_start = max(raw_start, source_start)
+        clamped_end = min(raw_end, source_end)
+
+        # Convert to clip-relative frame (0 = first frame of clip on timeline)
+        marker_frame = clamped_start - source_start
+        length = clamped_end - clamped_start + 1
+
+        label = f"{MARKER_PREFIX} seg {idx:03d}"
+        note = f"motion frames {clamped_start}-{clamped_end} ({length}f)"
+        ok = target.AddMarker(marker_frame, color, label, note, length, "")
         if ok:
             added += 1
+        else:
+            print(f"[DEBUG] AddMarker failed: frame={marker_frame}, len={length}")
     return added
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Place [DSU] motion markers in Resolve from segments.json or a video."
+        description="Place [DSU] motion markers on the clip at the playhead."
     )
     parser.add_argument(
         "--segments",
@@ -140,10 +124,10 @@ def main():
 
     segments = payload.get("segments", [])
     if not segments:
-        print("No segments found. Nothing to mark.")
+        print("No motion detected. Try lowering the sensitivity.")
         return
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")
@@ -151,12 +135,48 @@ def main():
     if timeline is None:
         raise RuntimeError("No active timeline.")
 
-    target, target_type = _pick_target(timeline)
-    removed = _clear_dsu_markers(target)
-    added = _add_segment_markers(target, segments, args.color)
+    # Find clip at playhead
+    clip, _track = get_clip_at_playhead(timeline)
+    if clip is None:
+        raise RuntimeError("No clip at playhead. Move the playhead over a clip and try again.")
 
-    print(f"Target: {target_type}. Removed {removed} old markers. Added {added} markers.")
+    # Get the clip's source in/out points (which part of the video file is used)
+    clip_start = int(clip.GetStart())
+    clip_end = int(clip.GetEnd())
+    clip_duration = clip_end - clip_start
+
+    # LeftOffset = how many frames into the source media the clip begins
+    source_start = 0
+    if hasattr(clip, "GetLeftOffset"):
+        try:
+            source_start = int(clip.GetLeftOffset())
+        except Exception:
+            pass
+    source_end = source_start + clip_duration - 1
+
+    print(f"[DEBUG] Clip on timeline: {clip_start}-{clip_end} ({clip_duration} frames)")
+    print(f"[DEBUG] Source range: {source_start}-{source_end}")
+    print(f"[DEBUG] Total segments from detection: {len(segments)}")
+
+    # Filter segments to those within the source range
+    relevant = [s for s in segments
+                 if int(s["end"]) >= source_start and int(s["start"]) <= source_end]
+    print(f"[DEBUG] Segments within clip source range: {len(relevant)}")
+
+    # Clear old DSU markers from this clip, then add new ones
+    removed = _clear_dsu_markers(clip)
+    added = _add_segment_markers(clip, relevant, args.color, source_start, source_end)
+
+    print(f"Removed {removed} old markers. Added {added} new markers on clip.")
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception:
+        import traceback, os
+        log = os.path.join(os.environ.get("TEMP", "."), "eternal2x_error.log")
+        with open(log, "w") as f:
+            traceback.print_exc(file=f)
+        traceback.print_exc()
+        raise

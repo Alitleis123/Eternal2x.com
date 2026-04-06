@@ -6,38 +6,10 @@ from typing import List, Tuple
 from Pipeline.config import UpscaleConfig
 from Stages.frame_detect import detect_motion_segments
 from Stages.motion_score import compute_motion_scores
+from Stages.resolve_helpers import get_resolve, get_clip_at_playhead
 
 
 MARKER_PREFIX = "[DSU]"
-
-
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
-
-
-def _get_selected_clip(timeline):
-    if hasattr(timeline, "GetSelectedItems"):
-        items = timeline.GetSelectedItems()
-        if items:
-            if isinstance(items, dict):
-                return next(iter(items.values()))
-            if isinstance(items, list):
-                return items[0]
-    if hasattr(timeline, "GetCurrentVideoItem"):
-        return timeline.GetCurrentVideoItem()
-    return None
 
 
 def _ranges_from_markers(marker_dict, base_tl_start: int) -> List[Tuple[int, int]]:
@@ -102,7 +74,7 @@ def main():
     parser.add_argument("--video", default=None, help="Optional video path for recompute if no markers")
     args = parser.parse_args()
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")
@@ -110,15 +82,17 @@ def main():
     if timeline is None:
         raise RuntimeError("No active timeline.")
 
-    selected = _get_selected_clip(timeline)
-    clip_start = int(selected.GetStart()) if selected else 0
+    selected, _ = get_clip_at_playhead(timeline)
+    if selected is None:
+        print("No clip at playhead. Move the playhead over a clip and try again.")
+        return
+    clip_start = int(selected.GetStart())
 
+    # Read [DSU] markers from the clip (placed by Detect stage)
     ranges: List[Tuple[int, int]] = []
-    if selected and hasattr(selected, "GetMarkers"):
+    if hasattr(selected, "GetMarkers"):
+        # Clip markers are relative to clip start — convert to absolute timeline positions
         ranges = _ranges_from_markers(selected.GetMarkers(), clip_start)
-
-    if not ranges and hasattr(timeline, "GetMarkers"):
-        ranges = _ranges_from_markers(timeline.GetMarkers(), 0)
 
     if not ranges and args.video:
         cfg = UpscaleConfig()
@@ -127,7 +101,7 @@ def main():
         ranges = _ranges_from_video(args.video, cfg, clip_start)
 
     if not ranges:
-        print("No [DSU] markers found and no recompute ranges available.")
+        print("No [DSU] markers found on clip. Run Detect first.")
         return
 
     items = _get_video_items(timeline, args.track)

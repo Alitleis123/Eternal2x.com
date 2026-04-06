@@ -3,20 +3,7 @@ from __future__ import annotations
 import argparse
 
 
-def _get_resolve():
-    try:
-        import os, sys
-        if sys.platform == "win32":
-            lib = os.environ.get("RESOLVE_SCRIPT_LIB", "")
-            if lib:
-                os.add_dll_directory(os.path.dirname(lib))
-        import DaVinciResolveScript as bmd  # type: ignore
-    except Exception as exc:
-        raise RuntimeError("Could not import DaVinciResolveScript. Run inside Resolve.") from exc
-    resolve = bmd.scriptapp("Resolve")
-    if resolve is None:
-        raise RuntimeError("Could not connect to Resolve.")
-    return resolve
+from Stages.resolve_helpers import get_resolve
 
 
 def _get_video_items(timeline, track_index: int):
@@ -49,6 +36,8 @@ def _shift_frame(frame: int, gaps) -> int:
 
 
 def _regroup_timeline_markers(timeline, gaps):
+    # DSU markers are now on clips (not timeline), so they move automatically.
+    # This only shifts any remaining non-DSU timeline markers if needed.
     if not hasattr(timeline, "GetMarkers"):
         return 0
     markers = timeline.GetMarkers() or {}
@@ -57,7 +46,10 @@ def _regroup_timeline_markers(timeline, gaps):
     moved = 0
     for frame_id, info in list(markers.items()):
         name = (info or {}).get("name", "")
-        if not isinstance(name, str) or not name.startswith("[DSU]"):
+        if not isinstance(name, str):
+            continue
+        # Skip DSU markers (they're on clips now)
+        if name.startswith("[DSU]"):
             continue
         try:
             frame = int(frame_id)
@@ -90,7 +82,7 @@ def main():
     parser.add_argument("--track", type=int, default=1, help="Video track index (default: 1)")
     args = parser.parse_args()
 
-    resolve = _get_resolve()
+    resolve = get_resolve()
     project = resolve.GetProjectManager().GetCurrentProject()
     if project is None:
         raise RuntimeError("No active project.")
