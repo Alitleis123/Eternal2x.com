@@ -1,10 +1,11 @@
 """
 Eternal2x GUI Installer
-One-click installer for buyers. Compiled to .exe/.app via PyInstaller.
 
-If system Python is not found, automatically downloads and sets up a
-private portable Python inside the plugin folder — works on both
-Windows (official embeddable package) and macOS (python-build-standalone).
+Run it with `python Installer/gui_installer.py`, or compile it with
+Installer/build_installer.py. When it runs as a compiled app and finds no
+system Python, it downloads a private portable Python into the plugin folder.
+That works on both Windows (official embeddable package) and macOS
+(python-build-standalone).
 """
 
 from __future__ import annotations
@@ -27,10 +28,12 @@ from tkinter import ttk
 # drift. This runs standalone and from a PyInstaller bundle, where the repo
 # root is not on the path, so fall back to importing the sibling module.
 try:
-    from Installer.install_eternal2x import write_config
+    from Installer.install_eternal2x import (
+        _resolve_scripts_dir, remove_old_install, write_config)
 except ImportError:  # pragma: no cover - depends on how this was launched
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from install_eternal2x import write_config
+    from install_eternal2x import (
+        _resolve_scripts_dir, remove_old_install, write_config)
 
 # ---------------------------------------------------------------------------
 # Python download sources
@@ -77,44 +80,15 @@ BORDER = "#1e1e26"
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _resolve_comp_dir() -> Path:
-    if sys.platform.startswith("win"):
-        appdata = os.environ.get("APPDATA")
-        if not appdata:
-            raise RuntimeError("APPDATA is not set.")
-        return (
-            Path(appdata)
-            / "Blackmagic Design"
-            / "DaVinci Resolve"
-            / "Fusion"
-            / "Scripts"
-            / "Comp"
-        )
-    if sys.platform == "darwin":
-        return (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Blackmagic Design"
-            / "DaVinci Resolve"
-            / "Fusion"
-            / "Scripts"
-            / "Comp"
-        )
-    return (
-        Path.home()
-        / ".local"
-        / "share"
-        / "DaVinciResolve"
-        / "Fusion"
-        / "Scripts"
-        / "Comp"
-    )
-
-
 def _find_repo_root() -> Path:
     if getattr(sys, "frozen", False):
-        return Path(sys.executable).resolve().parent
+        here = Path(sys.executable).resolve().parent
+        # A macOS app runs from Eternal2xInstaller.app/Contents/MacOS, so the
+        # plugin folder is the one holding the bundle, not the bundle itself.
+        for parent in (here, *here.parents):
+            if parent.suffix == ".app":
+                return parent.parent
+        return here
     return Path(__file__).resolve().parent.parent
 
 
@@ -290,7 +264,7 @@ class InstallerApp:
         ).pack(fill="x")
 
         try:
-            dest = str(_resolve_comp_dir())
+            dest = str(_resolve_scripts_dir())
         except Exception:
             dest = "(could not detect)"
         tk.Label(
@@ -617,13 +591,14 @@ class InstallerApp:
         self.root.after(0, self._set_progress, 80, "Copying plugin files...")
 
         try:
-            dest_dir = _resolve_comp_dir()
+            dest_dir = _resolve_scripts_dir()
         except Exception as exc:
             self.root.after(0, self._log,
                             f"  Could not find Resolve scripts folder: {exc}", "err")
             return
 
         dest_dir.mkdir(parents=True, exist_ok=True)
+        remove_old_install()
 
         src_launcher = self.repo_root / "Installer" / "Eternal2xLauncher.lua"
         dest_lua = dest_dir / "Eternal2x.lua"
