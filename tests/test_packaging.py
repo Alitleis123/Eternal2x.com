@@ -63,11 +63,18 @@ def test_update_metadata_lists_every_platform(repo_root):
         )
 
 
-def test_update_metadata_version_matches_the_repo_version(repo_root):
+def test_update_metadata_is_not_ahead_of_the_repo_version(repo_root):
+    """VERSION may run ahead between the bump and the release, never behind.
+
+    The feed only moves once a release is published, so straight after a bump
+    it still advertises the previous version. A feed newer than VERSION would
+    point users at something this tree never built.
+    """
+    from Stages.resolve_update import _parse_version
+
     meta = json.loads((repo_root / "update" / "latest.json").read_text(encoding="utf-8-sig"))
-    assert meta["version"] == read_version(repo_root / "VERSION"), (
-        "latest.json advertises a different version than VERSION; users either "
-        "never see the update or re-download it forever"
+    assert _parse_version(meta["version"]) <= _parse_version(read_version(repo_root / "VERSION")), (
+        f"latest.json advertises {meta['version']}, which is newer than VERSION"
     )
 
 

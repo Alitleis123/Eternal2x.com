@@ -207,7 +207,7 @@ def test_settings_chosen_in_the_panel_reach_the_render(installation, read_frames
 
 def test_forcing_a_hold_pattern_reaches_the_render(installation):
     H, _src = installation(holds=(2,) * 12)
-    H.set_combo("HoldCombo", 3)          # On 3s
+    H.set_combo("HoldCombo", 2)          # On 3s
     H.click("AnalyseBtn")
     finish(H)
     assert "on 3s" in H.widgets["AnalysisLabel"].Text

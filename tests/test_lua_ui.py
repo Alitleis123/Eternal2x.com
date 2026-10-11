@@ -148,7 +148,7 @@ def test_output_format_selection_reaches_the_command(lua, direct):
 def test_hold_pattern_choices_are_offered(lua, direct):
     H = load(lua, ui_script(direct))
     labels = H.combo_items("HoldCombo").split(",")
-    assert labels == ["Auto detect", "On 1s", "On 2s", "On 3s"]
+    assert labels == ["Auto detect", "On 2s", "On 3s"]
 
 
 def test_the_version_is_shown(lua, direct):
@@ -188,7 +188,8 @@ def test_buttons_run_from_the_folder_that_holds_the_code(lua, installed):
 
     cmd = H.last_command()
     assert cmd is not None, "clicking Analyse ran nothing"
-    assert f'"{plugin_root}"' in cmd, f"ran: {cmd}\nexpected a cd into {plugin_root}"
+    assert f"cd '{plugin_root}'" in cmd or f'"{plugin_root}"' in cmd, (
+        f"ran: {cmd}\nexpected a cd into {plugin_root}")
 
 
 def test_the_configured_interpreter_is_used(lua, installed):
@@ -286,7 +287,7 @@ def test_quality_selection_reaches_the_command(lua, direct):
 
 def test_hold_pattern_selection_reaches_the_command(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 2)         # On 2s
+    H.set_combo("HoldCombo", 1)         # On 2s
     H.click("AnalyseBtn")
     assert "--base-hold 2" in H.last_command()
 
@@ -444,7 +445,7 @@ def test_refreshing_with_no_run_says_so(lua, direct):
 def test_settings_are_saved(lua, direct):
     H = load(lua, ui_script(direct))
     H.set_combo("QualityCombo", 2)
-    H.set_combo("HoldCombo", 3)
+    H.set_combo("HoldCombo", 2)        # On 3s
     H.set_checkbox("UpscaleCB", False)
 
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
@@ -464,7 +465,7 @@ def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
 def test_saved_settings_are_restored_next_time(lua, direct):
     H = load(lua, ui_script(direct))
     H.set_combo("QualityCombo", 0)     # Fast
-    H.set_combo("HoldCombo", 2)        # On 2s
+    H.set_combo("HoldCombo", 1)        # On 2s
 
     H2 = load(lua, ui_script(direct))
     H2.click("AnalyseBtn")
@@ -591,3 +592,74 @@ def test_a_failed_run_imports_nothing(lua, direct):
     write_status(direct, done=True, ok=False, message="The clip's media is missing.")
     H.click("RefreshStatusBtn")
     assert H.imported_count() == 0
+
+
+@pytest.mark.skipif(sys.platform.startswith("win"), reason="POSIX shell quoting")
+@pytest.mark.parametrize("name", ["Épisode $HOME 1.mov", "it's `date`.mov", "a\\b \"q\".mov"])
+def test_odd_clip_names_reach_python_unchanged(lua, direct, tmp_path, name):
+    """$ and backticks expanded inside the old double quotes, and a quote
+    ended the path early."""
+    import subprocess
+    clip = f"/media/{name}"
+    H = load(lua, ui_script(direct), clip=clip)
+    H.click("AnalyseBtn")
+    cmd = H.last_command()
+    quoted = cmd.split("--video ")[1].split(" --quality")[0]
+    seen = subprocess.run(["sh", "-c", f"printf %s {quoted}"],
+                          capture_output=True, text=True).stdout
+    assert seen == clip
+
+
+@pytest.mark.parametrize("path", ["/tmp/Épisode 1/frame_000000.png",
+                                  'C:\\clips\\a "b"\\out.mp4'])
+def test_the_import_path_is_decoded_before_resolve_sees_it(lua, direct, path):
+    """The JSON escapes used to reach ImportMedia, which then found nothing."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path=path)
+    H.click("RefreshStatusBtn")
+    assert H.imported_at(1) == path
+
+
+def test_a_refused_super_scale_is_not_reported_as_done(lua, direct):
+    """Resolve says no by returning false, not by raising, on the free edition."""
+    H = load(lua, ui_script(direct))
+    H.super_scale_works = False
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert "upscaled 2x" not in H.status()
+    assert "upscale not applied" in H.status()
+
+
+def test_the_windows_background_run_goes_through_a_script(lua, direct):
+    """An & in a path split the old nested `cmd /c "..."` command.
+
+    Pretends to be Windows by changing the directory separator Lua reports,
+    then checks the script the panel writes instead of a nested command.
+    """
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    H = load(lua, ui_script(direct), clip="C:/clips/Tom & Jerry 100%.mov")
+    H.click("SmoothBtn")
+    cmd = H.last_command()
+    outer = cmd.split("\n")[0]
+    assert outer.startswith('start "Eternal2x" /B cmd /c "'), outer
+    assert outer.endswith('.eternal2x_run.cmd"') and "/" not in outer.split('cmd /c')[1], outer
+    assert "Tom & Jerry" not in outer, "the clip path must not be on the outer command line"
+
+    script = (direct / ".eternal2x_run.cmd").read_bytes()
+    assert b"\r\r\n" not in script
+    text = script.decode("utf-8")
+    assert text.startswith("@echo off\r\nchcp 65001 >nul\r\n")
+    assert '"C:/clips/Tom & Jerry 100%%.mov"' in text, "the path must be quoted and % doubled"
+    assert "2>&1" in text
+
+
+def test_a_saved_on_1s_setting_falls_back_to_auto_detect(lua, direct):
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "base_hold=1\n")
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--base-hold" not in H.last_command()

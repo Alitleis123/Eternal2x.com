@@ -8,7 +8,9 @@ the clip is rendered, imported and appended to the timeline.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import sys
 import time
 from pathlib import Path
 from typing import Optional
@@ -56,7 +58,8 @@ class StatusFile:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             temp = self.path.with_suffix(".tmp")
-            temp.write_text(json.dumps(payload), encoding="utf-8")
+            # ensure_ascii=False keeps a path like Épisode readable as UTF-8.
+            temp.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             temp.replace(self.path)
         except OSError:
             pass  # progress reporting must never break the render
@@ -157,10 +160,8 @@ def config_from_args(args) -> Eternal2xConfig:
     return cfg
 
 
-def main() -> int:
-    args = build_parser().parse_args()
+def _run(args, summary: dict) -> int:
     cfg = config_from_args(args)
-    summary: dict = {"ok": False}
     status = StatusFile(args.status_file)
     status.write(message="Starting")
 
@@ -175,12 +176,14 @@ def main() -> int:
             source = bridge.clip_source_path(bridge.selected_clip(timeline))
         except bridge.ResolveError as exc:
             print(f"Error: {exc}")
+            summary["error"] = str(exc)
             status.write(done=True, ok=False, message=str(exc))
             return 2
 
     if not source.exists():
         message = f"The clip's media is missing: {source.name}"
         print(f"Error: {message}")
+        summary["error"] = message
         status.write(done=True, ok=False, message=message)
         return 2
 
@@ -191,6 +194,7 @@ def main() -> int:
         plan, width, height = analyse_video(source, cfg, progress=progress)
     except SourceError as exc:
         print(f"Error: {exc}")
+        summary["error"] = str(exc)
         status.write(done=True, ok=False, message=str(exc))
         return 2
 
@@ -199,30 +203,33 @@ def main() -> int:
                     "plan": plan.to_dict()})
 
     if plan.is_noop:
-        print("Nothing to do: this clip has no duplicated frames.")
-        print("It is either live action or already animated on 1s.")
+        if plan.unique_drawings <= 1:
+            why = "This clip is a single held image, so there is no motion to rebuild."
+            short = "One held image. There is no motion to rebuild."
+            summary["skipped"] = "single drawing"
+        else:
+            why = "This clip has no duplicated frames. It is live action or already animated on 1s."
+            short = "No duplicate frames. This clip is already on 1s."
+            summary["skipped"] = "no duplicate frames"
+        print(f"Nothing to do. {why}")
         summary["ok"] = True
-        summary["skipped"] = "no duplicate frames"
-        status.write(done=True, ok=True,
-                     message="No duplicate frames. This clip is already on 1s.")
-        if args.json:
-            print(json.dumps(summary))
+        status.write(done=True, ok=True, message=short)
         return 0
 
     if args.analyse:
         print("Analysis only. Nothing was changed.")
         summary["ok"] = True
         status.write(done=True, ok=True, message=plan.describe())
-        if args.json:
-            print(json.dumps(summary))
         return 0
 
     output = _output_path(source, args.output_dir, args.format)
     print(f"Rendering to: {output}")
     try:
-        result = render_plan(source, plan, output, cfg, progress=progress)
+        result = render_plan(source, plan, output, cfg, progress=progress,
+                             sequence=(args.format == "png"))
     except SourceError as exc:
         print(f"Error: {exc}")
+        summary["error"] = str(exc)
         status.write(done=True, ok=False, message=str(exc))
         return 2
 
@@ -245,8 +252,6 @@ def main() -> int:
         status.write(done=True, ok=True,
                      message=f"Rendered {plan.unique_drawings} drawings into "
                              f"{result.frames_written} smooth frames.")
-        if args.json:
-            print(json.dumps(summary))
         return 0
 
     media_item, imported = bridge.import_media(project, result.output,
@@ -262,8 +267,6 @@ def main() -> int:
         status.write(done=True, ok=True,
                      message=f"Rendered, but Resolve would not import it. "
                              f"Drag in {result.output.name} to finish.")
-        if args.json:
-            print(json.dumps(summary))
         return 0
 
     if cfg.upscale_factor > 1:
@@ -285,9 +288,21 @@ def main() -> int:
     status.write(done=True, ok=True,
                  message=f"Done. {plan.unique_drawings} drawings rebuilt into "
                          f"{result.frames_written} smooth frames.")
-    if args.json:
-        print(json.dumps(summary))
     return 0
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    summary: dict = {"ok": False}
+    if not args.json:
+        return _run(args, summary)
+    # With --json, stdout carries exactly one JSON object, so the progress and
+    # human-readable lines go to stderr where they cannot break a parser.
+    with contextlib.redirect_stdout(sys.stderr):
+        code = _run(args, summary)
+    summary["exit_code"] = code
+    print(json.dumps(summary, ensure_ascii=False))
+    return code
 
 
 if __name__ == "__main__":

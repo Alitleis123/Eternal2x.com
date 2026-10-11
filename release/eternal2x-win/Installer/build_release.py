@@ -8,6 +8,12 @@ The tag is derived from VERSION in one place, `release_tag()`, and both the
 download URLs and the git tag come from it. They used to be decided separately,
 which is how 0.2.0 shipped a latest.json pointing at a v0.2.0 tag that did not
 exist, leaving every download link a 404.
+
+update/latest.json describes what is published, not what is in the working
+tree, so only --publish writes it, and only after the uploaded files check out.
+A plain build used to rewrite it too. After 0.3.1 a shipped file was deleted,
+the rebuild put new checksums in the feed, and every update download failed
+its checksum against the archives that were really on the release.
 """
 
 from __future__ import annotations
@@ -96,17 +102,23 @@ def publish(version: str) -> bool:
     existing = subprocess.run(["gh", "release", "view", tag, "--repo", REPO],
                               capture_output=True, text=True)
     if existing.returncode == 0:
-        print(f"  {tag} already exists, uploading assets over it")
-        command = ["gh", "release", "upload", tag, "--repo", REPO, "--clobber", *archives]
-    else:
-        # Tag the commit being built, not whatever the default branch points at.
-        target = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
-                                text=True, cwd=REPO_ROOT).stdout.strip()
-        command = ["gh", "release", "create", tag, "--repo", REPO,
-                   "--title", f"Eternal2x {version}",
-                   "--notes", f"Eternal2x {version}.", *archives]
-        if target:
-            command[4:4] = ["--target", target]
+        # Never replace a published file. Users who already have the feed
+        # verify against those exact bytes. Only upload what is missing, and
+        # let the verify step report it if the build no longer matches.
+        print(f"  {tag} already exists, uploading only missing assets")
+        for archive in archives:
+            subprocess.run(["gh", "release", "upload", tag, "--repo", REPO, archive],
+                           capture_output=True, text=True)
+        return True
+
+    # Tag the commit being built, not whatever the default branch points at.
+    target = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
+                            text=True, cwd=REPO_ROOT).stdout.strip()
+    command = ["gh", "release", "create", tag, "--repo", REPO,
+               "--title", f"Eternal2x {version}",
+               "--notes", f"Eternal2x {version}.", *archives]
+    if target:
+        command[4:4] = ["--target", target]
     result = subprocess.run(command, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"  publishing failed: {result.stderr.strip()}")
@@ -224,15 +236,16 @@ def main() -> int:
             return 1
         print("Verifying the published downloads")
         if not verify_feed(meta):
-            print("The release is published but its downloads are not usable. "
-                  "update/latest.json was left untouched.")
+            print("The published downloads do not match this build, so "
+                  "update/latest.json was left untouched. If shipped files changed "
+                  f"since {tag} went out, bump VERSION and release again.")
             return 1
+        path = write_metadata(meta)
+        print(f"Wrote {path.relative_to(REPO_ROOT)}")
+        return 0
 
-    path = write_metadata(meta)
-    print(f"Wrote {path.relative_to(REPO_ROOT)}")
-    if not args.publish:
-        print(f"Not published yet. Run with --publish, or tag the release {tag} "
-              "by hand, before this lands on main.")
+    print("update/latest.json is unchanged. It only moves when --publish "
+          "has uploaded and verified a release.")
     return 0
 
 

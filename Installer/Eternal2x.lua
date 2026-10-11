@@ -54,7 +54,10 @@ local function shell_quote(s)
     if is_windows() then
         return '"' .. s:gsub('"', '""') .. '"'
     end
-    return '"' .. s:gsub('"', '\\"') .. '"'
+    -- Single quotes, so $, backticks and backslashes in a path stay literal.
+    -- Inside double quotes the shell would expand `$HOME` in a file name, or
+    -- run a backticked command.
+    return "'" .. s:gsub("'", "'\\''") .. "'"
 end
 
 local function short_path(path, max_len)
@@ -70,7 +73,7 @@ local function basename(path)
 end
 
 local root = trim_trailing_sep(script_dir() or "")
--- Launched through Eternal2xLauncher.lua the config lives in Resolve's Comp
+-- Launched through Eternal2xLauncher.lua the config lives in Resolve's Utility
 -- folder rather than beside this file, so the launcher passes its path down.
 local CONF_PATH = _G.ETERNAL2X_CONF or join_path(root, "Eternal2x.conf")
 local conf = read_conf(CONF_PATH)
@@ -87,6 +90,7 @@ local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
 local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
+local RUN_SCRIPT = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_run.cmd")
 
 local function save_conf()
     local f = io.open(CONF_PATH, "w")
@@ -170,9 +174,21 @@ local function build_command(module_name, args, background)
         return cd .. " && " .. run .. redirect
     end
     if is_windows() then
-        -- The redirection has to sit inside the spawned cmd, otherwise it
-        -- binds to `start` itself and the log stays empty.
-        return cd .. " && start \"Eternal2x\" /B cmd /c \"" .. run .. redirect .. "\""
+        -- Nesting quoted paths inside `cmd /c "..."` flips cmd's quote state,
+        -- so the inner paths end up unquoted and an & in a file name splits
+        -- the command. Write the command to a script and start that instead.
+        -- % is doubled because a batch file expands it. The redirection sits
+        -- inside the script, so it applies to the child process and not to
+        -- `start`, which would leave the log empty. chcp 65001 makes cmd read
+        -- the rest of the script as UTF-8, so non-ASCII paths survive.
+        -- Binary mode keeps Lua from turning \r\n into \r\r\n.
+        local f = io.open(RUN_SCRIPT, "wb")
+        if f then
+            f:write("@echo off\r\nchcp 65001 >nul\r\n", (cd:gsub("%%", "%%%%")), "\r\n",
+                    ((run .. redirect):gsub("%%", "%%%%")), "\r\n")
+            f:close()
+        end
+        return "start \"Eternal2x\" /B cmd /c " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
     end
     -- `A && B &` backgrounds the whole compound, which is what we want here.
     return cd .. " && " .. run .. redirect .. " &"
@@ -199,9 +215,60 @@ local function read_log()
     return s
 end
 
--- The status file is written by Stages/resolve_smooth.py. Its shape is fixed
--- and its strings are sanitised, so pattern matching is enough and the panel
--- does not need a JSON parser.
+-- Encode a code point as UTF-8, for \u escapes in the status file.
+local function utf8_char(cp)
+    if cp < 0x80 then return string.char(cp) end
+    if cp < 0x800 then
+        return string.char(0xC0 + math.floor(cp / 0x40), 0x80 + cp % 0x40)
+    end
+    if cp < 0x10000 then
+        return string.char(0xE0 + math.floor(cp / 0x1000),
+                           0x80 + math.floor(cp / 0x40) % 0x40, 0x80 + cp % 0x40)
+    end
+    return string.char(0xF0 + math.floor(cp / 0x40000),
+                       0x80 + math.floor(cp / 0x1000) % 0x40,
+                       0x80 + math.floor(cp / 0x40) % 0x40, 0x80 + cp % 0x40)
+end
+
+local JSON_ESCAPES = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b",
+                       f = "\f", n = "\n", r = "\r", t = "\t" }
+
+-- Read one string value out of a flat JSON object, decoding its escapes.
+-- File paths can hold quotes, backslashes and non-ASCII letters, and a plain
+-- pattern match would hand Resolve the escaped form, which it cannot find.
+local function json_string(s, key)
+    local start = select(2, s:find('"' .. key .. '"%s*:%s*"'))
+    if not start then return nil end
+    local out, i = {}, start + 1
+    while i <= #s do
+        local c = s:sub(i, i)
+        if c == '"' then return table.concat(out) end
+        if c == "\\" then
+            local e = s:sub(i + 1, i + 1)
+            if e == "u" then
+                local cp = tonumber(s:sub(i + 2, i + 5), 16) or 0xFFFD
+                i = i + 6
+                -- A surrogate pair carries a character outside the BMP.
+                if cp >= 0xD800 and cp <= 0xDBFF and s:sub(i, i + 1) == "\\u" then
+                    local low = tonumber(s:sub(i + 2, i + 5), 16) or 0
+                    cp = 0x10000 + (cp - 0xD800) * 0x400 + (low - 0xDC00)
+                    i = i + 6
+                end
+                out[#out + 1] = utf8_char(cp)
+            else
+                out[#out + 1] = JSON_ESCAPES[e] or e
+                i = i + 2
+            end
+        else
+            out[#out + 1] = c
+            i = i + 1
+        end
+    end
+    return nil
+end
+
+-- The status file is written by Stages/resolve_smooth.py as a flat JSON
+-- object with a fixed shape, so the panel reads it without a full parser.
 local function read_status()
     local f = io.open(STATUS_PATH, "r")
     if not f then return nil end
@@ -209,10 +276,10 @@ local function read_status()
     f:close()
     if s == "" then return nil end
     return {
-        stage    = s:match('"stage"%s*:%s*"(.-)"') or "",
-        message  = s:match('"message"%s*:%s*"(.-)"') or "",
+        stage    = json_string(s, "stage") or "",
+        message  = json_string(s, "message") or "",
         fraction = tonumber(s:match('"fraction"%s*:%s*([%-%d%.eE]+)')) or 0,
-        import_path = s:match('"import_path"%s*:%s*"(.-)"') or "",
+        import_path = json_string(s, "import_path") or "",
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
         ok       = s:match('"ok"%s*:%s*(%a+)') == "true",
     }
@@ -231,8 +298,10 @@ local disp = bmd.UIDispatcher(ui)
 
 local QUALITIES = { "fast", "better", "best" }
 local QUALITY_LABELS = { "Fast", "Better", "Best" }
-local HOLDS = { 0, 1, 2, 3 }
-local HOLD_LABELS = { "Auto detect", "On 1s", "On 2s", "On 3s" }
+-- No "On 1s": planning on 1s gives every frame its own slot, so it would
+-- change nothing. A saved 1 from an older version falls back to Auto detect.
+local HOLDS = { 0, 2, 3 }
+local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
 local FORMATS = { "png", "mp4", "avi" }
 local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "AVI (lossless)" }
 
@@ -449,13 +518,17 @@ local function import_result(path)
     local notes = "Imported " .. basename(path)
     if DO_UPSCALE and mpi.SetClipProperty then
         -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected.
-        local scaled = pcall(function() return mpi:SetClipProperty("Super Scale", "2") end)
-        notes = notes .. (scaled and ", upscaled 2x" or ", upscale not applied")
+        -- pcall's first value only says nothing raised. Resolve reports a
+        -- refusal, as on the free edition, by returning false, so check that.
+        local called, scaled = pcall(function() return mpi:SetClipProperty("Super Scale", "2") end)
+        notes = notes .. ((called and scaled) and ", upscaled 2x"
+                          or ", upscale not applied (Super Scale needs Resolve Studio)")
     end
     if pool.AppendToTimeline then
-        local appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
-        notes = notes .. (appended and ", added to the timeline."
-                                    or ". Drag it onto your timeline.")
+        local called, appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
+        local added = called and appended and (type(appended) ~= "table" or #appended > 0)
+        notes = notes .. (added and ", added to the timeline."
+                                or ". Drag it onto your timeline.")
     end
     return true, notes
 end

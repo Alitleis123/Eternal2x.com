@@ -1,7 +1,8 @@
 """Report what this Resolve build's scripting API actually offers.
 
-Run it from Workspace > Scripts when something behaves unexpectedly, or on a
-Resolve version this plugin has not seen. The output says which methods exist,
+Run it from a terminal in the plugin folder, with Resolve open and its external
+scripting turned on, when something behaves unexpectedly or on a Resolve
+version this plugin has not seen. The output says which methods exist,
 which is usually enough to explain any failure without guesswork.
 """
 

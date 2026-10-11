@@ -59,8 +59,13 @@ class DedupePlan:
 
     @property
     def is_noop(self) -> bool:
-        """True when there is nothing to gain: every source frame is unique."""
-        return self.output_frames >= self.source_frames
+        """True when there is nothing to gain.
+
+        Either every source frame is already a new drawing, or there is only
+        one drawing and so no motion to rebuild. A clip that is mostly on 1s
+        with a few held frames is not a no-op, those holds still get filled.
+        """
+        return self.unique_drawings >= self.source_frames or self.unique_drawings <= 1
 
     @property
     def stretch(self) -> float:
@@ -76,6 +81,11 @@ class DedupePlan:
     def describe(self) -> str:
         if self.source_frames == 0:
             return "Empty clip."
+        if self.is_noop and self.unique_drawings <= 1:
+            return (
+                f"{self.source_frames} frames, one drawing held throughout. "
+                "There is no motion to rebuild."
+            )
         if self.is_noop:
             return (
                 f"{self.source_frames} frames, all unique. "
@@ -145,19 +155,26 @@ def detect_base_hold(holds: Sequence[Hold], *, max_pattern: int = 4) -> int:
     return min(length for length, count in counts.items() if count == best)
 
 
-def build_output_indices(holds: Sequence[Hold], base_hold: int) -> List[int]:
-    """Choose which source frames make up the intermediate clip.
+def hold_repeats(hold: Hold, base_hold: int) -> int:
+    """How many intermediate frames one drawing occupies.
 
-    Each drawing contributes `round(length / base_hold)` frames, so a drawing
-    held for the base pattern appears once, and one held for six times the
-    base still occupies six times as much screen time after the stretch. That
-    keeps deliberate holds still instead of melting them into motion.
+    A drawing held for the base pattern appears once, and one held for six
+    times the base appears six times, so deliberate holds stay still instead
+    of melting into motion. The base is at least 2 here: planning on 1s would
+    give every frame its own slot and leave the held frames of a mostly-1s
+    clip exactly as stepped as they were. A single-frame drawing still gets
+    exactly one slot, so it is never touched. Halves round up, not to even,
+    so equal holds always get equal treatment.
     """
-    base = max(1, int(base_hold))
+    base = max(2, int(base_hold))
+    return max(1, int(hold.length / float(base) + 0.5))
+
+
+def build_output_indices(holds: Sequence[Hold], base_hold: int) -> List[int]:
+    """Choose which source frames make up the intermediate clip."""
     indices: List[int] = []
     for hold in holds:
-        repeats = max(1, int(round(hold.length / float(base))))
-        indices.extend([hold.index] * repeats)
+        indices.extend([hold.index] * hold_repeats(hold, base_hold))
     return indices
 
 
@@ -185,9 +202,13 @@ def plan_from_scores(
 def output_time_map(plan: DedupePlan) -> List[float]:
     """Where each final frame sits in the intermediate clip, as a float index.
 
-    Final frame `n` of `source_frames` maps to position `n / stretch` in the
-    intermediate. The integer part picks the pair of drawings to blend, the
-    fraction is how far between them the in-between sits.
+    The integer part picks the pair of drawings to blend, the fraction is how
+    far between them the in-between sits.
+
+    Each hold is mapped onto its own slots, so the frame where a drawing
+    starts in the source is the frame where it starts in the output. A single
+    stretch for the whole clip let rounding error pile up instead, and a cut
+    could land several frames away from its place in the edit and the audio.
 
     The last drawing has no successor, so the final slot clamps to it and is
     held rather than interpolated. That is the one place where the source's
@@ -197,8 +218,15 @@ def output_time_map(plan: DedupePlan) -> List[float]:
     if plan.output_frames == 0 or plan.source_frames == 0:
         return []
     last = plan.output_frames - 1
-    # Rate-based, not endpoint-matched: output frame n sits n/stretch into the
-    # intermediate. Matching the endpoints instead would rescale the whole clip
-    # slightly and leave no output frame sitting exactly on a real drawing.
-    rate = plan.output_frames / float(plan.source_frames)
-    return [min(last, n * rate) for n in range(plan.source_frames)]
+    if not plan.holds:
+        rate = plan.output_frames / float(plan.source_frames)
+        return [min(last, n * rate) for n in range(plan.source_frames)]
+
+    positions: List[float] = []
+    slot = 0
+    for hold in plan.holds:
+        repeats = hold_repeats(hold, plan.base_hold)
+        step = repeats / float(hold.length)
+        positions.extend(min(last, slot + k * step) for k in range(hold.length))
+        slot += repeats
+    return positions

@@ -320,9 +320,9 @@ def test_a_download_that_404s_does_not_traceback(http_server, repo, capsys):
     base, www = http_server
     url = publish_meta(www, base, {
         "version": "9.9.9",
-        "windows": {"url": f"{base}/missing.zip", "sha256": ""},
-        "macos": {"url": f"{base}/missing.zip", "sha256": ""},
-        "linux": {"url": f"{base}/missing.zip", "sha256": ""},
+        "windows": {"url": f"{base}/missing.zip", "sha256": "0" * 64},
+        "macos": {"url": f"{base}/missing.zip", "sha256": "0" * 64},
+        "linux": {"url": f"{base}/missing.zip", "sha256": "0" * 64},
     })
 
     assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
@@ -333,13 +333,63 @@ def test_a_download_that_404s_does_not_traceback(http_server, repo, capsys):
 def test_a_corrupt_package_is_reported(http_server, repo, capsys):
     base, www = http_server
     (www / "broken.zip").write_bytes(b"this is not a zip file")
+    sha = hashlib.sha256(b"this is not a zip file").hexdigest()
     url = publish_meta(www, base, {
         "version": "9.9.9",
-        "windows": {"url": f"{base}/broken.zip", "sha256": ""},
-        "macos": {"url": f"{base}/broken.zip", "sha256": ""},
-        "linux": {"url": f"{base}/broken.zip", "sha256": ""},
+        "windows": {"url": f"{base}/broken.zip", "sha256": sha},
+        "macos": {"url": f"{base}/broken.zip", "sha256": sha},
+        "linux": {"url": f"{base}/broken.zip", "sha256": sha},
     })
 
     assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
     assert "could not be opened" in capsys.readouterr().out
     assert repo.joinpath("Stages/motion_score.py").read_text() == "# old stage\n"
+
+
+def _feed_for(www, base, zip_bytes, sha=None):
+    (www / "pkg.zip").write_bytes(zip_bytes)
+    digest = hashlib.sha256(zip_bytes).hexdigest() if sha is None else sha
+    blob = {"url": f"{base}/pkg.zip", "sha256": digest}
+    return publish_meta(www, base, {"version": "9.9.9", "windows": blob,
+                                    "macos": blob, "linux": blob})
+
+
+def _zip_of(entries):
+    import io
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        for name, data in entries.items():
+            zf.writestr(name, data)
+    return buf.getvalue()
+
+
+def test_an_update_without_a_checksum_is_refused(http_server, repo, capsys):
+    """The README promises every update is verified, so no checksum, no update."""
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({"pkg/Stages/new.py": "# new\n"}), sha="")
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+    assert "no checksum" in capsys.readouterr().out
+    assert not repo.joinpath("Stages/new.py").exists()
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+
+
+def test_a_package_with_nothing_to_install_leaves_the_version_alone(http_server, repo, capsys):
+    """Bumping VERSION after copying nothing would hide the update forever."""
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({"a/readme.txt": "x", "b/other.txt": "y"}))
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+
+
+def test_a_finder_zip_with_a_macosx_folder_still_installs(http_server, repo):
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({
+        "__MACOSX/eternal2x-mac/._README.md": "junk",
+        "eternal2x-mac/Stages/new.py": "# new\n",
+        "eternal2x-mac/VERSION": "9.9.9\n",
+    }))
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 0
+    assert repo.joinpath("Stages/new.py").read_text() == "# new\n"
+    assert repo.joinpath("VERSION").read_text().strip() == "9.9.9"
+    assert not any(p.name.startswith(".eternal2x_update_") for p in repo.iterdir())

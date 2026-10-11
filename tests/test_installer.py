@@ -34,26 +34,46 @@ def fake_home(tmp_path, monkeypatch):
 # install locations
 # --------------------------------------------------------------------------
 
-def test_comp_dir_matches_the_documented_mac_path(fake_home, monkeypatch):
+def test_scripts_dir_matches_the_documented_mac_path(fake_home, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     expected = (fake_home / "Library" / "Application Support" / "Blackmagic Design"
-                / "DaVinci Resolve" / "Fusion" / "Scripts" / "Comp")
-    assert inst._resolve_comp_dir() == expected
+                / "DaVinci Resolve" / "Fusion" / "Scripts" / "Utility")
+    assert inst._resolve_scripts_dir() == expected
 
 
-def test_comp_dir_matches_the_documented_windows_path(fake_home, monkeypatch):
+def test_scripts_dir_matches_the_documented_windows_path(monkeypatch, tmp_path):
+    """Blackmagic's README puts per-user scripts under Support on Windows."""
     monkeypatch.setattr(sys, "platform", "win32")
-    got = inst._resolve_comp_dir()
-    assert got.parts[-6:] == ("Blackmagic Design", "DaVinci Resolve", "Fusion",
-                              "Scripts", "Comp")[-6:] or got.name == "Comp"
-    assert "Blackmagic Design" in str(got)
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    got = inst._resolve_scripts_dir()
+    assert got == (tmp_path / "Blackmagic Design" / "DaVinci Resolve" / "Support"
+                   / "Fusion" / "Scripts" / "Utility")
 
 
-def test_comp_dir_requires_appdata_on_windows(monkeypatch):
+def test_the_launcher_is_listed_on_every_page_not_just_fusion(fake_home, monkeypatch):
+    """Comp scripts only appear on the Fusion page. The panel is used on Edit."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    assert inst._resolve_scripts_dir().name == "Utility"
+
+
+def test_a_reinstall_removes_the_old_comp_launcher(fake_home, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.lua").write_text("-- old\n")
+    (comp / "Eternal2x.conf").write_text("repo_root=/old\n")
+    (comp / "SomeoneElse.lua").write_text("-- not ours\n")
+    inst.remove_old_install()
+    assert not (comp / "Eternal2x.lua").exists()
+    assert not (comp / "Eternal2x.conf").exists()
+    assert (comp / "SomeoneElse.lua").exists()
+
+
+def test_scripts_dir_requires_appdata_on_windows(monkeypatch):
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.delenv("APPDATA", raising=False)
     with pytest.raises(RuntimeError, match="APPDATA"):
-        inst._resolve_comp_dir()
+        inst._resolve_scripts_dir()
 
 
 def test_prefers_a_project_venv_interpreter(tmp_path, monkeypatch):
@@ -78,7 +98,7 @@ def test_install_writes_launcher_and_config(fake_home, monkeypatch, capsys, repo
     monkeypatch.setattr(sys, "platform", "darwin")
     assert inst.main() == 0
 
-    comp = inst._resolve_comp_dir()
+    comp = inst._resolve_scripts_dir()
     assert (comp / "Eternal2x.lua").exists(), "launcher was not installed"
     assert (comp / "Eternal2x.conf").exists(), "config was not written"
 
@@ -86,7 +106,7 @@ def test_install_writes_launcher_and_config(fake_home, monkeypatch, capsys, repo
 def test_installed_config_has_every_key_the_ui_reads(fake_home, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf = read_conf(inst._resolve_comp_dir() / "Eternal2x.conf")
+    conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
     for key in ("repo_root", "python", "update_url", "auto_update"):
         assert key in conf, f"config is missing {key}; the UI reads it"
 
@@ -95,7 +115,7 @@ def test_installed_repo_root_contains_the_stages_package(fake_home, monkeypatch)
     """`repo_root` must be the folder a `python -m Stages.x` call can run from."""
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf = read_conf(inst._resolve_comp_dir() / "Eternal2x.conf")
+    conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
     root = Path(conf["repo_root"])
     assert (root / "Stages" / "__init__.py").exists(), (
         f"repo_root={root} does not contain the Stages package"
@@ -107,7 +127,7 @@ def test_the_installed_config_actually_runs_a_stage(fake_home, monkeypatch):
     """Use the installed repo_root + python to invoke a stage, as the UI does."""
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf = read_conf(inst._resolve_comp_dir() / "Eternal2x.conf")
+    conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
 
     result = subprocess.run(
         [conf["python"], "-m", "Stages.resolve_regroup"],
@@ -120,7 +140,7 @@ def test_the_installed_config_actually_runs_a_stage(fake_home, monkeypatch):
 def test_installed_update_url_is_https_and_points_at_latest_json(fake_home, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf = read_conf(inst._resolve_comp_dir() / "Eternal2x.conf")
+    conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
     assert conf["update_url"].startswith("https://")
     assert conf["update_url"].endswith("latest.json")
 
@@ -128,7 +148,7 @@ def test_installed_update_url_is_https_and_points_at_latest_json(fake_home, monk
 def test_reinstall_is_idempotent(fake_home, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf_path = inst._resolve_comp_dir() / "Eternal2x.conf"
+    conf_path = inst._resolve_scripts_dir() / "Eternal2x.conf"
     first = conf_path.read_text()
     inst.main()
     assert conf_path.read_text() == first
@@ -150,7 +170,7 @@ def test_the_installed_launcher_can_find_the_ui_script(fake_home, monkeypatch, r
     """The launcher forwards to repo_root/Installer/Eternal2x.lua -- it must exist."""
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
-    conf = read_conf(inst._resolve_comp_dir() / "Eternal2x.conf")
+    conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
     ui_script = Path(conf["repo_root"]) / "Installer" / "Eternal2x.lua"
     assert ui_script.exists(), f"launcher would look for {ui_script}, which is missing"
 
