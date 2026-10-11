@@ -327,3 +327,42 @@ def test_the_no_interpolate_flag_changes_the_output(make_anime, monkeypatch, tmp
     assert any(not (a == b).all() for a, b in zip(on, off)), (
         "--no-interpolate produced identical output, so the setting does nothing"
     )
+
+
+def test_a_dotted_source_name_still_renders_an_image_sequence(make_anime, monkeypatch, tmp_path):
+    """`shot.v2_smooth` has the suffix `.v2_smooth`, which was taken for a
+    video container and failed with 'No encoder available'."""
+    src = make_anime(holds=(2,) * 6)
+    dotted = src.with_name("shot.v2.avi")
+    src.rename(dotted)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(dotted), "--output-dir", str(out)]) == 0
+    folder = out / "shot.v2_smooth"
+    assert folder.is_dir()
+    assert len(list(folder.glob("frame_*.png"))) == 12
+
+
+def test_a_frame_that_cannot_be_written_fails_the_run(make_anime, monkeypatch, tmp_path, capsys):
+    """imwrite returns False instead of raising, and that used to be ignored."""
+    import cv2
+    src = make_anime(holds=(2,) * 6)
+    monkeypatch.setattr(cv2, "imwrite", lambda *a, **k: False)
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(tmp_path / "o")]) == 2
+    assert "Could not write" in capsys.readouterr().out
+
+
+def test_json_output_is_the_whole_of_stdout(make_anime, monkeypatch, capsys, tmp_path):
+    """`| jq` has to work, so progress lines must not share stdout."""
+    src = make_anime(holds=(2,) * 6)
+    assert run(monkeypatch, ["--video", str(src), "--json", "--analyse"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+    assert payload["plan"]["unique_drawings"] == 6
+
+
+def test_json_output_reports_errors_too(monkeypatch, capsys, tmp_path):
+    assert run(monkeypatch, ["--video", str(tmp_path / "missing.mov"), "--json"]) == 2
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert "missing" in payload["error"]
+    assert payload["exit_code"] == 2

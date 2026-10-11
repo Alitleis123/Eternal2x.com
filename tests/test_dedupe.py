@@ -234,3 +234,54 @@ def test_time_map_of_a_single_frame():
 
 def test_time_map_of_an_empty_plan():
     assert output_time_map(DedupePlan(source_frames=0, fps=24.0)) == []
+
+
+def _starts(holds):
+    starts, at = [], 0
+    for length in holds:
+        starts.append(at)
+        at += length
+    return starts
+
+
+@pytest.mark.parametrize("holds", [
+    [3] * 8 + [2] * 12,             # 3s then a cut to 2s
+    [2, 3, 2, 5, 2, 7, 2, 2, 3],    # odd holds that round both ways
+    [1, 1, 2, 1, 3, 1, 1, 2, 12, 2],
+])
+def test_every_drawing_starts_where_it_did_in_the_source(holds):
+    """A cut that moves goes out of sync with the edit and the audio.
+
+    With one stretch for the whole clip, 8 drawings on 3s followed by 12 on
+    2s put the cut at output frame 27 instead of 24.
+    """
+    plan = plan_from_scores(scores_for(holds), 24.0, threshold=T)
+    positions = output_time_map(plan)
+    slots = {}
+    slot = 0
+    for i in plan.output_indices:
+        slots.setdefault(i, slot)
+        slot += 1
+    for start in _starts(holds):
+        assert positions[start] == pytest.approx(slots[start]), (
+            f"the drawing at source frame {start} starts at {positions[start]}, "
+            f"not on its own slot {slots[start]}"
+        )
+
+
+def test_a_mostly_ones_clip_with_held_frames_is_not_a_noop():
+    """It used to report 'all unique' and stop, leaving the holds stepped."""
+    holds = [1, 1, 1, 1, 1, 1, 2, 2]
+    plan = plan_from_scores(scores_for(holds), 24.0, threshold=T)
+    assert not plan.is_noop
+    assert "all unique" not in plan.describe()
+    positions = output_time_map(plan)
+    # The held frames get in-betweens, the single frames stay exact.
+    assert any(p != int(p) for p in positions)
+    for start in range(6):
+        assert positions[start] == start
+
+
+def test_a_single_drawing_is_still_a_noop():
+    plan = plan_from_scores(scores_for([24]), 24.0, threshold=T)
+    assert plan.is_noop
