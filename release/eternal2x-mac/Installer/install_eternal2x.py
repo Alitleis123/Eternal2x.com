@@ -11,39 +11,43 @@ DEFAULT_UPDATE_URL = (
 )
 
 
-def _resolve_comp_dir() -> Path:
+def _resolve_scripts_root() -> Path:
+    """Resolve's per-user Fusion/Scripts folder, as Blackmagic documents it."""
     if sys.platform.startswith("win"):
         appdata = os.environ.get("APPDATA")
         if not appdata:
             raise RuntimeError("APPDATA is not set.")
-        return (
-            Path(appdata)
-            / "Blackmagic Design"
-            / "DaVinci Resolve"
-            / "Fusion"
-            / "Scripts"
-            / "Comp"
-        )
+        # Windows keeps it under Support. Without that folder Resolve never
+        # scans the script, so the panel would not show up at all.
+        return (Path(appdata) / "Blackmagic Design" / "DaVinci Resolve"
+                / "Support" / "Fusion" / "Scripts")
     if sys.platform == "darwin":
-        return (
-            Path.home()
-            / "Library"
-            / "Application Support"
-            / "Blackmagic Design"
-            / "DaVinci Resolve"
-            / "Fusion"
-            / "Scripts"
-            / "Comp"
-        )
-    return (
-        Path.home()
-        / ".local"
-        / "share"
-        / "DaVinciResolve"
-        / "Fusion"
-        / "Scripts"
-        / "Comp"
-    )
+        return (Path.home() / "Library" / "Application Support"
+                / "Blackmagic Design" / "DaVinci Resolve" / "Fusion" / "Scripts")
+    return Path.home() / ".local" / "share" / "DaVinciResolve" / "Fusion" / "Scripts"
+
+
+def _resolve_scripts_dir() -> Path:
+    """Where the launcher goes.
+
+    Utility scripts are listed under Workspace > Scripts on every page. Comp
+    scripts are only listed on the Fusion page, which is not where anyone
+    works with a timeline clip.
+    """
+    return _resolve_scripts_root() / "Utility"
+
+
+def remove_old_install() -> None:
+    """Remove the launcher earlier versions put in Comp, so it is not listed twice."""
+    try:
+        old = _resolve_scripts_root() / "Comp"
+    except RuntimeError:
+        return
+    for name in ("Eternal2x.lua", "Eternal2x.conf"):
+        try:
+            (old / name).unlink()
+        except OSError:
+            pass
 
 
 def _pick_python(repo_root: Path) -> str:
@@ -96,8 +100,9 @@ def main() -> int:
         print(f"Missing launcher script: {src_lua}")
         return 1
 
-    dest_dir = _resolve_comp_dir()
+    dest_dir = _resolve_scripts_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
+    remove_old_install()
 
     dest_lua = dest_dir / "Eternal2x.lua"
     shutil.copy2(src_lua, dest_lua)

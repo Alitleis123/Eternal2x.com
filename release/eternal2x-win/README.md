@@ -15,8 +15,11 @@ Eternal2x recovers the real drawings first, then rebuilds the shot.
 ```
 source     A A B B C C C D D        9 frames, held on 2s
 drawings   A   B   C     D          4 unique drawings
-rebuilt    A a B b C c c D          in-betweens generated, C stays a held pose
+rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer hold
 ```
+
+Every drawing starts on the same frame it did in the source, so cuts and lip
+sync stay where the edit put them.
 
 The result has the same length and frame rate as the clip you started with, so
 it drops straight back into your edit.
@@ -40,18 +43,21 @@ dissolve rather than inventing a broken frame.
 - **DaVinci Resolve Studio** 18 or newer. Super Scale and Optical Flow are
   Studio features, so the free edition cannot do the upscale. Eternal2x detects
   it and tells you rather than silently skipping it.
-- Python 3.8+ on your PATH. The one-click installer sets up a private Python if
-  you do not have one.
+- Python 3.8+ on your PATH, from [python.org](https://www.python.org/downloads/).
 
 ## Install
 
-### One-click
+### With the installer window
 
-1. Extract the download.
-2. Run **`Eternal2xInstaller.exe`** on Windows, or the installer app on macOS.
-3. It checks for Python, installs `numpy` and `opencv-python`, copies the
-   plugin into Resolve's scripts folder and writes the config.
+1. Extract the download somewhere permanent.
+2. From inside the extracted folder, run `python Installer/gui_installer.py`
+   (`python3` on macOS) and click **Install**.
+3. It installs `numpy` and `opencv-python`, copies the plugin into Resolve's
+   scripts folder and writes the config.
 4. Restart Resolve and open **Workspace → Scripts → Eternal2x**.
+
+If the window does not open, your Python was built without Tk. Use the manual
+install below, which does the same job.
 
 ### Manual
 
@@ -62,10 +68,14 @@ python Installer/install_eternal2x.py
 
 Then restart Resolve.
 
-The installer writes to Resolve's Comp scripts folder:
+The installer writes to Resolve's Utility scripts folder, which Resolve lists
+under Workspace → Scripts on every page:
 
-- **Windows:** `%APPDATA%\Blackmagic Design\DaVinci Resolve\Fusion\Scripts\Comp\`
-- **macOS:** `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Comp/`
+- **Windows:** `%APPDATA%\Blackmagic Design\DaVinci Resolve\Support\Fusion\Scripts\Utility\`
+- **macOS:** `~/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility/`
+
+Earlier versions used the Comp folder, which Resolve only lists on the Fusion
+page. Re-running the installer moves it.
 
 The config records where the plugin folder is, so re-run the installer if you
 move it.
@@ -82,6 +92,9 @@ move it.
 The render runs in the background and the panel shows progress, so Resolve
 stays usable while it works. When it finishes, the rebuilt clip is imported and
 added to the end of your timeline.
+
+Eternal2x works on the clip's whole source file, not just the part trimmed onto
+your timeline, so trim the result to match once it is in.
 
 ### Settings
 
@@ -108,11 +121,16 @@ Every button is a thin wrapper around one module, so you can script it:
 ```
 python -m Stages.resolve_smooth --video shot.mov --analyse
 python -m Stages.resolve_smooth --video shot.mov --quality best --format mp4
-python -m Stages.resolve_smooth --video shot.mov --base-hold 3 --no-upscale
+python -m Stages.resolve_smooth --video shot.mov --base-hold 3 --no-interpolate
 ```
 
-`--video` skips Resolve entirely and writes the result next to the source.
-Add `--json` for a machine-readable summary.
+`--video` skips Resolve entirely and writes the result to an `Eternal2x` folder
+beside the source, or to `--output-dir`. The 2x upscale is Resolve's Super
+Scale, applied when the panel imports the result, so a `--video` run is always
+at source resolution and `--no-upscale` only matters inside Resolve.
+
+Add `--json` and stdout carries a single JSON summary, errors included, while
+progress goes to stderr.
 
 ## Updates
 
@@ -131,7 +149,7 @@ before being applied. Restart Resolve afterwards.
 | Progress seems stuck | Press **Refresh Progress**. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` avoids this. |
 | Upscale skipped | Super Scale needs Resolve Studio. |
-| Something else | Run `python -m Stages.resolve_probe` from Workspace → Scripts. It reports exactly which API methods your Resolve build offers. |
+| Something else | Email the panel's status text and the `.eternal2x_last_run.log` file from the plugin folder. |
 
 ## Development
 
@@ -139,11 +157,16 @@ before being applied. Restart Resolve afterwards.
 ./test.sh
 ```
 
-235+ tests, no Resolve required. The suite fakes the Resolve scripting API and
+360+ tests, no Resolve required. The suite fakes the Resolve scripting API and
 runs the Lua panel under an embedded Lua runtime, so buttons, commands and the
 full render pipeline are all covered headlessly. See `tests/README.md`.
 
 Tests run on Linux, macOS and Windows against Python 3.9 and 3.12.
+
+To see which scripting API methods a Resolve build offers, turn on
+Preferences → System → General → External scripting using → Local, set up
+the environment variables from Blackmagic's scripting README, then run
+`python -m Stages.resolve_probe` from the plugin folder.
 
 To cut a release, bump `VERSION` and push a matching tag:
 
@@ -163,6 +186,12 @@ python Installer/build_release.py            # build the folders and zips
 python Installer/build_release.py --publish  # build, tag, upload, verify
 python Installer/build_release.py --verify   # check the live feed is sound
 ```
+
+`update/latest.json` always describes the release that is live, so only
+`--publish` writes it, and only once the uploaded files match the build. A
+plain build never touches it. Files already on a release are never replaced.
+If you change anything that ships after a release goes out, bump `VERSION` and
+cut a new one rather than re-uploading.
 
 Archives are byte reproducible, so rebuilding a tag on any machine gives the
 same checksums as the published ones.

@@ -201,16 +201,21 @@ def render_plan(
     cfg: Eternal2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
+    sequence: Optional[bool] = None,
 ) -> RenderResult:
     """Write the rebuilt clip.
 
     The output has exactly as many frames as the source and runs at the same
     rate, so it drops straight back into an edit in place of the original.
+
+    `sequence` says whether `output` is a folder of PNG frames. Left as None it
+    is guessed from the suffix, which a caller that knows should not rely on,
+    because a folder called `shot.v2_smooth` has the suffix `.v2_smooth`.
     """
     if plan.output_frames == 0:
         raise SourceError("Nothing to render: the plan has no frames.")
 
-    is_sequence = output.suffix.lower() == ""
+    is_sequence = (output.suffix == "") if sequence is None else bool(sequence)
     if is_sequence:
         output.mkdir(parents=True, exist_ok=True)
     else:
@@ -235,7 +240,12 @@ def render_plan(
             frame = upscale(frame, factor)
         state["height"], state["width"] = frame.shape[:2]
         if is_sequence:
-            cv2.imwrite(str(output / f"frame_{state['written']:06d}.png"), frame)
+            target = output / f"frame_{state['written']:06d}.png"
+            # imwrite reports failure, a full disk or a path OpenCV cannot
+            # encode, by returning False rather than raising.
+            if not cv2.imwrite(str(target), frame):
+                raise SourceError(f"Could not write {target}. Check the disk has "
+                                  "space and the folder is writable.")
         else:
             if state["writer"] is None:
                 state["writer"] = _writer(output, (state["width"], state["height"]),

@@ -1,4 +1,4 @@
--- Eternal2x launcher script installed into Resolve Scripts/Comp.
+-- Eternal2x launcher script installed into Resolve Scripts/Utility.
 -- It forwards execution to the main UI script at repo_root/Installer/Eternal2x.lua.
 
 local function script_dir()

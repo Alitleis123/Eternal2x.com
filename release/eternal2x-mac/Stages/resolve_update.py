@@ -62,10 +62,21 @@ def _sha256(path: Path) -> str:
     return h.hexdigest()
 
 
+# Names the updater replaces. Anything else in the archive is left alone.
+PAYLOAD_NAMES = ("Installer", "Pipeline", "Stages", "VERSION", "README.md")
+
+
 def _find_payload_root(extract_dir: Path) -> Path:
-    children = [p for p in extract_dir.iterdir()]
-    if len(children) == 1 and children[0].is_dir():
-        return children[0]
+    """The folder inside the archive that holds the plugin files.
+
+    Archives re-zipped in Finder carry a __MACOSX folder beside the real one,
+    so look for the folder that actually has the payload in it.
+    """
+    if any((extract_dir / name).exists() for name in PAYLOAD_NAMES):
+        return extract_dir
+    for child in sorted(extract_dir.iterdir()):
+        if child.is_dir() and any((child / name).exists() for name in PAYLOAD_NAMES):
+            return child
     return extract_dir
 
 
@@ -80,25 +91,35 @@ def _copy_tree(src: Path, dst: Path) -> None:
             shutil.copy2(child, target)
 
 
-def _apply_payload(payload_root: Path, repo_root: Path) -> None:
-    # Keep updates scoped to project runtime files.
-    allowed = [
-        "Installer",
-        "Pipeline",
-        "Stages",
-        "VERSION",
-        "README.md",
-    ]
-    for name in allowed:
-        src = payload_root / name
-        if not src.exists():
-            continue
-        dst = repo_root / name
-        if src.is_dir():
-            _copy_tree(src, dst)
-        else:
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, dst)
+def _apply_payload(payload_root: Path, repo_root: Path) -> int:
+    """Copy the runtime files into the install. Returns how many were copied.
+
+    Everything is staged beside the install first, so a disk that fills up
+    halfway fails before anything live has been touched.
+    """
+    present = [name for name in PAYLOAD_NAMES if (payload_root / name).exists()]
+    if not present:
+        return 0
+    staging = Path(tempfile.mkdtemp(prefix=".eternal2x_update_", dir=repo_root))
+    try:
+        for name in present:
+            src = payload_root / name
+            if src.is_dir():
+                _copy_tree(src, staging / name)
+            else:
+                shutil.copy2(src, staging / name)
+        copied = 0
+        for name in present:
+            staged = staging / name
+            if staged.is_dir():
+                _copy_tree(staged, repo_root / name)
+                copied += sum(1 for f in staged.rglob("*") if f.is_file())
+            else:
+                shutil.copy2(staged, repo_root / name)
+                copied += 1
+        return copied
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
 
 
 def main() -> int:
@@ -153,6 +174,10 @@ def main() -> int:
     if not download_url:
         print("Update package URL missing.")
         return 1
+    if not expected_sha:
+        # Never apply code that cannot be checked against the feed.
+        print("Update package has no checksum, so it was not applied.")
+        return 1
 
     print(f"Updating Eternal2x: {current_version} -> {latest_version}")
     with tempfile.TemporaryDirectory(prefix="eternal2x_update_") as td:
@@ -168,11 +193,10 @@ def main() -> int:
             print(f"Could not download the update: {exc}")
             return 1
 
-        if expected_sha:
-            actual_sha = _sha256(zip_path).lower()
-            if actual_sha != expected_sha:
-                print("Update package checksum mismatch.")
-                return 1
+        actual_sha = _sha256(zip_path).lower()
+        if actual_sha != expected_sha:
+            print("Update package checksum mismatch.")
+            return 1
 
         extract_dir.mkdir(parents=True, exist_ok=True)
         try:
@@ -183,7 +207,15 @@ def main() -> int:
             return 1
 
         payload_root = _find_payload_root(extract_dir)
-        _apply_payload(payload_root, repo_root)
+        try:
+            copied = _apply_payload(payload_root, repo_root)
+        except OSError as exc:
+            print(f"The update could not be applied: {exc}")
+            return 1
+        if not copied:
+            # Leave VERSION alone, or every later check would say up to date.
+            print("The update package held none of the plugin files, so nothing changed.")
+            return 1
 
     (repo_root / "VERSION").write_text(latest_version + "\n", encoding="utf-8")
     print("Update applied. Restart Resolve to use the new version.")
