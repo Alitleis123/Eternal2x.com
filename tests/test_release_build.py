@@ -160,6 +160,37 @@ def test_checksums_in_the_feed_describe_the_archives(built):
         assert meta[key]["sha256"] == hashlib.sha256(archive.read_bytes()).hexdigest()
 
 
+def test_a_plain_build_leaves_the_feed_alone(built, monkeypatch):
+    """The feed describes the published release, not the working tree.
+
+    After 0.3.1 a shipped file was deleted and a rebuild rewrote the feed, so
+    it advertised checksums for archives nobody had uploaded and every update
+    download failed verification.
+    """
+    feed = built / "update" / "latest.json"
+    before = feed.read_bytes()
+    (built / "Installer" / "extra_tool.py").write_text("# changes the archives\n")
+    monkeypatch.setattr("sys.argv", ["build_release.py"])
+    assert builder.main() == 0
+    assert feed.read_bytes() == before
+
+
+def test_publish_never_replaces_files_on_an_existing_release(built, monkeypatch):
+    """Users already verify against those bytes, so --clobber is off limits."""
+    calls = []
+
+    def fake_run(command, **kwargs):
+        calls.append(command)
+        return type("Result", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+    monkeypatch.setattr(builder.subprocess, "run", fake_run)
+    assert builder.publish("0.3.1") is True
+    assert calls[0][:3] == ["gh", "release", "view"]
+    uploads = calls[1:]
+    assert uploads and all(c[:3] == ["gh", "release", "upload"] for c in uploads)
+    assert not any("--clobber" in c for c in uploads)
+
+
 def test_verify_reports_an_unreachable_download(built, capsys):
     meta = {
         "version": "9.9.9",

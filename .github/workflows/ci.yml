@@ -72,19 +72,11 @@ jobs:
           sha256sum release/*.zip > /tmp/second.txt
           diff /tmp/first.txt /tmp/second.txt
 
-      - name: Check the checksums in update/latest.json match the build
-        run: |
-          python - <<'PY'
-          import hashlib, json, sys
-          from pathlib import Path
-          meta = json.loads(Path("update/latest.json").read_text(encoding="utf-8-sig"))
-          names = {"macos": "eternal2x-mac", "windows": "eternal2x-win"}
-          failed = False
-          for key, name in names.items():
-              actual = hashlib.sha256(Path(f"release/{name}.zip").read_bytes()).hexdigest()
-              if actual != meta[key]["sha256"]:
-                  print(f"{key}: latest.json has {meta[key]['sha256'][:16]}, "
-                        f"a fresh build gives {actual[:16]}")
-                  failed = True
-          sys.exit(1 if failed else 0)
-          PY
+      # A plain build must leave the feed alone. The feed describes what is
+      # published, and rewriting it from the working tree is how the 0.3.1
+      # feed ended up with checksums for archives nobody had uploaded.
+      - name: Check a build leaves update/latest.json untouched
+        run: git diff --exit-code -- update/latest.json
+
+      - name: Check the feed matches the files on the release
+        run: python Installer/build_release.py --verify
