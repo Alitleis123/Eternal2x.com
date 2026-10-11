@@ -119,3 +119,31 @@ def test_the_download_page_reads_releases_from_the_right_repo(repo_root):
     assert f"'{REPO}'" in page(repo_root, "download.html"), (
         "the download page points at a different repository than releases are cut from"
     )
+
+
+@pytest.mark.parametrize("name", PAGES)
+def test_anchor_links_point_at_ids_that_exist(repo_root, name):
+    for target, anchor in re.findall(r'href="([a-z]*\.html)?#([\w-]+)"', page(repo_root, name)):
+        html = page(repo_root, target or name)
+        assert f'id="{anchor}"' in html, f"{name} links to {target or name}#{anchor}, which has no such id"
+
+
+@pytest.mark.parametrize("name", PAGES)
+def test_the_site_only_promises_files_the_release_ships(repo_root, name):
+    """The site told users to double-click an installer exe and app that no
+    release has ever contained."""
+    from Installer.build_release import PAYLOAD
+
+    text = page(repo_root, name)
+    for promised in ("Eternal2xInstaller", ".app installer", "installer app", "one-click"):
+        assert promised.lower() not in text.lower(), f"{name} mentions {promised!r}"
+    for script in re.findall(r"Installer[/\\]+(\w+\.py)", text):
+        assert "Installer" in PAYLOAD and (repo_root / "Installer" / script).exists(), (
+            f"{name} tells users to run Installer/{script}, which is not shipped"
+        )
+
+
+@pytest.mark.parametrize("name", PAGES)
+def test_pages_use_no_em_dashes(repo_root, name):
+    text = page(repo_root, name)
+    assert "\u2014" not in text and "&mdash;" not in text, f"{name} contains an em dash"

@@ -171,21 +171,32 @@
             </div>
             <div class="faq-answer">
                 Press <strong>Refresh Progress</strong>. If a run was interrupted, press <strong>Reset</strong>
-                to clear it. For anything else, run <code>python -m Stages.resolve_probe</code> from
-                Workspace &rarr; Scripts, which reports exactly what your Resolve build supports.
+                to clear it. For anything else, email the panel's status text and the
+                <code>.eternal2x_last_run.log</code> file from the plugin folder.
             </div>
         </div>
 
         <div class="faq-item" onclick="this.classList.toggle('open')">
             <div class="faq-question">
-                The installer says "Python not found"
+                "python" is not recognised, or the installer window does not open
                 <span class="faq-chevron">&#9660;</span>
             </div>
             <div class="faq-answer">
-                On Windows, the installer automatically downloads and sets up a private Python for you &mdash;
-                no action needed. If this fails, check your internet connection. On macOS, the installer does
-                the same with a portable Python build. If all else fails, install Python manually from
-                <a href="https://www.python.org/downloads/">python.org</a> and re-run the installer.
+                Install Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
+                On Windows, tick <strong>Add python.exe to PATH</strong> in its installer, then open a new
+                terminal. If the installer window still does not open, your Python was built without Tk. Use
+                the manual install commands further down this page instead. They do the same job without a
+                window.
+            </div>
+        </div>
+
+        <div class="faq-item" onclick="this.classList.toggle('open')">
+            <div class="faq-question">
+                "No clip selected"
+                <span class="faq-chevron">&#9660;</span>
+            </div>
+            <div class="faq-answer">
+                Click a clip on the timeline, then press <strong>Use Selected Clip</strong> in the panel.
             </div>
         </div>
     </div>
@@ -196,7 +207,7 @@
 
     <div class="section" id="windows">
         <h2 class="section-title">Windows Guide</h2>
-        <p class="section-subtitle">One-click installation. No terminal required.</p>
+        <p class="section-subtitle">Extract, run the installer, restart Resolve.</p>
 
         <div class="guide-step">
             <div class="step-number">1</div>
@@ -210,8 +221,8 @@
             <div class="step-number">2</div>
             <div class="step-content">
                 <h3>Extract the zip</h3>
-                <p>Right-click the downloaded file and select <strong>Extract All</strong>. Put it somewhere permanent &mdash;
-                   don't leave it in your Downloads folder.</p>
+                <p>Right-click the downloaded file and select <strong>Extract All</strong>. Put it somewhere permanent,
+                   not your Downloads folder.</p>
                 <div class="compat-note" style="margin-top: 12px;">
                     Do not move this folder after installing. If you do, re-run the installer.
                 </div>
@@ -222,11 +233,15 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Run the installer</h3>
-                <p>Double-click <strong>Eternal2xInstaller.exe</strong> inside the extracted folder.</p>
+                <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
+                   Open the extracted folder, type <code>cmd</code> in the address bar and press Enter, then run:</p>
+                <div class="code-block">
+                    python Installer\gui_installer.py
+                    <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+                </div>
                 <p>Click the <strong>Install</strong> button and wait for it to finish. The installer will:</p>
                 <ul style="color: var(--text-dim); font-size: 14px; padding-left: 20px; margin-top: 8px; line-height: 2;">
-                    <li>Set up Python automatically if you don't have it</li>
-                    <li>Install required Python packages</li>
+                    <li>Install the required Python packages</li>
                     <li>Copy the plugin into DaVinci Resolve</li>
                     <li>Write the configuration file</li>
                 </ul>
@@ -245,7 +260,7 @@
         </div>
 
         <h3 class="mb-16 mt-24">Manual install (alternative)</h3>
-        <p class="text-dim text-sm mb-16">If the GUI installer doesn't work, you can install manually via the command line.</p>
+        <p class="text-dim text-sm mb-16">If the installer window does not open, run these from the same folder instead.</p>
 
         <div class="code-block">
             pip install numpy opencv-python
@@ -266,7 +281,7 @@
 
     <div class="section" id="macos">
         <h2 class="section-title">macOS Guide</h2>
-        <p class="section-subtitle">Same process — extract, install, done.</p>
+        <p class="section-subtitle">Same process. Extract, install, restart Resolve.</p>
 
         <div class="guide-step">
             <div class="step-number">1</div>
@@ -289,16 +304,15 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Run the installer</h3>
-                <p>Open Terminal and run:</p>
+                <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
+                   Open Terminal and run:</p>
                 <div class="code-block">
                     cd ~/path/to/eternal2x-mac<br>
                     python3 Installer/gui_installer.py
                     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
                 </div>
-                <p>Or if you have a compiled <strong>.app</strong> installer, just double-click it.</p>
                 <p class="text-dim text-sm mt-8">
-                    The installer downloads a portable Python automatically if your system doesn't have one.
-                    Works on both Apple Silicon (M1/M2/M3) and Intel Macs.
+                    Click <strong>Install</strong> and wait for it to finish. Works on both Apple Silicon and Intel Macs.
                 </p>
             </div>
         </div>
@@ -366,7 +380,9 @@
                 <p><strong>Quality</strong> trades speed for detail, with <code>Better</code> suiting most work.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
                    timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve always
-                   imports. Settings are remembered between sessions.</p>
+                   imports. <strong>Upscale 2x</strong> applies Super Scale to the result, and turning off
+                   <strong>Interpolate</strong> removes the duplicates without generating in-betweens.
+                   Settings are remembered between sessions.</p>
             </div>
         </div>
 
@@ -453,6 +469,14 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('overlay').classList.toggle('open');
 }
+
+// On a phone the sidebar covers the page, so close it once a link is chosen.
+document.querySelectorAll('.sidebar a').forEach(function(link) {
+    link.addEventListener('click', function() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('overlay').classList.remove('open');
+    });
+});
 
 function copyCode(btn) {
     const block = btn.parentElement;

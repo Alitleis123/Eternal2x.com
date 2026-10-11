@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eternal2x | Smooth 2x for hand-drawn animation for DaVinci Resolve</title>
-    <meta name="description" content="Eternal2x is a smooth 2x for hand-drawn animation plugin for DaVinci Resolve. Detect motion, refine cuts, and upscale with interpolation — all from one simple panel.">
+    <meta name="description" content="Eternal2x is a smooth 2x for hand-drawn animation plugin for DaVinci Resolve. It finds the real drawings in a held shot, rebuilds the missing in-betweens and upscales 2x, from one panel.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -75,10 +75,10 @@
             <span class="badge-dot"></span>
             DaVinci Resolve Plugin
         </div>
-        <h1>Upscale smarter<br>with <span>Eternal2x</span></h1>
+        <h1>Smooth 2x for anime<br>with <span>Eternal2x</span></h1>
         <p>
-            Motion-aware upscaling and interpolation built directly into your DaVinci Resolve timeline.
-            No external tools. No render-export loops. Just 4 buttons.
+            Recovers the drawings in animation held on 2s and 3s, rebuilds the in-betweens and upscales 2x,
+            right on your DaVinci Resolve timeline. No external tools. No render-export loops.
         </p>
         <div class="hero-buttons">
             <a href="download.html" class="btn btn-primary">
@@ -108,7 +108,7 @@
             <div class="stat-label">Super Scale</div>
         </div>
         <div class="stat-card">
-            <div class="stat-value">4</div>
+            <div class="stat-value">2</div>
             <div class="stat-label">Button Workflow</div>
         </div>
         <div class="stat-card">
@@ -174,9 +174,9 @@
         <div class="feature-card">
             <h3>
                 <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                One-Click Install
+                Simple Install
             </h3>
-            <p>Double-click the installer — it handles Python, packages, and Resolve setup automatically. No terminal commands, no manual file copying.</p>
+            <p>One installer command sets up the Python packages, copies the plugin into Resolve and writes its config. No manual file copying.</p>
         </div>
         <div class="feature-card">
             <h3>
@@ -198,9 +198,9 @@
     <div class="section">
         <h2 class="section-title">Requirements</h2>
         <div class="feature-card" style="max-width: 480px;">
-            <p><strong>DaVinci Resolve 18+</strong> (Free or Studio)</p>
+            <p><strong>DaVinci Resolve Studio 18+</strong>. The free edition runs everything except the 2x upscale.</p>
             <p class="mt-8"><strong>Windows 10/11</strong> or <strong>macOS 12+</strong></p>
-            <p class="mt-8 text-dim">Python is handled automatically by the installer — you don't need to install it yourself.</p>
+            <p class="mt-8"><strong>Python 3.8+</strong>, free from <a href="https://www.python.org/downloads/">python.org</a>. The installer adds the packages it needs.</p>
         </div>
     </div>
 
@@ -221,6 +221,14 @@ function toggleSidebar() {
     document.getElementById('sidebar').classList.toggle('open');
     document.getElementById('overlay').classList.toggle('open');
 }
+
+// On a phone the sidebar covers the page, so close it once a link is chosen.
+document.querySelectorAll('.sidebar a').forEach(function(link) {
+    link.addEventListener('click', function() {
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('overlay').classList.remove('open');
+    });
+});
 </script>
 
 </body>

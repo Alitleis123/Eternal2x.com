@@ -547,7 +547,8 @@ a:hover { color: var(--accent-hover); }
     background: var(--bg-code);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 16px 20px;
+    /* Room on the right so the Copy button never sits on the command. */
+    padding: 16px 80px 16px 20px;
     font-family: var(--mono);
     font-size: 13px;
     color: var(--text);
@@ -702,6 +703,9 @@ a:hover { color: var(--accent-hover); }
     .features { grid-template-columns: 1fr; }
     .stats-row { grid-template-columns: 1fr; }
     .site-footer { flex-direction: column; align-items: flex-start; }
+
+    /* Keep anchored headings clear of the fixed mobile header. */
+    [id] { scroll-margin-top: 72px; }
 }
 
 /* ===== Utilities ===== */
