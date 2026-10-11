@@ -131,6 +131,7 @@ function H.make_resolve(clip_file_path)
                 table.insert(H.imported, path)
                 table.insert(made, {
                     SetClipProperty = function(_s, k, v)
+                        if H.super_scale_works == false then return false end
                         H.clip_properties[k] = v
                         return true
                     end,
@@ -158,7 +159,19 @@ end
 -- the shell runs it, and the panel reads back what it produced.
 function H.make_execute(real_execute)
     return function(cmd)
-        table.insert(H.commands, cmd)
+        -- On Windows the panel writes the real command to a script and starts
+        -- that, so record the script too, or every check of the arguments
+        -- would only see `start ... cmd /c "script"`.
+        local script = cmd:match('cmd /c "(.-%.cmd)"$')
+        local recorded = cmd
+        if script then
+            local f = io.open(script, "rb")
+            if f then
+                recorded = cmd .. "\n" .. f:read("*a")
+                f:close()
+            end
+        end
+        table.insert(H.commands, recorded)
         if H.real_execute then
             return real_execute(cmd)
         end
