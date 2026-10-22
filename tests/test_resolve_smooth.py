@@ -480,3 +480,24 @@ def test_a_range_covering_the_whole_file_is_the_whole_file(make_anime):
     assert smooth.source_frames(src, 0.0, 1.0) is None
     assert smooth.source_frames(src, None, None) is None
     assert smooth.source_frames(src, 0.5, None) == (12, 24)
+
+
+def test_a_clip_named_outside_the_system_code_page_runs(make_anime, repo_root, tmp_path):
+    """The panel sends output to a log file, which Python on Windows encodes
+    in the ANSI code page, so printing a Japanese file name used to crash."""
+    import os
+    import subprocess
+
+    src = make_anime(holds=(2,) * 6)
+    clip = src.with_name("ヴァイオレット" + src.suffix)
+    src.rename(clip)
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONUTF8"}
+    env["PYTHONIOENCODING"] = "cp1252"
+    log = tmp_path / "run.log"
+    with open(log, "wb") as out:
+        code = subprocess.call([sys.executable, "-m", "Stages.resolve_smooth",
+                                "--video", str(clip), "--analyse"],
+                               cwd=str(repo_root), env=env, stdout=out, stderr=out)
+    text = log.read_bytes().decode("utf-8")
+    assert code == 0, text
+    assert "ヴァイオレット" in text
