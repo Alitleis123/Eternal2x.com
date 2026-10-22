@@ -677,6 +677,9 @@ local function apply_status(st)
     set_progress(st.fraction, st.stage)
     if st.message ~= "" then set_status(st.message) end
     if st.done then
+        -- Handled now. Left in place, Refresh Progress in a reopened panel
+        -- would import the same render again.
+        os.remove(STATUS_PATH)
         set_busy(false)
         if not st.ok then
             set_progress(0, nil)
@@ -841,7 +844,9 @@ function win.On.SmoothBtn.Clicked(ev)
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)
-    if not read_status() and not read_exit_code() then
+    -- A finished run's status is gone once handled, but the shell can still
+    -- write the exit code after it, so that alone is not a run to report on.
+    if not read_status() and not (RUNNING and read_exit_code()) then
         set_status("No run in progress.")
         return
     end

@@ -430,6 +430,23 @@ def test_completion_message_is_surfaced(lua, direct):
     assert "12 drawings" in H.status()
 
 
+def test_a_finished_render_is_imported_once_even_after_reopening(lua, direct):
+    """The status file outlives the panel. Pressing Refresh Progress in a new
+    panel must not import the last render again and append a second copy."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
+                 import_path=str(direct / "shot_smooth.mp4"))
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 1
+    H.click("RefreshStatusBtn")
+
+    H = load(lua, ui_script(direct))
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 0, "the reopened panel imported the render again"
+    assert "No run in progress" in H.status()
+
+
 def test_a_failure_is_surfaced(lua, direct):
     H = load(lua, ui_script(direct))
     write_status(direct, done=True, ok=False, message="The clip's media is missing.")
