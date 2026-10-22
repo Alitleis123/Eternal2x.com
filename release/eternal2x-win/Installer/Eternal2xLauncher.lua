@@ -50,8 +50,27 @@ local function file_exists(path)
     return true
 end
 
+-- Where Installer/install_eternal2x.py puts this script, for when Resolve
+-- reports the running script under a path map such as Scripts: that io.open
+-- cannot follow.
+local function installed_dir()
+    local appdata = os.getenv("APPDATA")
+    if package.config:sub(1, 1) == "\\" and appdata then
+        return appdata .. "/Blackmagic Design/DaVinci Resolve/Support/Fusion/Scripts/Utility"
+    end
+    local home = os.getenv("HOME")
+    if not home then return nil end
+    local mac = home .. "/Library/Application Support/Blackmagic Design/DaVinci Resolve/Fusion/Scripts/Utility"
+    if file_exists(mac .. "/Eternal2x.conf") then return mac end
+    return home .. "/.local/share/DaVinciResolve/Fusion/Scripts/Utility"
+end
+
 local root = trim_trailing_sep(script_dir() or "")
-local conf = read_conf(join_path(root, "Eternal2x.conf"))
+local conf_path = join_path(root, "Eternal2x.conf")
+if not file_exists(conf_path) and installed_dir() then
+    conf_path = join_path(installed_dir(), "Eternal2x.conf")
+end
+local conf = read_conf(conf_path)
 local repo_root = trim_trailing_sep(conf["repo_root"] or "")
 
 if repo_root == "" then
@@ -69,7 +88,7 @@ end
 -- The UI script lives in the plugin folder, but the config lives here next to
 -- the launcher. Hand both down so the UI does not have to guess from its own
 -- location and end up treating Installer/ as the repo root.
-_G.ETERNAL2X_CONF = join_path(root, "Eternal2x.conf")
+_G.ETERNAL2X_CONF = conf_path
 _G.ETERNAL2X_ROOT = repo_root
 
 local ok, err = pcall(dofile, ui_script)

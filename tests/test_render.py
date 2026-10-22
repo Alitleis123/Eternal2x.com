@@ -276,3 +276,31 @@ def test_turning_interpolation_off_changes_the_result(make_anime, tmp_path, read
     assert any(not np.array_equal(a, b) for a, b in zip(on, off)), (
         "the interpolate setting made no difference to the output"
     )
+
+
+# --------------------------------------------------------------------------
+# a trimmed range of the source
+# --------------------------------------------------------------------------
+
+def test_analysing_a_range_reads_only_that_range(make_anime):
+    """A two second cut of a long file must not cost the whole file."""
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(6, 18))
+    assert plan.source_frames == 12
+    assert plan.unique_drawings == 6
+
+
+def test_a_range_starts_on_exactly_the_frame_asked_for(make_anime, tmp_path, read_frames):
+    """Off by one here would shift every drawing against the edit."""
+    src = make_anime(holds=(2,) * 12)
+    source = read_frames(src)
+    plan, _w, _h = analyse_video(src, cfg(), frames=(6, 18))
+    out = tmp_path / "range"
+    result = render_plan(src, plan, out, cfg(), sequence=True, frames=(6, 18))
+    frames = read_frames(out)
+    assert result.frames_written == len(frames) == 12
+    assert np.array_equal(frames[0], source[6]), "the render did not start at frame 6"
+
+
+def test_a_range_past_the_end_of_the_file_stops_at_the_end(make_anime):
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(20, 400))
+    assert plan.source_frames == 4

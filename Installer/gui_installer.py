@@ -111,6 +111,11 @@ def _check_python(path: str) -> bool:
 
 
 def _find_system_python() -> str | None:
+    # Run as a script, the Python running this window is the one the user
+    # chose, such as `py Installer\gui_installer.py` with nothing on PATH.
+    if (not getattr(sys, "frozen", False) and sys.executable
+            and _check_python(sys.executable)):
+        return sys.executable
     candidates = (
         ["python", "python3"] if sys.platform.startswith("win")
         else ["python3", "python"]
@@ -120,6 +125,23 @@ def _find_system_python() -> str | None:
         if path and _check_python(path):
             return path
     return None
+
+
+def _patch_pth(text: str) -> str:
+    """Make the embeddable Python able to run the plugin.
+
+    A ._pth file replaces sys.path outright, so without the plugin folder in
+    it `python -m Stages.resolve_smooth` fails with No module named 'Stages'.
+    Entries are relative to the ._pth file, which sits in <plugin>/python.
+    """
+    lines = [("import site" if line.strip() == "#import site" else line)
+             for line in text.splitlines()]
+    stripped = [line.strip() for line in lines]
+    if ".." not in stripped:
+        lines.append("..")
+    if "import site" not in stripped:
+        lines.append("import site")
+    return "\n".join(lines) + "\n"
 
 
 def _embedded_python_exe(repo_root: Path) -> Path:
@@ -372,11 +394,8 @@ class InstallerApp:
             zf.extractall(python_dir)
 
         for pth in python_dir.glob("python*._pth"):
-            text = pth.read_text(encoding="utf-8")
-            text = text.replace("#import site", "import site")
-            if "import site" not in text:
-                text += "\nimport site\n"
-            pth.write_text(text, encoding="utf-8")
+            pth.write_text(_patch_pth(pth.read_text(encoding="utf-8")),
+                           encoding="utf-8")
 
         python_exe = str(python_dir / "python.exe")
         if not Path(python_exe).exists():

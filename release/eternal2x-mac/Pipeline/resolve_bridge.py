@@ -113,7 +113,7 @@ def clip_source_path(item: Any) -> Path:
     """Where the clip's media lives on disk."""
     if item is None:
         raise ResolveError(
-            "No clip selected. Click a clip on the timeline and try again."
+            "No clip under the playhead. Move the playhead over a clip and try again."
         )
     mpi = item.GetMediaPoolItem() if hasattr(item, "GetMediaPoolItem") else None
     if mpi is None:
@@ -157,8 +157,10 @@ def import_media(project: Any, path: Path, *, frame_count: int = 0,
         frames = sorted(path.glob("*.png"))
         if not frames:
             return None, Outcome(False, f"No frames were written to {path}.")
+        # A printf pattern, as in Blackmagic's README. Given the first frame's
+        # own name, Resolve has no pattern to step through.
         attempts.append(("ImportMedia(sequence descriptor)", [{
-            "FilePath": str(frames[0]),
+            "FilePath": str(path / "frame_%06d.png"),
             "StartIndex": 0,
             "EndIndex": max(0, len(frames) - 1),
         }]))

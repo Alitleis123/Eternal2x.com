@@ -91,6 +91,10 @@ local FORMAT = conf["format"] or "png"
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
 local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
 local RUN_SCRIPT = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_run.cmd")
+-- Written by the shell once Python exits, however it exits. A Python that
+-- cannot start never writes a status file, so this is how the panel tells a
+-- run that is still going from one that died.
+local EXIT_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_exit")
 
 local function save_conf()
     local f = io.open(CONF_PATH, "w")
@@ -124,17 +128,57 @@ local CURRENT_VERSION = read_version()
 -- Resolve
 -- ---------------------------------------------------------------------------
 
+-- A script run from Workspace > Scripts gets Resolve as a global, the way
+-- Blackmagic's Lua examples use it: `resolve`, or `Resolve()`. There is no Lua
+-- DaVinciResolveScript module, so require is only a last resort.
+local function global(name)
+    -- A plain lookup, so globals Fusion provides through a metatable count.
+    local ok, value = pcall(function() return _G[name] end)
+    if ok then return value end
+    return nil
+end
+
 local function get_resolve()
-    local ok, mod = pcall(require, "DaVinciResolveScript")
-    if not ok or not mod then
+    local r = global("resolve")
+    if not r and global("Resolve") then
+        local ok, got = pcall(global("Resolve"))
+        if ok then r = got end
+    end
+    local app = global("bmd")
+    if not r and app and app.scriptapp then
+        local ok, got = pcall(app.scriptapp, "Resolve")
+        if ok then r = got end
+    end
+    if not r then
+        local ok, mod = pcall(require, "DaVinciResolveScript")
+        if ok and type(mod) == "table" and mod.scriptapp then r = mod.scriptapp("Resolve") end
+    end
+    if not r then
         return nil, "Could not reach Resolve. Run this from Workspace > Scripts."
     end
-    local r = mod.scriptapp("Resolve")
-    if not r then return nil, "Could not connect to Resolve." end
     return r, nil
 end
 
-local function selected_clip_path()
+-- Where the timeline clip starts and ends within its media, in seconds, so a
+-- two second cut of a long file costs two seconds of work. Seconds mean the
+-- same whatever the timeline's rate. nil means use the whole file.
+local function clip_range(item, props)
+    local function call(name)
+        local ok, value = pcall(function() return item[name](item) end)
+        return ok and tonumber(value) or nil
+    end
+    local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
+    if t0 and t1 and t1 > t0 then return { start = t0, finish = t1 } end
+    -- Frames count at the media's own rate.
+    local fps = tonumber(props["FPS"])
+    local f0, f1 = call("GetSourceStartFrame"), call("GetSourceEndFrame")
+    if fps and fps > 0 and f0 and f1 and f1 > f0 then
+        return { start = f0 / fps, finish = f1 / fps }
+    end
+    return nil
+end
+
+local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
     local project = resolve:GetProjectManager():GetCurrentProject()
@@ -142,24 +186,30 @@ local function selected_clip_path()
     local timeline = project:GetCurrentTimeline()
     if not timeline then return nil, "No timeline is open." end
 
+    -- Resolve's API has no timeline selection. GetCurrentVideoItem is the clip
+    -- under the playhead, so that is the one Eternal2x works on.
     local item = nil
-    if timeline.GetSelectedItems then
-        local items = timeline:GetSelectedItems()
-        if items and type(items) == "table" then
-            for _, v in pairs(items) do item = v break end
-        end
-    end
-    if not item and timeline.GetCurrentVideoItem then
+    if timeline.GetCurrentVideoItem then
         item = timeline:GetCurrentVideoItem()
     end
-    if not item then return nil, "No clip selected. Click a clip on the timeline." end
+    if not item then
+        return nil, "No clip under the playhead. Move the playhead over a clip on the timeline."
+    end
 
     local mpi = item:GetMediaPoolItem()
     if not mpi then return nil, "That item has no source media." end
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then return nil, "Could not read the clip's file path." end
-    return path, nil
+    return path, nil, clip_range(item, props)
+end
+
+-- Any API call above can raise, and this runs while the panel opens, where an
+-- error would stop the window from ever appearing.
+local function selected_clip_path()
+    local ok, path, err, range = pcall(find_clip_path)
+    if not ok then return nil, "Could not read the clip from Resolve: " .. tostring(path) end
+    return path, err, range
 end
 
 -- ---------------------------------------------------------------------------
@@ -181,17 +231,24 @@ local function build_command(module_name, args, background)
         -- inside the script, so it applies to the child process and not to
         -- `start`, which would leave the log empty. chcp 65001 makes cmd read
         -- the rest of the script as UTF-8, so non-ASCII paths survive.
-        -- Binary mode keeps Lua from turning \r\n into \r\r\n.
+        -- Binary mode keeps Lua from turning \r\n into \r\r\n. The exit code
+        -- line puts the redirection first, because `echo 2> file` would
+        -- redirect stderr instead of writing 2.
         local f = io.open(RUN_SCRIPT, "wb")
         if f then
             f:write("@echo off\r\nchcp 65001 >nul\r\n", (cd:gsub("%%", "%%%%")), "\r\n",
-                    ((run .. redirect):gsub("%%", "%%%%")), "\r\n")
+                    ((run .. redirect):gsub("%%", "%%%%")), "\r\n",
+                    ">", (shell_quote(EXIT_PATH):gsub("%%", "%%%%")), " echo %ERRORLEVEL%\r\n")
             f:close()
         end
-        return "start \"Eternal2x\" /B cmd /c " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
+        -- /MIN gives the run its own minimised window. With /B it shared the
+        -- console os.execute opens, which stayed on screen for the whole
+        -- render, and closing it killed the render without a word.
+        return "start \"Eternal2x\" /MIN cmd /c " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
     end
-    -- `A && B &` backgrounds the whole compound, which is what we want here.
-    return cd .. " && " .. run .. redirect .. " &"
+    -- The subshell backgrounds the whole run, and records how it ended.
+    return "(" .. cd .. " && " .. run .. redirect .. "; echo $? > "
+        .. shell_quote(EXIT_PATH) .. ") &"
 end
 
 local function run_blocking(module_name, args)
@@ -213,6 +270,15 @@ local function read_log()
     local s = f:read("*a") or ""
     f:close()
     return s
+end
+
+-- The last line of the run log worth showing, such as Python's final error.
+local function last_log_line()
+    local last = nil
+    for line in read_log():gmatch("[^\r\n]+") do
+        if line:match("%S") then last = line end
+    end
+    return last and (last:match("^%s*(.-)%s*$")) or nil
 end
 
 -- Encode a code point as UTF-8, for \u escapes in the status file.
@@ -280,6 +346,10 @@ local function read_status()
         message  = json_string(s, "message") or "",
         fraction = tonumber(s:match('"fraction"%s*:%s*([%-%d%.eE]+)')) or 0,
         import_path = json_string(s, "import_path") or "",
+        sequence_pattern = json_string(s, "sequence_pattern") or "",
+        sequence_frames = tonumber(s:match('"sequence_frames"%s*:%s*(%d+)')) or 0,
+        updated  = tonumber(s:match('"updated"%s*:%s*([%d%.eE]+)')),
+        fps      = tonumber(s:match('"fps"%s*:%s*([%d%.]+)')) or 0,
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
         ok       = s:match('"ok"%s*:%s*(%a+)') == "true",
     }
@@ -287,6 +357,16 @@ end
 
 local function clear_status()
     os.remove(STATUS_PATH)
+    os.remove(EXIT_PATH)
+end
+
+-- The exit code of the last background run, or nil while it is still going.
+local function read_exit_code()
+    local f = io.open(EXIT_PATH, "r")
+    if not f then return nil end
+    local s = f:read("*a") or ""
+    f:close()
+    return s:match("%-?%d+") or "?"
 end
 
 -- ---------------------------------------------------------------------------
@@ -375,10 +455,10 @@ local win = disp:AddWindow({
               Text = "Smooth 2x for hand-drawn animation  \xC2\xB7  v" .. CURRENT_VERSION },
 
     ui:Label{ ID = "SourceSection", Text = "SOURCE CLIP", ObjectName = "Section" },
-    ui:Label{ ID = "SourceLabel", Text = "No clip selected.", ObjectName = "Card",
+    ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", ObjectName = "Card",
               WordWrap = true },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshBtn", Text = "Use Selected Clip", ObjectName = "GhostBtn" },
+        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", ObjectName = "GhostBtn" },
         ui:Button{ ID = "AnalyseBtn", Text = "Analyse", ObjectName = "GhostBtn" },
     },
     ui:Label{ ID = "AnalysisLabel", Text = "Analyse to see how this clip is animated.",
@@ -432,6 +512,7 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 -- ---------------------------------------------------------------------------
 
 local SOURCE_PATH = nil
+local SOURCE_RANGE = nil
 local RUNNING = false
 local IMPORTED = false
 local ANALYSING = false
@@ -462,15 +543,29 @@ local function set_busy(busy)
     items.SmoothBtn.Text = busy and "Working..." or "\xE2\x96\xB2  Smooth Clip"
 end
 
+-- Seconds as text that Python's float() reads, whatever the locale.
+local function seconds(value)
+    return (string.format("%.6f", value):gsub(",", "."))
+end
+
+local function range_text(range)
+    if not range then return "Whole file." end
+    return (string.format("%.2f s to %.2f s of the file, %.2f s long.",
+                          range.start, range.finish, range.finish - range.start)
+            :gsub("(%d),(%d)", "%1.%2"))
+end
+
 local function refresh_source()
-    local path, err = selected_clip_path()
+    local path, err, range = selected_clip_path()
     if not path then
         SOURCE_PATH = nil
-        items.SourceLabel.Text = err or "No clip selected."
+        SOURCE_RANGE = nil
+        items.SourceLabel.Text = err or "No clip under the playhead."
         return false
     end
     SOURCE_PATH = path
-    items.SourceLabel.Text = basename(path)
+    SOURCE_RANGE = range
+    items.SourceLabel.Text = basename(path) .. "\n" .. range_text(range)
     items.Meta.Text = short_path(path, 68)
     return true
 end
@@ -479,6 +574,10 @@ local function current_args(extra)
     local args = ""
     if SOURCE_PATH and SOURCE_PATH ~= "" then
         args = args .. " --video " .. shell_quote(SOURCE_PATH)
+        if SOURCE_RANGE then
+            args = args .. " --start-time " .. seconds(SOURCE_RANGE.start)
+                        .. " --end-time " .. seconds(SOURCE_RANGE.finish)
+        end
     end
     local quality = QUALITIES[(items.QualityCombo.CurrentIndex or 1) + 1] or "better"
     args = args .. " --quality " .. quality
@@ -497,7 +596,27 @@ end
 
 -- The render is finished on disk; bring it in from here rather than from the
 -- Python process, which would need Resolve's external scripting enabled.
-local function import_result(path)
+-- An image sequence has no frame rate of its own, so Resolve gives it the
+-- project's, and a 60 fps render in a 24 fps project plays at 40% speed.
+-- Resolve lets a sequence's rate be changed, so set it, then read it back,
+-- because a refusal is not always reported. Done before the clip is appended,
+-- since its length on the timeline depends on it.
+local function set_sequence_fps(mpi, fps)
+    if not mpi.SetClipProperty then return "" end
+    local text = (math.abs(fps - math.floor(fps + 0.5)) < 0.001)
+        and tostring(math.floor(fps + 0.5)) or string.format("%.3f", fps)
+    local called, set = pcall(function() return mpi:SetClipProperty("FPS", text) end)
+    if called and set and mpi.GetClipProperty then
+        local read, got = pcall(function() return mpi:GetClipProperty("FPS") end)
+        if read and type(got) == "table" then got = got["FPS"] end
+        if read and math.abs((tonumber(got) or 0) - fps) > 0.01 then set = false end
+    end
+    if called and set then return " at " .. text .. " fps" end
+    return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)"
+end
+
+local function import_result(st)
+    local path = st.import_path
     if not path or path == "" then return false, "Nothing to import." end
     local resolve, err = get_resolve()
     if not resolve then return false, err end
@@ -509,18 +628,38 @@ local function import_result(path)
         return false, "This Resolve version cannot import from a script."
     end
 
-    local ok, items = pcall(function() return pool:ImportMedia({ path }) end)
-    if not ok or not items or type(items) ~= "table" or #items == 0 then
+    local function try_import(what)
+        local ok, got = pcall(function() return pool:ImportMedia({ what }) end)
+        if ok and type(got) == "table" and #got > 0 then return got[1] end
+        return nil
+    end
+
+    -- Handed a single frame, Resolve imports a single still. A sequence needs
+    -- the clipInfo form from Blackmagic's README: a printf pattern plus the
+    -- first and last frame numbers.
+    local mpi = nil
+    if st.sequence_pattern ~= "" and st.sequence_frames > 0 then
+        mpi = try_import({ FilePath = st.sequence_pattern, StartIndex = 0,
+                           EndIndex = st.sequence_frames - 1 })
+    end
+    mpi = mpi or try_import(path)
+    if not mpi then
         return false, "Resolve would not import " .. basename(path)
     end
-    local mpi = items[1]
 
     local notes = "Imported " .. basename(path)
+    if st.sequence_pattern ~= "" and st.fps > 0 then
+        notes = notes .. set_sequence_fps(mpi, st.fps)
+    end
     if DO_UPSCALE and mpi.SetClipProperty then
-        -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected.
+        -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected. The
+        -- README calls the value an integer, so try a number if text is refused.
         -- pcall's first value only says nothing raised. Resolve reports a
         -- refusal, as on the free edition, by returning false, so check that.
         local called, scaled = pcall(function() return mpi:SetClipProperty("Super Scale", "2") end)
+        if not (called and scaled) then
+            called, scaled = pcall(function() return mpi:SetClipProperty("Super Scale", 2) end)
+        end
         notes = notes .. ((called and scaled) and ", upscaled 2x"
                           or ", upscale not applied (Super Scale needs Resolve Studio)")
     end
@@ -557,7 +696,7 @@ local function apply_status(st)
         end
         if st.import_path ~= "" and not IMPORTED then
             IMPORTED = true
-            local ok, notes = import_result(st.import_path)
+            local ok, notes = import_result(st)
             if ok then
                 set_status(st.message .. " " .. notes)
             else
@@ -570,23 +709,61 @@ local function apply_status(st)
     return false
 end
 
+-- Check on the background run. The exit code is read before the status, so a
+-- run that wrote its final status and then exited is never taken for a crash.
+-- Python updates the status at least once a frame. This long without a word,
+-- and no exit code, means the run was killed from outside, so nothing could
+-- report it, as when its window is closed.
+local STALLED_AFTER = 180
+
+local function poll()
+    local exited = read_exit_code()
+    local st = read_status()
+    if apply_status(st) then return true end
+    if not exited then
+        local quiet = (st and st.updated and st.updated > 0) and (os.time() - st.updated) or 0
+        if quiet > STALLED_AFTER then
+            set_status(string.format("No progress for %d minutes. If the Eternal2x window "
+                .. "was closed, the render stopped: press Reset and run it again.",
+                math.floor(quiet / 60 + 0.5)))
+        end
+        return false
+    end
+
+    -- Python exited without saying it was done: it could not start, could not
+    -- load a package, or crashed. Its last words are the end of the log.
+    local why = last_log_line() or ("Python exited with code " .. exited .. ".")
+    local msg = "Stopped without finishing: " .. why .. " Full log: " .. LOG_PATH
+    set_busy(false)
+    set_progress(0, nil)
+    if ANALYSING then items.AnalysisLabel.Text = msg end
+    ANALYSING = false
+    set_status(msg)
+    return true
+end
+
 -- ---------------------------------------------------------------------------
 -- polling
 -- ---------------------------------------------------------------------------
 
 -- ui:Timer is not present on every Resolve build, so it is created defensively
--- and the Refresh Progress button covers the case where it is missing.
+-- and the Refresh Progress button covers the case where it is missing. Its
+-- Timeout reaches the dispatcher, as in Blackmagic's UIManager examples, and
+-- the window handler is kept for builds that route it there instead.
 local timer = nil
 local have_timer = pcall(function()
     timer = ui:Timer({ ID = "PollTimer", Interval = 500 })
 end)
 
+local function on_timeout(ev)
+    if not RUNNING then return end
+    poll()
+end
+
 if have_timer and timer then
-    win:AddChild(timer)
-    function win.On.PollTimer.Timeout(ev)
-        if not RUNNING then return end
-        apply_status(read_status())
-    end
+    pcall(function() win:AddChild(timer) end)
+    pcall(function() disp.On.Timeout = on_timeout end)
+    pcall(function() win.On.PollTimer.Timeout = on_timeout end)
 end
 
 local function start_polling()
@@ -613,15 +790,27 @@ function win.On.RefreshBtn.Clicked(ev)
     end
 end
 
+-- Work on the clip under the playhead now, not the one there when the panel
+-- opened. If the playhead has moved off every clip, keep the last one.
+local function pick_source()
+    local previous, label, range = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE
+    if refresh_source() then return true end
+    if previous then
+        SOURCE_PATH = previous
+        SOURCE_RANGE = range
+        items.SourceLabel.Text = label
+        return true
+    end
+    set_status(items.SourceLabel.Text)
+    return false
+end
+
 function win.On.AnalyseBtn.Clicked(ev)
     if REPO_ROOT == "" then
         set_status("Plugin folder not configured. Re-run the installer.")
         return
     end
-    if not SOURCE_PATH and not refresh_source() then
-        set_status(items.SourceLabel.Text)
-        return
-    end
+    if not pick_source() then return end
     -- Backgrounded like the render: analysis is quick on a short clip but can
     -- take tens of seconds on a long one, and Resolve must not freeze for it.
     clear_status()
@@ -640,10 +829,7 @@ function win.On.SmoothBtn.Clicked(ev)
         set_status("Plugin folder not configured. Re-run the installer.")
         return
     end
-    if not SOURCE_PATH and not refresh_source() then
-        set_status(items.SourceLabel.Text)
-        return
-    end
+    if not pick_source() then return end
     clear_status()
     IMPORTED = false
     ANALYSING = false
@@ -655,12 +841,11 @@ function win.On.SmoothBtn.Clicked(ev)
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)
-    local st = read_status()
-    if not st then
+    if not read_status() and not read_exit_code() then
         set_status("No run in progress.")
         return
     end
-    apply_status(st)
+    poll()
 end
 
 function win.On.CancelBtn.Clicked(ev)
@@ -717,8 +902,9 @@ local function run_update(auto_mode)
     if not auto_mode then set_status("Checking for updates...") end
     local ok = run_blocking("Stages.resolve_update", args)
     if auto_mode then return end
-    local log = read_log()
-    local line = log:match("([^\n]*Updat[^\n]*)") or log:match("([^\n]*No update[^\n]*)")
+    -- The updater's last line is its verdict. An earlier "Updating..." line is
+    -- followed by whether it was applied, or why not.
+    local line = last_log_line()
     if line and line ~= "" then
         set_status(line)
     elseif ok then

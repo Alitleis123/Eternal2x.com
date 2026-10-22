@@ -111,29 +111,54 @@ H.imported = {}         -- paths handed to ImportMedia
 H.appended = 0          -- how many clips reached the timeline
 H.clip_properties = {}  -- properties set on imported clips
 H.import_works = true   -- flip to false to simulate a build that refuses
+H.sequence_import_works = true  -- false: refuse the clipInfo form only
+H.under_playhead = true  -- false: the playhead is not over a clip
 
 function H.make_resolve(clip_file_path)
     local mpi = {
         GetClipProperty = function(_self)
-            return { ["File Path"] = clip_file_path }
+            return { ["File Path"] = clip_file_path, FPS = H.clip_fps }
         end,
     }
     local item = { GetMediaPoolItem = function(_self) return mpi end }
+    -- Where the clip sits in its media. Left unset, the item has no such
+    -- methods, as on a build that predates them, and the whole file is used.
+    if H.source_range then
+        item.GetSourceStartTime = function(_self) return H.source_range[1] end
+        item.GetSourceEndTime = function(_self) return H.source_range[2] end
+    end
+    if H.source_frames then
+        item.GetSourceStartFrame = function(_self) return H.source_frames[1] end
+        item.GetSourceEndFrame = function(_self) return H.source_frames[2] end
+    end
+    -- No GetSelectedItems: Resolve's API has no timeline selection.
     local timeline = {
-        GetCurrentVideoItem = function(_self) return item end,
-        GetSelectedItems = function(_self) return { item } end,
+        GetCurrentVideoItem = function(_self) return H.under_playhead and item or nil end,
     }
     local pool = {
         ImportMedia = function(_self, paths)
             if not H.import_works then return {} end
             local made = {}
             for _, path in ipairs(paths) do
+                -- A clipInfo table imports a sequence, as Blackmagic documents.
+                if type(path) == "table" then
+                    if not H.sequence_import_works then return {} end
+                    H.sequence_imports = (H.sequence_imports or 0) + 1
+                    H.last_sequence = path
+                    path = path.FilePath
+                end
                 table.insert(H.imported, path)
                 table.insert(made, {
                     SetClipProperty = function(_s, k, v)
-                        if H.super_scale_works == false then return false end
+                        if k == "Super Scale" and H.super_scale_works == false then return false end
+                        -- Resolve can say yes to a frame rate and keep the old one.
+                        if k == "FPS" and H.fps_sticks == false then return true end
                         H.clip_properties[k] = v
                         return true
+                    end,
+                    GetClipProperty = function(_s, k)
+                        if k == "FPS" then return H.clip_properties.FPS or "24" end
+                        return H.clip_properties[k]
                     end,
                 })
             end
@@ -188,12 +213,11 @@ function H.load(script_path, clip_file_path)
     _G.fu = { UIManager = ui }
     _G.bmd = bmd
 
-    package.preload["DaVinciResolveScript"] = function()
-        return { scriptapp = function(name)
-            if name == "Resolve" then return H.make_resolve(clip_file_path) end
-            return nil
-        end }
-    end
+    -- Resolve hands Lua scripts a Resolve() global, as in Blackmagic's
+    -- examples. There is no Lua DaVinciResolveScript module to require.
+    _G.Resolve = function() return H.make_resolve(clip_file_path) end
+    package.preload["DaVinciResolveScript"] = nil
+    package.loaded["DaVinciResolveScript"] = nil
 
     local real_execute = os.execute
     local real_print = print
@@ -273,7 +297,10 @@ function H.enabled(id)
     return w ~= nil and w.Enabled ~= false
 end
 
+function H.set_source_range(a, b) H.source_range = { a, b } end
 function H.imported_count() return #H.imported end
+function H.sequence_import_count() return H.sequence_imports or 0 end
+function H.last_sequence_field(k) return H.last_sequence and H.last_sequence[k] end
 function H.imported_at(i) return H.imported[i] end
 function H.property_of(key) return H.clip_properties[key] end
 function H.command_count() return #H.commands end

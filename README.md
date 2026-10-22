@@ -82,7 +82,9 @@ move it.
 
 ## Using it
 
-1. Select a clip on your timeline.
+1. Move the playhead over a clip on your timeline. Resolve does not tell
+   scripts which clip is selected, so Eternal2x works on the clip under the
+   playhead, read again each time you press a button.
 2. Open **Workspace → Scripts → Eternal2x**.
 3. Click **Analyse**. It reads the clip and tells you what it found, for
    example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`
@@ -93,8 +95,9 @@ The render runs in the background and the panel shows progress, so Resolve
 stays usable while it works. When it finishes, the rebuilt clip is imported and
 added to the end of your timeline.
 
-Eternal2x works on the clip's whole source file, not just the part trimmed onto
-your timeline, so trim the result to match once it is in.
+Only the part of the file the timeline clip uses is read and rebuilt, so a two
+second cut of a long file takes two seconds' worth of work. The panel shows the
+range it will use under the clip's name.
 
 ### Settings
 
@@ -144,9 +147,9 @@ before being applied. Restart Resolve afterwards.
 |---|---|
 | "Plugin folder not configured" | Re-run `python Installer/install_eternal2x.py`. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
-| "No clip selected" | Click a clip on the timeline, then press **Use Selected Clip**. |
+| "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
 | Analyse says nothing to do | The clip has no duplicated frames. It is live action, or already on 1s. |
-| Progress seems stuck | Press **Refresh Progress**. If a run was interrupted, press **Reset**. |
+| Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` avoids this. |
 | Upscale skipped | Super Scale needs Resolve Studio. |
 | Something else | Email the panel's status text and the `.eternal2x_last_run.log` file from the plugin folder. |

@@ -52,11 +52,68 @@ class RenderResult:
         }
 
 
-def _open(path: Path) -> cv2.VideoCapture:
+# Source frames [start, end) to work on. None means the whole file.
+FrameRange = Optional[Tuple[int, Optional[int]]]
+
+
+class _ClipReader:
+    """A capture that only shows frames [start, end) of its source.
+
+    A clip trimmed to two seconds of a long file should cost two seconds of
+    work, so everything downstream sees just that range, numbered from 0, and
+    cannot tell it from a short file.
+    """
+
+    def __init__(self, cap: cv2.VideoCapture, start: int = 0,
+                 end: Optional[int] = None) -> None:
+        self._cap = cap
+        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        self._start = max(0, start)
+        self._end = end
+        if total and (self._end is None or self._end > total):
+            self._end = total
+        self._read = 0
+        # grab() decodes without converting, and unlike seeking it lands on
+        # exactly the frame asked for, whatever the codec.
+        for _ in range(self._start):
+            if not cap.grab():
+                break
+
+    def read(self):
+        if self._end is not None and self._start + self._read >= self._end:
+            return False, None
+        ok, frame = self._cap.read()
+        if ok:
+            self._read += 1
+        return ok, frame
+
+    def get(self, prop: int) -> float:
+        if prop == cv2.CAP_PROP_FRAME_COUNT and self._end is not None:
+            return float(max(0, self._end - self._start))
+        return self._cap.get(prop)
+
+    def release(self) -> None:
+        self._cap.release()
+
+
+def _open(path: Path, frames: FrameRange = None) -> _ClipReader:
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise SourceError(f"Could not open clip: {path}")
-    return cap
+    start, end = frames if frames else (0, None)
+    return _ClipReader(cap, start, end)
+
+
+def probe_video(path: Path) -> Tuple[float, int]:
+    """The clip's frame rate and frame count, without decoding it."""
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        raise SourceError(f"Could not open clip: {path}")
+    try:
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
+        return fps, int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+    finally:
+        cap.release()
 
 
 def _downscale(gray: np.ndarray, max_width: int) -> np.ndarray:
@@ -99,9 +156,10 @@ def frame_difference_scores(
     cfg: Eternal2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
+    frames: FrameRange = None,
 ) -> Tuple[List[float], float, int, int]:
     """Per-frame difference from the previous frame, plus fps and dimensions."""
-    cap = _open(path)
+    cap = _open(path, frames)
     try:
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -137,9 +195,15 @@ def analyse_video(
     cfg: Eternal2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
+    frames: FrameRange = None,
 ) -> Tuple[DedupePlan, int, int]:
-    """Decode the clip once and return a rebuild plan plus its dimensions."""
-    scores, fps, width, height = frame_difference_scores(path, cfg, progress=progress)
+    """Decode the clip once and return a rebuild plan plus its dimensions.
+
+    With `frames`, only that range of the source is read, and the plan's frame
+    numbers count from its first frame.
+    """
+    scores, fps, width, height = frame_difference_scores(path, cfg, progress=progress,
+                                                         frames=frames)
     plan = plan_from_scores(
         scores, fps,
         threshold=cfg.duplicate_threshold,
@@ -202,6 +266,7 @@ def render_plan(
     *,
     progress: Optional[ProgressFn] = None,
     sequence: Optional[bool] = None,
+    frames: FrameRange = None,
 ) -> RenderResult:
     """Write the rebuilt clip.
 
@@ -211,6 +276,8 @@ def render_plan(
     `sequence` says whether `output` is a folder of PNG frames. Left as None it
     is guessed from the suffix, which a caller that knows should not rely on,
     because a folder called `shot.v2_smooth` has the suffix `.v2_smooth`.
+
+    `frames` must be the range of the source the plan was made from.
     """
     if plan.output_frames == 0:
         raise SourceError("Nothing to render: the plan has no frames.")
@@ -231,7 +298,7 @@ def render_plan(
         i = min(int(p), max(0, last_pair))
         buckets[i].append(p - i)
 
-    cap = _open(source)
+    cap = _open(source, frames)
     state = {"writer": None, "written": 0, "width": 0, "height": 0}
 
     def emit(frame: np.ndarray) -> None:
@@ -241,11 +308,17 @@ def render_plan(
         state["height"], state["width"] = frame.shape[:2]
         if is_sequence:
             target = output / f"frame_{state['written']:06d}.png"
-            # imwrite reports failure, a full disk or a path OpenCV cannot
-            # encode, by returning False rather than raising.
-            if not cv2.imwrite(str(target), frame):
-                raise SourceError(f"Could not write {target}. Check the disk has "
-                                  "space and the folder is writable.")
+            # Encode in memory and let Python write the file. cv2.imwrite
+            # cannot open a non-ASCII path on Windows, so a clip in a folder
+            # called Épisode 01 would fail on its first frame.
+            encoded, data = cv2.imencode(".png", frame)
+            if not encoded:
+                raise SourceError(f"Could not encode frame {state['written']}.")
+            try:
+                target.write_bytes(data.tobytes())
+            except OSError as exc:
+                raise SourceError(f"Could not write {target}: {exc}. Check the disk "
+                                  "has space and the folder is writable.") from exc
         else:
             if state["writer"] is None:
                 state["writer"] = _writer(output, (state["width"], state["height"]),

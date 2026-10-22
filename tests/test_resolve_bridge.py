@@ -109,7 +109,7 @@ def test_source_path_is_read_from_the_media_pool_item(install_fake_resolve):
 
 
 def test_no_selection_says_so_plainly():
-    with pytest.raises(bridge.ResolveError, match="No clip selected"):
+    with pytest.raises(bridge.ResolveError, match="No clip under the playhead"):
         bridge.clip_source_path(None)
 
 
@@ -155,6 +155,11 @@ def test_import_a_png_sequence(install_fake_resolve, tmp_path):
     item, outcome = bridge.import_media(project, folder)
     assert outcome, outcome.detail
     assert item is not None
+
+    # Resolve steps through a printf pattern, not the first frame's own name.
+    descriptor = project.GetMediaPool().import_calls[0][0]
+    assert descriptor["FilePath"] == str(folder / "frame_%06d.png")
+    assert (descriptor["StartIndex"], descriptor["EndIndex"]) == (0, 3)
 
 
 def test_sequence_import_falls_back_when_descriptors_are_rejected(install_fake_resolve,

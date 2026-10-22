@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
+
 import pytest
 
 from Stages import resolve_smooth as smooth
@@ -199,7 +201,7 @@ def test_no_selected_clip_is_reported(monkeypatch, capsys):
         sys.modules, "DaVinciResolveScript",
         FakeBmdModule(FakeResolve(FakeProjectManager(FakeProject(FakeTimeline())))))
     assert run(monkeypatch, []) == 2
-    assert "No clip selected" in capsys.readouterr().out
+    assert "No clip under the playhead" in capsys.readouterr().out
 
 
 # --------------------------------------------------------------------------
@@ -343,12 +345,88 @@ def test_a_dotted_source_name_still_renders_an_image_sequence(make_anime, monkey
 
 
 def test_a_frame_that_cannot_be_written_fails_the_run(make_anime, monkeypatch, tmp_path, capsys):
-    """imwrite returns False instead of raising, and that used to be ignored."""
-    import cv2
+    """A failed frame write used to be ignored, leaving a short sequence."""
     src = make_anime(holds=(2,) * 6)
-    monkeypatch.setattr(cv2, "imwrite", lambda *a, **k: False)
+
+    def refuse(self, data):
+        raise PermissionError("read-only")
+
+    monkeypatch.setattr(Path, "write_bytes", refuse)
     assert run(monkeypatch, ["--video", str(src), "--output-dir", str(tmp_path / "o")]) == 2
     assert "Could not write" in capsys.readouterr().out
+
+
+def test_a_frame_that_cannot_be_encoded_fails_the_run(make_anime, monkeypatch, tmp_path, capsys):
+    import cv2
+    src = make_anime(holds=(2,) * 6)
+    monkeypatch.setattr(cv2, "imencode", lambda *a, **k: (False, None))
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(tmp_path / "o")]) == 2
+    assert "Could not encode" in capsys.readouterr().out
+
+
+def test_a_non_ascii_output_folder_gets_every_frame(make_anime, monkeypatch, tmp_path):
+    """cv2.imwrite cannot open a path like this on Windows."""
+    src = make_anime(holds=(2,) * 6)
+    out = tmp_path / "Épisode 01"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out)]) == 0
+    assert len(list((out / f"{src.stem}_smooth").glob("frame_*.png"))) == 12
+
+
+def test_a_crash_is_reported_to_the_panel(make_anime, monkeypatch, tmp_path):
+    """Without this the panel says Working... until someone presses Reset."""
+    def boom(*a, **k):
+        raise RuntimeError("disk on fire")
+
+    monkeypatch.setattr(smooth, "render_plan", boom)
+    status = tmp_path / "status.json"
+    src = make_anime(holds=(2,) * 6)
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status)]) == 1
+    payload = json.loads(status.read_text(encoding="utf-8"))
+    assert payload["done"] is True and payload["ok"] is False
+    assert "disk on fire" in payload["message"]
+
+
+def test_missing_packages_are_reported_to_the_panel(monkeypatch, tmp_path):
+    monkeypatch.setattr(smooth, "IMPORT_ERROR",
+                        ImportError("No module named 'cv2'"))
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", "x.mov", "--status-file", str(status)]) == 3
+    payload = json.loads(status.read_text(encoding="utf-8"))
+    assert payload["done"] is True and payload["ok"] is False
+    assert "cv2" in payload["message"]
+
+
+def test_the_final_status_survives_a_reader_holding_the_file(tmp_path, monkeypatch):
+    """Windows refuses the replace while the panel has the file open."""
+    status = smooth.StatusFile(str(tmp_path / "status.json"))
+    real_replace = Path.replace
+    refusals = {"left": 5}
+
+    def busy(self, target):
+        if refusals["left"]:
+            refusals["left"] -= 1
+            raise PermissionError("in use")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", busy)
+    status.write(done=True, ok=True, message="Finished")
+    payload = json.loads((tmp_path / "status.json").read_text(encoding="utf-8"))
+    assert payload["done"] is True
+
+
+def test_a_sequence_tells_the_panel_how_to_import_it(make_anime, monkeypatch, tmp_path):
+    """Handed one frame, Resolve imports a still. It needs a pattern and a range."""
+    status = tmp_path / "status.json"
+    src = make_anime(holds=(2,) * 6)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--status-file", str(status)]) == 0
+    payload = json.loads(status.read_text(encoding="utf-8"))
+    folder = out / f"{src.stem}_smooth"
+    assert payload["sequence_pattern"] == str(folder / "frame_%06d.png")
+    assert payload["sequence_frames"] == 12
+    assert payload["fps"] == 24.0, "the panel needs the rate to set on the sequence"
+    assert (folder / ("frame_%06d.png" % (payload["sequence_frames"] - 1))).exists()
 
 
 def test_json_output_is_the_whole_of_stdout(make_anime, monkeypatch, capsys, tmp_path):
@@ -366,3 +444,39 @@ def test_json_output_reports_errors_too(monkeypatch, capsys, tmp_path):
     assert payload["ok"] is False
     assert "missing" in payload["error"]
     assert payload["exit_code"] == 2
+
+
+def test_a_trimmed_clip_renders_only_its_range(make_anime, monkeypatch, tmp_path):
+    """Seconds in, so the timeline's frame rate cannot skew it. 24 fps here."""
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    out = tmp_path / "out"
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--start-time", "0.25", "--end-time", "0.75",
+                             "--status-file", str(status)]) == 0
+    folder = out / f"{src.stem}_f6-18_smooth"
+    assert len(list(folder.glob("frame_*.png"))) == 12
+    assert json.loads(status.read_text(encoding="utf-8"))["sequence_frames"] == 12
+
+
+def test_analyse_describes_only_the_trimmed_part(make_anime, monkeypatch, capsys):
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--start-time", "0.25", "--end-time", "0.75"]) == 0
+    out = capsys.readouterr().out
+    assert "12 frames, 6 unique drawings" in out
+    assert "source frames 6 to 17" in out
+
+
+def test_in_and_out_points_outside_the_media_are_reported(make_anime, monkeypatch, capsys):
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--start-time", "50", "--end-time", "52"]) == 2
+    assert "outside its media" in capsys.readouterr().out
+
+
+def test_a_range_covering_the_whole_file_is_the_whole_file(make_anime):
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    assert smooth.source_frames(src, 0.0, 1.0) is None
+    assert smooth.source_frames(src, None, None) is None
+    assert smooth.source_frames(src, 0.5, None) == (12, 24)
