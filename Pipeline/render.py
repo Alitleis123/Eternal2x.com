@@ -65,7 +65,8 @@ class _ClipReader:
     """
 
     def __init__(self, cap: cv2.VideoCapture, start: int = 0,
-                 end: Optional[int] = None) -> None:
+                 end: Optional[int] = None,
+                 progress: Optional[ProgressFn] = None) -> None:
         self._cap = cap
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
         self._start = max(0, start)
@@ -74,8 +75,11 @@ class _ClipReader:
             self._end = total
         self._read = 0
         # grab() decodes without converting, and unlike seeking it lands on
-        # exactly the frame asked for, whatever the codec.
-        for _ in range(self._start):
+        # exactly the frame asked for, whatever the codec. Deep into a long
+        # file that takes a while, so it reports like any other stage.
+        for i in range(self._start):
+            if progress and i % 100 == 0:
+                progress("Seeking", i / float(self._start))
             if not cap.grab():
                 break
 
@@ -96,12 +100,13 @@ class _ClipReader:
         self._cap.release()
 
 
-def _open(path: Path, frames: FrameRange = None) -> _ClipReader:
+def _open(path: Path, frames: FrameRange = None,
+          progress: Optional[ProgressFn] = None) -> _ClipReader:
     cap = cv2.VideoCapture(str(path))
     if not cap.isOpened():
         raise SourceError(f"Could not open clip: {path}")
     start, end = frames if frames else (0, None)
-    return _ClipReader(cap, start, end)
+    return _ClipReader(cap, start, end, progress)
 
 
 def probe_video(path: Path) -> Tuple[float, int]:
@@ -159,7 +164,7 @@ def frame_difference_scores(
     frames: FrameRange = None,
 ) -> Tuple[List[float], float, int, int]:
     """Per-frame difference from the previous frame, plus fps and dimensions."""
-    cap = _open(path, frames)
+    cap = _open(path, frames, progress)
     try:
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -298,7 +303,7 @@ def render_plan(
         i = min(int(p), max(0, last_pair))
         buckets[i].append(p - i)
 
-    cap = _open(source, frames)
+    cap = _open(source, frames, progress)
     state = {"writer": None, "written": 0, "width": 0, "height": 0}
 
     def emit(frame: np.ndarray) -> None:

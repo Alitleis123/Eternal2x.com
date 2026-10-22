@@ -301,6 +301,21 @@ def test_a_range_starts_on_exactly_the_frame_asked_for(make_anime, tmp_path, rea
     assert np.array_equal(frames[0], source[6]), "the render did not start at frame 6"
 
 
+def test_reaching_the_start_of_a_range_reports_progress(make_anime, tmp_path):
+    """Every frame before the range is decoded to reach it, which can take
+    minutes deep into an episode. The panel takes minutes of silence for a
+    dead run, so both passes must report while they get there."""
+    src = make_anime(holds=(2,) * 12)
+    stages = []
+    plan, _w, _h = analyse_video(src, cfg(), frames=(6, 18),
+                                 progress=lambda s, f: stages.append(s))
+    assert stages[0] == "Seeking"
+    stages.clear()
+    render_plan(src, plan, tmp_path / "range", cfg(), sequence=True, frames=(6, 18),
+                progress=lambda s, f: stages.append(s))
+    assert stages[0] == "Seeking"
+
+
 def test_a_range_past_the_end_of_the_file_stops_at_the_end(make_anime):
     plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(20, 400))
     assert plan.source_frames == 4
