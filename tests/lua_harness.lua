@@ -197,6 +197,8 @@ function H.make_execute(real_execute)
             end
         end
         table.insert(H.commands, recorded)
+        -- Lets a test play the part of the command, such as writing its log.
+        if H.on_execute then H.on_execute(cmd) end
         if H.real_execute then
             return real_execute(cmd)
         end

@@ -865,13 +865,60 @@ def test_smooth_keeps_the_last_clip_when_the_playhead_is_in_a_gap(lua, direct):
 # update checks report their verdict
 # --------------------------------------------------------------------------
 
+def updater_writes(direct, text):
+    """Play the updater: write its log when the panel runs it."""
+    def run(cmd):
+        if "Stages.resolve_update" in cmd:
+            (direct / ".eternal2x_update.log").write_text(text)
+    return run
+
+
 def test_a_failed_update_is_not_reported_as_updating(lua, direct):
     H = load(lua, ui_script(direct))
     H.exit_code = 1
-    (direct / ".eternal2x_last_run.log").write_text(
-        "Updating Eternal2x: 0.3.0 -> 0.3.2\nUpdate package checksum mismatch.\n")
+    H.on_execute = updater_writes(
+        direct, "Updating Eternal2x: 0.3.0 -> 0.3.2\nUpdate package checksum mismatch.\n")
     H.click("UpdateBtn")
     assert H.status() == "Update package checksum mismatch."
+
+
+def test_opening_the_panel_keeps_the_render_log(lua, direct):
+    """The update check runs on open. The render log is the one users send in."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text().replace("auto_update=false", "auto_update=true"))
+    H = load(lua, ui_script(direct))
+    cmd = H.last_command()
+    assert "Stages.resolve_update" in cmd
+    assert ".eternal2x_update.log" in cmd and ".eternal2x_last_run.log" not in cmd
+
+
+def test_an_update_check_that_never_ran_does_not_repeat_the_last_verdict(lua, direct):
+    (direct / ".eternal2x_update.log").write_text(
+        "Update applied. Restart Resolve to use the new version.\n")
+    H = load(lua, ui_script(direct))
+    H.exit_code = 1
+    H.click("UpdateBtn")
+    assert "Update applied" not in H.status()
+    assert "failed" in H.status()
+
+
+def test_no_update_while_a_render_runs(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not H.enabled("UpdateBtn")
+
+
+def test_no_update_while_a_render_from_an_earlier_panel_runs(lua, direct):
+    """Reopened mid-render, the panel must not replace the files it is using."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time())
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text().replace("auto_update=false", "auto_update=true"))
+    H = load(lua, ui_script(direct))
+    assert H.command_count() == 0, "the auto update ran during a render"
+    H.click("UpdateBtn")
+    assert H.command_count() == 0
+    assert "still running" in H.status()
 
 
 def test_a_sequence_gets_the_source_frame_rate(lua, direct):
