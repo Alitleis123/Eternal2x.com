@@ -87,14 +87,13 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
     else:
         raise AIUnavailable(
             f"Could not install ONNX Runtime for the AI setting ({why}). It needs "
-            f"Python 3.10 or newer on most systems. Pick another quality, or run: "
+            f"Python 3.10 or newer on most systems. To install it by hand, run: "
             f"\"{sys.executable}\" -m pip install onnxruntime")
     importlib.invalidate_caches()
     try:
         return importlib.import_module("onnxruntime")
     except ImportError as exc:
-        raise AIUnavailable(f"ONNX Runtime installed but will not load ({exc}). "
-                            f"Pick another quality.") from exc
+        raise AIUnavailable(f"ONNX Runtime installed but will not load ({exc}).") from exc
 
 
 def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,
@@ -125,11 +124,10 @@ def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,
                             progress("Downloading AI model", min(1.0, got / float(total)))
             except OSError as exc:
                 raise AIUnavailable(f"Could not download the AI model ({exc}). Check the "
-                                    f"connection and try again, or pick another "
-                                    f"quality.") from exc
+                                    f"connection and try again.") from exc
         if _sha256(part) != sha256:
             raise AIUnavailable("The downloaded AI model did not match its checksum, so it "
-                                "was not used. Try again, or pick another quality.")
+                                "was not used. Try again.")
         try:
             os.replace(part, path)
         except OSError:
@@ -154,15 +152,13 @@ class Rife:
             self.session = self._session()
         except Exception as exc:  # onnxruntime raises its own exception types
             if not self.on_gpu:
-                raise AIUnavailable(f"The AI model would not load ({exc}). "
-                                    f"Pick another quality.") from exc
+                raise AIUnavailable(f"The AI model would not load ({exc}).") from exc
             # A GPU without DirectX 12 lists DirectML but cannot start it.
             self.on_gpu = False
             try:
                 self.session = self._session()
             except Exception as exc2:
-                raise AIUnavailable(f"The AI model would not load ({exc2}). "
-                                    f"Pick another quality.") from exc2
+                raise AIUnavailable(f"The AI model would not load ({exc2}).") from exc2
         self.input = self.session.get_inputs()[0].name
 
     def _session(self):

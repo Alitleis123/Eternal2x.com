@@ -532,3 +532,8 @@ def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):
     gui = importlib.import_module("Installer.gui_installer")
     monkeypatch.setattr(gui.shutil, "which", lambda name: None)
     assert gui._find_system_python() == sys.executable
+
+
+def test_a_fresh_install_defaults_to_ai_quality(tmp_path):
+    conf = inst.write_config(tmp_path, Path("/repo"), "python3").read_text()
+    assert "quality=ai" in conf

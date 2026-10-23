@@ -1616,3 +1616,11 @@ def test_a_frame_rate_that_cannot_be_read_back_is_not_trusted(lua, direct):
                   sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
     assert H.appended == 0
     assert "at 60 fps" not in H.status()
+
+
+def test_ai_is_the_default_quality(lua, direct):
+    """The flow qualities hold a drawing wherever an in-between would ghost,
+    so on fast motion they smooth little. AI draws those too."""
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--quality ai" in H.last_command()

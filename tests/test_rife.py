@@ -65,7 +65,7 @@ def test_a_model_already_in_place_is_not_downloaded_again(tmp_path):
 def test_a_failed_download_says_what_to_do(tmp_path):
     target = tmp_path / "rife.onnx"
     missing = (tmp_path / "nowhere.onnx").as_uri()
-    with pytest.raises(rife.AIUnavailable, match="another quality"):
+    with pytest.raises(rife.AIUnavailable, match="Check the connection"):
         rife.ensure_model(path=target, url=missing, sha256="0" * 64)
     assert not target.exists()
 
@@ -302,16 +302,17 @@ def test_only_the_ai_setting_uses_the_network(monkeypatch, make_anime, tmp_path,
     assert _FakeRife.made == 1, "Interpolate off still loaded the network"
 
 
-def test_an_ai_setup_failure_stops_before_any_frame(monkeypatch, make_anime, tmp_path):
+def test_an_ai_setup_failure_renders_with_best_and_says_why(monkeypatch, make_anime, tmp_path):
+    """AI is the panel's default, so offline it must still render."""
     def broken(progress=None):
         raise rife.AIUnavailable("Could not download the AI model (offline).")
 
     monkeypatch.setattr(rife, "Rife", broken)
     src = make_anime(holds=(2,) * 6)
     plan, _, _ = analyse_video(src, Eternal2xConfig())
-    with pytest.raises(SourceError, match="AI model"):
-        render_plan(src, plan, tmp_path / "out", Eternal2xConfig(quality="ai"), sequence=True)
-    assert not list((tmp_path / "out").glob("*.png")), "frames were written before it failed"
+    result = render_plan(src, plan, tmp_path / "out", Eternal2xConfig(quality="ai"), sequence=True)
+    assert result.frames_written == plan.source_frames
+    assert "Best" in result.note and "offline" in result.note
 
 
 # --------------------------------------------------------------------------

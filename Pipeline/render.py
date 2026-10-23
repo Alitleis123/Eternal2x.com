@@ -24,7 +24,7 @@ import numpy as np
 
 from Pipeline.config import Eternal2xConfig
 from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
-from Pipeline.interpolate import interpolate_pair, upscale
+from Pipeline.interpolate import frames_are_a_cut, interpolate_pair, upscale
 
 ProgressFn = Callable[[str, float], None]
 
@@ -41,6 +41,12 @@ class RenderResult:
     height: int
     fps: float
     is_sequence: bool
+    # Why the render did not use the quality asked for, if it did not.
+    note: str = ""
+    # Pairs of drawings the flow qualities held rather than ghost, of the
+    # pairs they could have filled. Cuts are in neither count.
+    held: int = 0
+    pairs: int = 0
 
     def to_dict(self) -> dict:
         return {
@@ -50,6 +56,9 @@ class RenderResult:
             "height": self.height,
             "fps": self.fps,
             "is_sequence": self.is_sequence,
+            "note": self.note,
+            "held": self.held,
+            "pairs": self.pairs,
         }
 
 
@@ -414,9 +423,17 @@ def render_plan(
     # its runtime and downloads its model, and a failure there should come
     # before any frame is written.
     pair = interpolate_pair
+    quality = cfg.quality
+    note = ""
     if cfg.interpolate_enabled and cfg.quality == "ai":
-        from Pipeline.rife import Rife  # only the AI setting needs onnxruntime
-        pair = Rife(progress).interpolate_pair
+        from Pipeline.rife import AIUnavailable, Rife  # only AI needs onnxruntime
+        try:
+            pair = Rife(progress).interpolate_pair
+        except AIUnavailable as exc:
+            # AI is the panel's default, so a machine where it cannot run still
+            # gets a render. Best never ghosts either; it holds more drawings.
+            quality = "best"
+            note = f"AI could not run, so this used Best. {exc}"
 
     # Which in-between times belong to each pair of consecutive drawings.
     last_pair = plan.output_frames - 2
@@ -426,7 +443,7 @@ def render_plan(
         buckets[i].append(p - i)
 
     cap = _open(source, frames, progress)
-    state = {"writer": None, "written": 0, "width": 0, "height": 0}
+    state = {"writer": None, "written": 0, "width": 0, "height": 0, "held": 0, "pairs": 0}
 
     def emit(frame: np.ndarray) -> None:
         """Upscale if asked, then write one output frame."""
@@ -477,10 +494,15 @@ def render_plan(
                 if cfg.interpolate_enabled:
                     produced = pair(
                         prev, curr, times,
-                        quality=cfg.quality,
+                        quality=quality,
                         occlusion_softness=cfg.occlusion_softness,
                         max_disagreement=cfg.max_disagreement,
                     )
+                    inner = [f for t, f in zip(times, produced) if 0.0 < t < 1.0]
+                    if (pair is interpolate_pair and inner and not np.array_equal(prev, curr)
+                            and not frames_are_a_cut(prev, curr)):
+                        state["pairs"] += 1
+                        state["held"] += all(np.array_equal(f, prev) for f in inner)
                 else:
                     # De-duplicate only: every output frame is a real drawing,
                     # nothing is synthesised, and each starts where it did.
@@ -505,4 +527,7 @@ def render_plan(
         height=state["height"],
         fps=plan.fps,
         is_sequence=is_sequence,
+        note=note,
+        held=state["held"],
+        pairs=state["pairs"],
     )

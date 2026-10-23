@@ -82,7 +82,7 @@ local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
-local QUALITY = conf["quality"] or "better"
+local QUALITY = conf["quality"] or "ai"
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
 local GRAINY = parse_bool(conf["grain"], false)
@@ -570,7 +570,7 @@ local win = disp:AddWindow({
     ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Quality", Weight = 0.4 },
         ui:ComboBox{ ID = "QualityCombo", Weight = 0.6,
-                     ToolTip = "Fast for a quick look, Better for most work, Best for fine detail. AI uses the RIFE network: cleanest on fast motion, about 6x slower, and its first run downloads about 40 MB." },
+                     ToolTip = "AI draws every in-between with the RIFE network, so moving characters stay solid. On Windows it runs on the GPU. Its first run downloads about 50 MB.\nFast, Better and Best track pixels instead, and keep a drawing as it is wherever an in-between would ghost, so they smooth less." },
     },
     ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Hold pattern", Weight = 0.4 },
@@ -710,7 +710,7 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local quality = QUALITIES[(items.QualityCombo.CurrentIndex or 1) + 1] or "better"
+    local quality = QUALITIES[(items.QualityCombo.CurrentIndex or 3) + 1] or "ai"
     args = args .. " --quality " .. quality
     local hold = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
     if hold and hold > 0 then
@@ -1306,7 +1306,7 @@ function win.On.CancelBtn.Clicked(ev)
 end
 
 function win.On.QualityCombo.CurrentIndexChanged(ev)
-    QUALITY = QUALITIES[(items.QualityCombo.CurrentIndex or 1) + 1] or "better"
+    QUALITY = QUALITIES[(items.QualityCombo.CurrentIndex or 3) + 1] or "ai"
     save_conf()
 end
 
