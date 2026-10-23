@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -186,6 +189,43 @@ def test_various_frame_rates_are_preserved(make_anime, tmp_path, read_frames, fp
     src = make_anime(holds=(2,) * 6, fps=fps)
     plan, result, _frames = roundtrip(src, tmp_path, read_frames, name=f"o{int(fps)}.avi")
     assert result.fps == pytest.approx(fps, rel=0.02)
+
+
+def _ffmpeg(*args):
+    """Make a fixture OpenCV cannot write, one with its own timestamps."""
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        pytest.skip("ffmpeg makes the timestamped fixtures")
+    subprocess.run([exe, "-hide_banner", "-loglevel", "error", "-y", *map(str, args)],
+                   check=True)
+
+
+def test_a_variable_frame_rate_clip_is_refused(make_anime, tmp_path):
+    """The render runs at one rate, so a clip whose frames are unevenly spaced
+    would change length: 0.72 s of input once came out as 0.24 s."""
+    src = make_anime(holds=(2,) * 3, fps=25.0)
+    vfr = tmp_path / "vfr.mkv"
+    # Frames 0-2 are 40 ms apart, then 120 and 200 ms.
+    _ffmpeg("-i", src, "-vf", "setpts='if(lt(N,3),N,5*N-10)/(25*TB)'",
+            "-fps_mode", "vfr", "-c:v", "ffv1", vfr)
+    with pytest.raises(SourceError, match="variable frame rate"):
+        analyse_video(vfr, cfg())
+    # A range after the uneven part starts at the wrong time too.
+    with pytest.raises(SourceError, match="variable frame rate"):
+        analyse_video(vfr, cfg(), frames=(4, 6))
+
+
+@pytest.mark.parametrize("fps", [23.976, 29.97, 59.94])
+def test_rounded_timestamps_still_count_as_a_constant_rate(make_anime, tmp_path, fps):
+    """Matroska and WebM store whole milliseconds, so frames at these rates sit
+    up to half a millisecond off their exact time."""
+    src = make_anime(holds=(2,) * 60, fps=fps)
+    mkv = tmp_path / "cfr.mkv"
+    _ffmpeg("-i", src, "-c:v", "ffv1", mkv)
+    plan, _w, _h = analyse_video(mkv, cfg())
+    assert plan.source_frames == 120
+    plan, _w, _h = analyse_video(mkv, cfg(), frames=(100, 120))
+    assert plan.source_frames == 20
 
 
 def test_upscale_doubles_whatever_the_source_is(make_anime, tmp_path, read_frames):

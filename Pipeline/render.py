@@ -75,6 +75,8 @@ class _ClipReader:
         if total and (self._end is None or self._end > total):
             self._end = total
         self._read = 0
+        # When the file's first frame is shown, in ms. Some files start late.
+        self._origin: Optional[float] = None
         # grab() decodes without converting, and unlike seeking it lands on
         # exactly the frame asked for, whatever the codec. Deep into a long
         # file that takes a while, so it reports like any other stage.
@@ -83,6 +85,8 @@ class _ClipReader:
                 progress("Seeking", i / float(self._start))
             if not cap.grab():
                 break
+            if i == 0:
+                self._origin = cap.get(cv2.CAP_PROP_POS_MSEC)
 
     def read(self):
         if self._end is not None and self._start + self._read >= self._end:
@@ -90,7 +94,21 @@ class _ClipReader:
         ok, frame = self._cap.read()
         if ok:
             self._read += 1
+            if self._origin is None:
+                self._origin = self._cap.get(cv2.CAP_PROP_POS_MSEC)
         return ok, frame
+
+    def frames_off_schedule(self, fps: float) -> float:
+        """How far, in frames, the last frame read is from where `fps` puts it.
+
+        Counted from the start of the file, so unevenly spaced frames before
+        the range show up too. A file without timestamps reports 0 for every
+        frame and counts as on time.
+        """
+        ms = self._cap.get(cv2.CAP_PROP_POS_MSEC)
+        if ms <= 0 or self._origin is None:
+            return 0.0
+        return abs((ms - self._origin) * fps / 1000.0 - (self._start + self._read - 1))
 
     def get(self, prop: int) -> float:
         if prop == cv2.CAP_PROP_FRAME_COUNT and self._end is not None:
@@ -157,6 +175,24 @@ def _difference(prev: np.ndarray, curr: np.ndarray) -> float:
     return float(np.partition(arr, -k)[-k:].mean())
 
 
+def _require_constant_rate(cap: _ClipReader, fps: float, path: Path) -> None:
+    """Refuse a variable frame rate rather than quietly retime the clip.
+
+    The render writes every frame at one rate, so a clip whose frames are
+    unevenly spaced would come out a different length and drift against its
+    audio. Past half a frame a frame lands in another frame's slot. Real
+    constant-rate files sit far inside that: Matroska and WebM round times to
+    whole milliseconds, which is at most 0.03 of a frame at 59.94 fps.
+    """
+    if cap.frames_off_schedule(fps) > 0.5:
+        raise SourceError(
+            f"{path.name} has a variable frame rate, and Eternal2x needs every frame "
+            "to last the same time or the result changes length. Convert it to a "
+            "constant frame rate first, for example by rendering it from Resolve, or "
+            f"with ffmpeg -i \"{path.name}\" -r 24 constant.mp4 using your timeline's "
+            "frame rate.")
+
+
 def frame_difference_scores(
     path: Path,
     cfg: Eternal2xConfig,
@@ -175,6 +211,7 @@ def frame_difference_scores(
         ok, first = cap.read()
         if not ok:
             raise SourceError(f"Could not read any frames from: {path}")
+        _require_constant_rate(cap, fps, path)
         if not width or not height:
             height, width = first.shape[:2]
 
@@ -185,6 +222,7 @@ def frame_difference_scores(
             ok, frame = cap.read()
             if not ok:
                 break
+            _require_constant_rate(cap, fps, path)
             curr = _downscale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cfg.analysis_width)
             scores.append(_difference(prev, curr))
             prev = curr
