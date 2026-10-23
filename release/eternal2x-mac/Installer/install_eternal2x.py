@@ -48,29 +48,12 @@ def remove_old_install() -> None:
         root = _resolve_scripts_root()
     except RuntimeError:
         return
-    # The panel saved its settings beside the old launcher. Carried over, they
-    # survive the move, so an update opt-out is not turned back on.
-    # The copy is made beside it under another name and renamed into place, so
-    # a copy that fails halfway leaves no partial conf. The old one is deleted
-    # only once the new one exists, so the settings are never lost.
-    old_conf, new_conf = root / "Comp" / "Eternal2x.conf", root / "Utility" / "Eternal2x.conf"
-    if old_conf.exists() and not new_conf.exists():
-        staged = new_conf.with_name(new_conf.name + ".moving")
-        try:
-            new_conf.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(old_conf, staged)
-            os.replace(staged, new_conf)
-        except OSError:
-            try:
-                staged.unlink()
-            except OSError:
-                pass
-    leftovers = ["Eternal2x.lua"] + (["Eternal2x.conf"] if new_conf.exists() else [])
-    for name in leftovers:
-        try:
-            (root / "Comp" / name).unlink()
-        except OSError:
-            pass
+    # Only the old launcher goes here. The conf beside it holds the panel's
+    # settings, so write_config reads it and removes it once they are saved.
+    try:
+        (root / "Comp" / "Eternal2x.lua").unlink()
+    except OSError:
+        pass
     old_py = root / "Utility" / "Eternal2x.py"
     try:
         if OLD_PY_LAUNCHER_MARK in old_py.read_text(encoding="utf-8",
@@ -120,11 +103,18 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
     Plain UTF-8 with no BOM: the panel and the updater both read it. The
     panel saves its settings here, so a reinstall keeps them, and any key a
     later version added, rather than turning updates back on.
+
+    Versions up to 0.3.1 kept the conf beside a launcher in Comp. With none
+    here yet, its settings are read from there, and it is removed only after
+    this one is written. Moving it first could fail halfway, and the next
+    install would then find defaults here and delete the only real copy.
     """
     conf_path = dest_dir / "Eternal2x.conf"
+    legacy = dest_dir.parent / "Comp" / "Eternal2x.conf"
     settings = {"auto_update": "true", **PANEL_DEFAULTS}
     try:
-        saved = conf_path.read_text(encoding="utf-8-sig", errors="replace")
+        saved = (conf_path if conf_path.exists() else legacy).read_text(
+            encoding="utf-8-sig", errors="replace")
     except OSError:
         saved = ""
     for line in saved.splitlines():
@@ -138,6 +128,10 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
     ]
     lines += [f"{k}={v}" for k, v in settings.items()]
     conf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    try:
+        legacy.unlink()
+    except OSError:
+        pass
     return conf_path
 
 
