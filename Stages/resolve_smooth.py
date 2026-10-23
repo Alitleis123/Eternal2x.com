@@ -170,8 +170,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Duplicate-detection threshold override.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
-    parser.add_argument("--quality", default=None, choices=["fast", "better", "best"],
-                        help="Interpolation quality.")
+    parser.add_argument("--quality", default=None, choices=["fast", "better", "best", "ai"],
+                        help="Interpolation quality. ai uses the RIFE network: cleanest on "
+                             "fast motion, about 6x slower, and its first run downloads "
+                             "about 40 MB.")
     parser.add_argument("--no-interpolate", action="store_true",
                         help="De-duplicate only, without generating in-betweens.")
     parser.add_argument("--no-upscale", action="store_true",

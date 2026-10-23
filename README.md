@@ -29,6 +29,9 @@ it drops straight back into your edit.
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
 - Rebuilds the motion with optical flow, generating the in-between frames that
   were never drawn.
+- Has an AI setting, the RIFE network, that draws fast-moving characters
+  cleanly where optical flow shows a faint double image. It is about six
+  times slower.
 - Keeps deliberate held poses still, instead of smearing them into drift.
 - Cuts stay hard. Blending across a scene change would show both shots at once,
   so it snaps instead.
@@ -36,7 +39,9 @@ it drops straight back into your edit.
 
 It works like Twixtor without the warping. Where forward and backward motion
 disagree, which is where optical flow normally tears, it fades to a soft
-dissolve rather than inventing a broken frame.
+dissolve rather than inventing a broken frame. On a small character moving a
+long way that dissolve can show as a faint double image for a frame. The AI
+setting avoids it.
 
 ## Requirements
 
@@ -116,7 +121,7 @@ Whole file when Resolve does not report one.
 
 | Setting | What it does |
 |---|---|
-| **Quality** | `Fast` for a quick look, `Better` for normal work, `Best` tracks fine detail like eyes and fingers at the cost of speed. |
+| **Quality** | `Fast` for a quick look, `Better` for normal work, `Best` tracks fine detail like eyes and fingers at the cost of speed. `AI` uses the RIFE network, the cleanest on fast motion and about six times slower than `Better`. Its first run installs ONNX Runtime and downloads the model, about 40 MB, so it needs a connection once. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and always imports. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
@@ -212,6 +217,14 @@ cut a new one rather than re-uploading.
 
 Archives are byte reproducible, so rebuilding a tag on any machine gives the
 same checksums as the published ones.
+
+## Credits
+
+The AI setting runs [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
+4.25 by Zhewei Huang, under the MIT licence, in the ONNX export made by
+[vs-mlrt](https://github.com/AmusementClub/vs-mlrt). The model is downloaded
+the first time the setting is used and checked against its SHA-256. It is not
+part of the Eternal2x download.
 
 ## Questions
 

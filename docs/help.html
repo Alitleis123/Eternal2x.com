@@ -386,6 +386,8 @@
             <div class="step-content">
                 <h3>Choose your settings</h3>
                 <p><strong>Quality</strong> trades speed for detail, with <code>Better</code> suiting most work.
+                   <code>AI</code> uses the RIFE network, which draws fast-moving characters cleanly, at about a
+                   sixth of the speed. Its first run downloads about 40 MB.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
                    timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve always
                    imports. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
@@ -433,8 +435,10 @@
             <div class="step-content">
                 <h3>Very fast motion may stay stepped</h3>
                 <p>This is deliberate. Past a certain speed the areas a drawing uncovers exist in only one
-                   frame, so no in-between can be reconstructed. Eternal2x holds a real drawing rather than
-                   producing a smeared one.</p>
+                   frame, so optical flow cannot rebuild an in-between. Eternal2x holds a real drawing rather
+                   than producing a smeared one. When only a small part of the frame moves that fast, such as
+                   a character running across a still background, it can show a faint double image for a
+                   frame instead. The <code>AI</code> quality draws those moves cleanly.</p>
             </div>
         </div>
 
