@@ -80,20 +80,25 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
     for package in _packages():
         cmd = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", package]
         done = subprocess.run(cmd, capture_output=True, text=True)
-        if done.returncode == 0:
-            break
-        lines = [x for x in (done.stderr or done.stdout or "").splitlines() if x.strip()]
-        why = lines[-1].strip() if lines else f"pip exited with {done.returncode}"
-    else:
-        raise AIUnavailable(
-            f"Could not install ONNX Runtime for the AI setting ({why}). It needs "
-            f"Python 3.10 or newer on most systems. To install it by hand, run: "
-            f"\"{sys.executable}\" -m pip install onnxruntime")
-    importlib.invalidate_caches()
-    try:
-        return importlib.import_module("onnxruntime")
-    except ImportError as exc:
-        raise AIUnavailable(f"ONNX Runtime installed but will not load ({exc}).") from exc
+        if done.returncode != 0:
+            lines = [x for x in (done.stderr or done.stdout or "").splitlines() if x.strip()]
+            why = lines[-1].strip() if lines else f"pip exited with {done.returncode}"
+            continue
+        importlib.invalidate_caches()
+        try:
+            return importlib.import_module("onnxruntime")
+        except ImportError as exc:
+            # The DirectML build can install and still not load, missing a
+            # DLL. It is removed, so the next build does not share its files.
+            why = f"{package} installed but will not load: {exc}"
+            for name in [m for m in sys.modules if m.split(".")[0] == "onnxruntime"]:
+                del sys.modules[name]
+            subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", package],
+                           capture_output=True, text=True)
+    raise AIUnavailable(
+        f"Could not install ONNX Runtime for the AI setting ({why}). It needs "
+        f"Python 3.10 or newer on most systems. To install it by hand, run: "
+        f"\"{sys.executable}\" -m pip install onnxruntime")
 
 
 def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,

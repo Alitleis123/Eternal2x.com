@@ -163,6 +163,45 @@ def test_windows_falls_back_to_the_cpu_runtime(monkeypatch):
     assert asked == ["onnxruntime-directml", "onnxruntime"]
 
 
+def test_a_gpu_runtime_that_will_not_load_makes_way_for_the_cpu_one(monkeypatch):
+    """pip can install the DirectML build on a machine where its DLLs do not
+    load. It is removed before the plain build goes in."""
+    calls, installed = [], set()
+
+    def module(name):
+        if "onnxruntime" not in installed:
+            raise ImportError("DLL load failed while importing onnxruntime_pybind11_state")
+        return "onnxruntime module"
+
+    def run(cmd, **kwargs):
+        verb, package = cmd[3], cmd[-1]
+        calls.append((verb, package))
+        if verb == "install":
+            installed.add(package)
+        else:
+            installed.discard(package)
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(rife.sys, "platform", "win32")
+    monkeypatch.setattr(rife.importlib, "import_module", module)
+    monkeypatch.setattr(rife.subprocess, "run", run)
+    assert rife.ensure_runtime() == "onnxruntime module"
+    assert calls == [("install", "onnxruntime-directml"), ("uninstall", "onnxruntime-directml"),
+                     ("install", "onnxruntime")]
+
+
+def test_runtimes_that_all_fail_to_load_say_why(monkeypatch):
+    def module(name):
+        raise ImportError("DLL load failed")
+
+    monkeypatch.setattr(rife.sys, "platform", "win32")
+    monkeypatch.setattr(rife.importlib, "import_module", module)
+    monkeypatch.setattr(rife.subprocess, "run",
+                        lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, "", ""))
+    with pytest.raises(rife.AIUnavailable, match="will not load: DLL load failed"):
+        rife.ensure_runtime()
+
+
 def test_macos_gets_the_plain_runtime(monkeypatch):
     assert _install(monkeypatch, "darwin") == ["onnxruntime"]
 
