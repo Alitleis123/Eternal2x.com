@@ -78,5 +78,12 @@ jobs:
       - name: Check a build leaves update/latest.json untouched
         run: git diff --exit-code -- update/latest.json
 
+      # The release folders are committed copies of the source. The packaging
+      # test only compares the Python files already in them, so check them all.
+      - name: Check the committed release folders match the source
+        run: |
+          git status --porcelain -- release/
+          test -z "$(git status --porcelain -- release/)"
+
       - name: Check the feed matches the files on the release
         run: python Installer/build_release.py --verify
