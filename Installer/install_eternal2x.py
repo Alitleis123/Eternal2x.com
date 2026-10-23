@@ -63,15 +63,18 @@ def remove_old_install() -> None:
 
 
 def _pick_python(repo_root: Path) -> str:
+    # Past a venv, the Python running this is the one the user chose and
+    # installed the requirements into. `python` on PATH can be another one,
+    # or on Windows the Microsoft Store stub, which runs nothing.
     if sys.platform.startswith("win"):
         venv_python = repo_root / ".venv" / "Scripts" / "python.exe"
         if venv_python.exists():
             return str(venv_python)
-        return shutil.which("python") or sys.executable or "python"
+        return sys.executable or shutil.which("python") or "python"
     venv_python = repo_root / ".venv" / "bin" / "python"
     if venv_python.exists():
         return str(venv_python)
-    return shutil.which("python3") or shutil.which("python") or sys.executable or "python3"
+    return sys.executable or shutil.which("python3") or shutil.which("python") or "python3"
 
 
 # Panel defaults. The UI rewrites this file whenever a setting changes.

@@ -111,6 +111,17 @@ def test_falls_back_to_a_system_interpreter(tmp_path, monkeypatch):
     assert picked and Path(picked).name.startswith("python")
 
 
+@pytest.mark.parametrize("platform", ["win32", "darwin"])
+def test_without_a_venv_the_python_running_the_installer_is_used(tmp_path, monkeypatch,
+                                                                  platform):
+    """`py Installer\\install_eternal2x.py` must not record whatever `python` is
+    on PATH, which on Windows can be the Microsoft Store stub."""
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(sys, "executable", "/chosen/python3")
+    monkeypatch.setattr(inst.shutil, "which", lambda name: "/elsewhere/" + name)
+    assert inst._pick_python(tmp_path) == "/chosen/python3"
+
+
 # --------------------------------------------------------------------------
 # a full install
 # --------------------------------------------------------------------------
@@ -151,11 +162,10 @@ def test_the_installed_config_actually_runs_a_stage(fake_home, monkeypatch):
     conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
 
     result = subprocess.run(
-        [conf["python"], "-m", "Stages.resolve_regroup"],
+        [conf["python"], "-m", "Stages.resolve_smooth", "--help"],
         cwd=conf["repo_root"], capture_output=True, text=True,
     )
-    combined = result.stdout + result.stderr
-    assert "No module named 'Stages'" not in combined, combined
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_installed_update_url_is_https_and_points_at_latest_json(fake_home, monkeypatch):
