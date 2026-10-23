@@ -99,10 +99,14 @@
         if (e.target !== pause) slider.focus({ preventScroll: true });
     });
 
+    // The label follows what the video really does: a browser can refuse to
+    // start it, and then it must still offer Play.
+    function label() { pause.textContent = video.paused ? 'Play' : 'Pause'; }
+    video.addEventListener('play', label);
+    video.addEventListener('pause', label);
     function setPlaying(play) {
-        if (play) video.play().catch(function () {});
+        if (play) video.play().catch(label);
         else video.pause();
-        pause.textContent = play ? 'Pause' : 'Play';
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
 
@@ -111,5 +115,6 @@
     loop();
     // Motion only when the reader has not asked for less of it.
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    label();
     setPlaying(!still);
 })();
