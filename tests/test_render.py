@@ -69,6 +69,31 @@ def test_a_colour_change_at_equal_brightness_is_a_new_drawing(tmp_path):
     assert [(h.index, h.length) for h in plan.holds] == [(0, 2), (2, 2), (4, 2)]
 
 
+def test_a_slow_fade_keeps_moving(tmp_path, read_frames):
+    """One level a frame is under the threshold, so comparing each frame only
+    with the one before found no change and froze 22 frames of a fade."""
+    import cv2
+    src = tmp_path / "fade.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    for level in range(40, 64):
+        writer.write(np.full((120, 160, 3), level, np.uint8))
+    writer.release()
+    c = cfg(interpolate_enabled=False)
+    plan, _w, _h = analyse_video(src, c)
+    assert max(h.length for h in plan.holds) <= 2
+    out = read_frames(render_plan(src, plan, tmp_path / "out", c, sequence=True).output)
+    lag = max(40 + i - int(f[0, 0, 0]) for i, f in enumerate(out))
+    assert lag <= 1, f"the fade fell {lag} levels behind the source"
+
+
+def test_a_slow_pan_is_not_one_long_hold(make_anime):
+    """A tenth of a pixel a frame never crossed the threshold between
+    neighbours, so a moving shot came out as one still drawing. Holds up to
+    4 frames still count as timing, not as a deliberate still."""
+    plan, _w, _h = analyse_video(make_anime(holds=(1,) * 24, step=0.1), cfg())
+    assert max(h.length for h in plan.holds) <= 4
+
+
 def test_analyse_rejects_a_missing_file(tmp_path):
     with pytest.raises(SourceError, match="Could not open"):
         analyse_video(tmp_path / "nope.avi", cfg())

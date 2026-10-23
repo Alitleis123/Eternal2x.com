@@ -3,8 +3,8 @@
 Two passes over the source:
 
   analyse_video()  decodes once to measure how different each frame is from the
-                   one before it, which is all `Pipeline.dedupe` needs to build
-                   a plan.
+                   last new drawing, which is all `Pipeline.dedupe` needs to
+                   build a plan.
   render_plan()    decodes again and writes the output, holding only the two
                    drawings currently being interpolated between.
 
@@ -236,7 +236,13 @@ def frame_difference_scores(
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
 ) -> Tuple[List[float], float, int, int]:
-    """Per-frame difference from the previous frame, plus fps and dimensions."""
+    """Per-frame difference from the last new drawing, plus fps and dimensions.
+
+    Comparing each frame only with the one before missed change that builds
+    up slowly: a fade of one level a frame never crossed the threshold, and
+    22 frames froze on the first. Against the last drawing the change adds up
+    until it counts as a new one, so fades and slow pans keep moving.
+    """
     cap = _open(path, frames, progress)
     try:
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
@@ -251,7 +257,7 @@ def frame_difference_scores(
         if not width or not height:
             height, width = first.shape[:2]
 
-        prev = _analysis_frame(first, cfg.analysis_width)
+        drawing = _analysis_frame(first, cfg.analysis_width)
         scores = [0.0]
 
         while True:
@@ -260,8 +266,9 @@ def frame_difference_scores(
                 break
             _require_constant_rate(cap, fps, path)
             curr = _analysis_frame(frame, cfg.analysis_width)
-            scores.append(_difference(prev, curr))
-            prev = curr
+            scores.append(_difference(drawing, curr))
+            if scores[-1] >= cfg.duplicate_threshold:
+                drawing = curr
             if progress and total:
                 progress("Analysing", min(1.0, len(scores) / float(total)))
 
