@@ -185,6 +185,29 @@ def test_reinstall_is_idempotent(fake_home, monkeypatch):
     assert conf_path.read_text() == first
 
 
+@pytest.mark.parametrize("module", ["Installer.install_eternal2x",
+                                    "Installer.gui_installer"])
+def test_a_reinstall_keeps_the_users_settings(tmp_path, module):
+    """The panel saves its settings in this file. A reinstall that put back
+    the defaults would turn updates on again for someone who turned them off."""
+    import importlib
+    installer = importlib.import_module(module)
+    conf_path = installer.write_config(tmp_path, Path("/old/plugin"), "/old/python")
+    saved = {"auto_update": "false", "output_dir": "/renders", "quality": "ai",
+             "upscale": "false", "interpolate": "false", "base_hold": "3",
+             "format": "mkv", "added_by_a_later_version": "kept"}
+    old = {**read_conf(conf_path), **saved, "update_url": "https://old.example/latest.json"}
+    conf_path.write_text("".join(f"{k}={v}\n" for k, v in old.items()), encoding="utf-8")
+
+    installer.write_config(tmp_path, Path("/new/plugin"), "/new/python")
+    conf = read_conf(conf_path)
+    for key, value in saved.items():
+        assert conf[key] == value, f"the reinstall reset {key}"
+    assert conf["repo_root"] == str(Path("/new/plugin"))
+    assert conf["python"] == "/new/python"
+    assert conf["update_url"] == inst.DEFAULT_UPDATE_URL
+
+
 def test_install_reports_where_things_went(fake_home, monkeypatch, capsys):
     monkeypatch.setattr(sys, "platform", "darwin")
     inst.main()
