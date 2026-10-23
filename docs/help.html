@@ -89,19 +89,21 @@
             <div class="faq-answer">
                 Make sure you ran the installer and it completed successfully. The plugin should appear at
                 <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>. If it's not there, restart Resolve.
-                If it still doesn't appear, re-run the installer.
+                If it still doesn't appear, re-run the installer. If Resolve says you need Studio when you open
+                it, you are on the free edition, which blocks script panels since Resolve 19.1.
             </div>
         </details>
 
         <details class="faq-item">
             <summary class="faq-question">
-                "Plugin folder not configured"
+                Clicking Eternal2x does nothing
                 <span class="faq-chevron" aria-hidden="true">&#9660;</span>
             </summary>
             <div class="faq-answer">
-                The plugin cannot find the folder you extracted it to. The usual cause is moving or renaming
-                that folder after installing, since the config records its path. Re-run the installer from the
-                new location.
+                Open <strong>Workspace &rarr; Console</strong>. If it says <code>UI script not found</code> or
+                <code>Missing repo_root</code>, the plugin folder was moved, renamed or deleted after installing,
+                since the config records its path. Re-run the installer from where the folder is now. The panel's
+                "Plugin folder not configured" means the same thing.
             </div>
         </details>
 
@@ -132,11 +134,11 @@
 
         <details class="faq-item">
             <summary class="faq-question">
-                Analyse says there is nothing to do
+                "No duplicate frames. This clip is already on 1s."
                 <span class="faq-chevron" aria-hidden="true">&#9660;</span>
             </summary>
             <div class="faq-answer">
-                The clip has no duplicated frames, so there is nothing to recover. It is either live action or
+                Analyse found nothing to do. The clip has no duplicated frames, so there is nothing to recover. It is either live action or
                 animation already drawn on 1s. Smoothing it would only invent motion that was never there, so
                 Eternal2x stops instead.
             </div>
@@ -148,8 +150,8 @@
                 <span class="faq-chevron" aria-hidden="true">&#9660;</span>
             </summary>
             <div class="faq-answer">
-                Super Scale is a DaVinci Resolve Studio feature. On the free edition Eternal2x tells you it
-                was skipped rather than silently leaving it out. De-duplication and smoothing still run.
+                Super Scale is a DaVinci Resolve Studio feature. If the panel says the upscale was not applied,
+                check that Studio is activated. De-duplication and smoothing still run.
             </div>
         </details>
 
@@ -237,7 +239,8 @@
             <div class="step-content">
                 <h3>Run the installer</h3>
                 <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
-                   Open the extracted folder, type <code>cmd</code> in the address bar and press Enter, then run:</p>
+                   Open the extracted folder, then the <code>eternal2x-win</code> folder inside it, the one that
+                   contains <code>Installer</code>. Type <code>cmd</code> in the address bar and press Enter, then run:</p>
                 <div class="code-block">
                     python Installer\gui_installer.py
                     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -266,7 +269,7 @@
         <p class="text-dim text-sm mb-16">If the installer window does not open, run these from the same folder instead.</p>
 
         <div class="code-block">
-            pip install numpy opencv-python
+            python -m pip install numpy opencv-python
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
 
@@ -334,7 +337,7 @@
         <h3 class="mb-16 mt-24">Manual install (alternative)</h3>
 
         <div class="code-block">
-            pip3 install numpy opencv-python
+            python3 -m pip install numpy opencv-python
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
 
@@ -451,8 +454,9 @@
         <div class="guide-step">
             <div class="step-content">
                 <h3>Re-running the installer</h3>
-                <p>Only needed if you move or rename the plugin folder, since the config records where it lives.
-                   Updates themselves do not require it.</p>
+                <p>Needed once when updating from 0.3.1 or earlier. Those versions put the launcher where Resolve
+                   lists it only on the Fusion page, or on Windows not at all. After that, only if you move or
+                   rename the plugin folder, since the config records where it lives.</p>
             </div>
         </div>
     </div>
@@ -484,7 +488,8 @@ document.querySelectorAll('.sidebar a').forEach(function(link) {
 
 function copyCode(btn) {
     const block = btn.parentElement;
-    const text = block.innerText.replace('Copy', '').trim();
+    // The button's own label is part of the block's text, as Copy or Copied!.
+    const text = block.innerText.replace(/(Copy|Copied!)\s*$/, '').trim();
     navigator.clipboard.writeText(text).then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => { btn.textContent = 'Copy'; }, 1500);

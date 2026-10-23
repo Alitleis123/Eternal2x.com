@@ -4,8 +4,8 @@
 
 Smooth 2x for hand-drawn animation, inside DaVinci Resolve Studio.
 
-Anime is drawn on 2s or 3s: the artist draws twelve pictures a second and each
-one is held for two or three frames to fill 24fps. That is why anime looks
+Anime is drawn on 2s or 3s: the artist draws twelve pictures a second, or
+eight, and each one is held for two or three frames to fill 24fps. That is why anime looks
 stepped when you slow it down, and why running it straight through a frame
 interpolator does nothing useful. Most neighbouring frames are identical, so
 there is no motion to interpolate between them.
@@ -40,9 +40,9 @@ dissolve rather than inventing a broken frame.
 
 ## Requirements
 
-- **DaVinci Resolve Studio** 18 or newer. Super Scale and Optical Flow are
-  Studio features, so the free edition cannot do the upscale. Eternal2x detects
-  it and tells you rather than silently skipping it.
+- **DaVinci Resolve Studio** 18 or newer. Since 19.1 the free edition blocks
+  script panels like this one, so it cannot open Eternal2x. The 2x upscale uses
+  Super Scale, which is Studio only too.
 - Python 3.8+ on your PATH, from [python.org](https://www.python.org/downloads/).
 
 ## Install
@@ -62,11 +62,12 @@ install below, which does the same job.
 ### Manual
 
 ```
-pip install numpy opencv-python
+python -m pip install numpy opencv-python
 python Installer/install_eternal2x.py
 ```
 
-Then restart Resolve.
+Use `python3` on macOS. The installer records the Python that runs it, so
+install the packages into that same one. Then restart Resolve.
 
 The installer writes to Resolve's Utility scripts folder, which Resolve lists
 under Workspace → Scripts on every page:
@@ -145,10 +146,11 @@ before being applied. Restart Resolve afterwards.
 
 | Problem | Fix |
 |---|---|
-| "Plugin folder not configured" | Re-run `python Installer/install_eternal2x.py`. |
+| Resolve says you need Studio | Since 19.1 the free edition blocks script panels. Eternal2x needs Studio. |
+| Clicking Eternal2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
 | "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
-| Analyse says nothing to do | The clip has no duplicated frames. It is live action, or already on 1s. |
+| "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` avoids this. |
 | Upscale skipped | Super Scale needs Resolve Studio. |
