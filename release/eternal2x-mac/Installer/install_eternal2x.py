@@ -111,9 +111,11 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
     """
     conf_path = dest_dir / "Eternal2x.conf"
     legacy = dest_dir.parent / "Comp" / "Eternal2x.conf"
+    if legacy == conf_path:
+        legacy = None   # installing into Comp itself: there is no older copy
     settings = {"auto_update": "true", **PANEL_DEFAULTS}
     try:
-        saved = (conf_path if conf_path.exists() else legacy).read_text(
+        saved = (conf_path if conf_path.exists() or not legacy else legacy).read_text(
             encoding="utf-8-sig", errors="replace")
     except OSError:
         saved = ""
@@ -128,10 +130,11 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
     ]
     lines += [f"{k}={v}" for k, v in settings.items()]
     conf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    try:
-        legacy.unlink()
-    except OSError:
-        pass
+    if legacy:
+        try:
+            legacy.unlink()
+        except OSError:
+            pass
     return conf_path
 
 
