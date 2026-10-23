@@ -123,11 +123,14 @@ end
 
 -- A frame rate as Resolve counts with it: 23.976 is 24000/1001, but 23.98
 -- is 23.98.
-local NTSC = { ["23.976"] = 24000 / 1001, ["29.97"] = 30000 / 1001, ["47.952"] = 48000 / 1001,
-               ["59.94"] = 60000 / 1001, ["119.88"] = 120000 / 1001 }
+local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
+               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
 local function exact_rate(text)
     local r = tonumber(tostring(text or "24"):match("[%d%.]+"))
-    return NTSC[string.format("%g", r)] or r
+    for _, pair in ipairs(NTSC) do
+        if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
+    end
+    return r
 end
 
 function H.make_resolve(clip_file_path)
