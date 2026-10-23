@@ -406,8 +406,10 @@ end
 local ui = fu.UIManager
 local disp = bmd.UIDispatcher(ui)
 
-local QUALITIES = { "fast", "better", "best" }
-local QUALITY_LABELS = { "Fast", "Better", "Best" }
+local QUALITIES = { "fast", "better", "best", "ai" }
+-- AI is the RIFE network: the cleanest on fast motion, and the slowest. Its
+-- first run installs ONNX Runtime and downloads the model, about 40 MB.
+local QUALITY_LABELS = { "Fast", "Better", "Best", "AI" }
 -- No "On 1s": planning on 1s gives every frame its own slot, so it would
 -- change nothing. A saved 1 from an older version falls back to Auto detect.
 local HOLDS = { 0, 2, 3 }

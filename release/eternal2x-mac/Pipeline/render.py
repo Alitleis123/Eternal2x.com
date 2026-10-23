@@ -306,6 +306,14 @@ def render_plan(
     factor = cfg.upscale_factor if cfg.upscale_enabled else 1
     positions = output_time_map(plan)
 
+    # Set up before the source is opened, since the first AI render installs
+    # its runtime and downloads its model, and a failure there should come
+    # before any frame is written.
+    pair = interpolate_pair
+    if cfg.interpolate_enabled and cfg.quality == "ai":
+        from Pipeline.rife import Rife  # only the AI setting needs onnxruntime
+        pair = Rife(progress).interpolate_pair
+
     # Which in-between times belong to each pair of consecutive drawings.
     last_pair = plan.output_frames - 2
     buckets: List[List[float]] = [[] for _ in range(max(1, plan.output_frames - 1))]
@@ -355,7 +363,7 @@ def render_plan(
             times = buckets[index] if index < len(buckets) else []
             if times:
                 if cfg.interpolate_enabled:
-                    produced = interpolate_pair(
+                    produced = pair(
                         prev, curr, times,
                         quality=cfg.quality,
                         occlusion_softness=cfg.occlusion_softness,

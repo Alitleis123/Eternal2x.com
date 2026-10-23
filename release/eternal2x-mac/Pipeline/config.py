@@ -29,8 +29,9 @@ class Eternal2xConfig:
     force_base_hold: int = 0
 
     # --- output -----------------------------------------------------------
-    # Interpolation quality. "fast" uses a coarser optical flow preset.
-    quality: str = "better"          # "fast" | "better" | "best"
+    # Interpolation quality. "fast" uses a coarser optical flow preset. "ai"
+    # uses the RIFE network in Pipeline/rife.py, slower but clean on fast motion.
+    quality: str = "better"          # "fast" | "better" | "best" | "ai"
 
     # Blend weight for occluded regions, where forward and backward flow
     # disagree. Higher values favour a plain cross-dissolve, which is softer
