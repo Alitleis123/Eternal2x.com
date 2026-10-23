@@ -96,9 +96,11 @@ The render runs in the background and the panel shows progress, so Resolve
 stays usable while it works. When it finishes, the rebuilt clip is imported and
 added to the end of your timeline.
 
-Only the part of the file the timeline clip uses is read and rebuilt, so a two
-second cut of a long file takes two seconds' worth of work. The panel shows the
-range it will use under the clip's name.
+Only the part of the file the timeline clip uses is analysed and rebuilt. To
+reach it, the file is still decoded from its start, once for Analyse and again
+for the render, so a short cut late in a long episode shows Seeking for a
+while first. The panel shows the range it will use under the clip's name, or
+Whole file when Resolve does not report one.
 
 ### Settings
 

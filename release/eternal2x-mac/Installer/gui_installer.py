@@ -152,6 +152,13 @@ def _embedded_python_exe(repo_root: Path) -> Path:
 
 def _find_embedded_python(repo_root: Path) -> str | None:
     exe = _embedded_python_exe(repo_root)
+    # Older installers left the ._pth without the plugin folder. Repair it
+    # before reusing this Python, or the panel still cannot import Stages.
+    for pth in exe.parent.glob("python*._pth"):
+        try:
+            pth.write_text(_patch_pth(pth.read_text(encoding="utf-8")), encoding="utf-8")
+        except OSError:
+            pass
     if exe.exists() and _check_python(str(exe)):
         return str(exe)
     return None

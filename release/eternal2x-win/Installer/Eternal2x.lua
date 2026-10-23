@@ -162,22 +162,27 @@ local function get_resolve()
     return r, nil
 end
 
--- Where the timeline clip starts and ends within its media, in seconds, so a
--- two second cut of a long file costs two seconds of work. Seconds mean the
--- same whatever the timeline's rate. nil means use the whole file.
+-- Where the timeline clip starts and ends within its media, in seconds from
+-- the start of the file, so only that part is rebuilt. Seconds mean the same
+-- whatever the timeline's rate. nil means use the whole file.
+--
+-- Resolve counts the source frame from the start of the file, at the media's
+-- own rate, but the source time from the media's start timecode, so on
+-- footage that starts at 01:00:00:00 the times are an hour out. Only their
+-- difference is used, anchored on the start frame.
 local function clip_range(item, props)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
         return ok and tonumber(value) or nil
     end
+    local fps = tonumber(tostring(props["FPS"] or ""):match("^%s*([%d%.]+)"))
+    local f0 = call("GetSourceStartFrame")
+    if not (fps and fps > 0 and f0) then return nil end
+    local start = f0 / fps
     local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
-    if t0 and t1 and t1 > t0 then return { start = t0, finish = t1 } end
-    -- Frames count at the media's own rate.
-    local fps = tonumber(props["FPS"])
-    local f0, f1 = call("GetSourceStartFrame"), call("GetSourceEndFrame")
-    if fps and fps > 0 and f0 and f1 and f1 > f0 then
-        return { start = f0 / fps, finish = f1 / fps }
-    end
+    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
+    local f1 = call("GetSourceEndFrame")
+    if f1 and f1 > f0 then return { start = start, finish = f1 / fps } end
     return nil
 end
 
@@ -247,7 +252,9 @@ local function build_command(module_name, args, background, log)
         -- /MIN gives the run its own minimised window. With /B it shared the
         -- console os.execute opens, which stayed on screen for the whole
         -- render, and closing it killed the render without a word.
-        return "start \"Eternal2x\" /MIN cmd /c " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
+        -- `call` keeps the quotes: given a quoted path holding &, `cmd /c`
+        -- strips them and splits the command there.
+        return "start \"Eternal2x\" /MIN cmd /c call " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
     end
     -- The subshell backgrounds the whole run, and records how it ended.
     return "(" .. cd .. " && " .. run .. redirect .. "; echo $? > "
@@ -640,13 +647,15 @@ local function import_result(st)
 
     -- Handed a single frame, Resolve imports a single still. A sequence needs
     -- the clipInfo form from Blackmagic's README: a printf pattern plus the
-    -- first and last frame numbers.
+    -- first and last frame numbers. If that is refused there is no fallback,
+    -- since the first frame alone would go on the timeline as a still.
     local mpi = nil
     if st.sequence_pattern ~= "" and st.sequence_frames > 0 then
         mpi = try_import({ FilePath = st.sequence_pattern, StartIndex = 0,
                            EndIndex = st.sequence_frames - 1 })
+    else
+        mpi = try_import(path)
     end
-    mpi = mpi or try_import(path)
     if not mpi then
         -- The whole path, so the render can be found and dragged in by hand.
         -- A sequence is its folder, not its first frame.
@@ -750,6 +759,17 @@ local function poll()
     ANALYSING = false
     set_status(msg)
     return true
+end
+
+-- A run may still be going, even one started from an earlier panel. Python
+-- writes its status at least once a frame, so a recent unfinished one means
+-- it is. Only one run at a time, since runs share the script, status and
+-- exit files.
+local function run_in_progress()
+    if read_exit_code() then return false end
+    local st = read_status()
+    return st ~= nil and not st.done and st.updated ~= nil
+        and os.time() - st.updated < STALLED_AFTER
 end
 
 -- ---------------------------------------------------------------------------
@@ -861,6 +881,13 @@ function win.On.RefreshStatusBtn.Clicked(ev)
 end
 
 function win.On.CancelBtn.Clicked(ev)
+    if run_in_progress() then
+        set_busy(true)
+        start_polling()
+        set_status("It is still running, so Reset leaves it alone. If its window was closed, "
+            .. "Reset works once it has been quiet for 3 minutes.")
+        return
+    end
     clear_status()
     ANALYSING = false
     IMPORTED = false
@@ -898,15 +925,6 @@ function win.On.AutoUpdateCB.Clicked(ev)
     AUTO_UPDATE = items.AutoUpdateCB.Checked
     save_conf()
     set_status(AUTO_UPDATE and "Auto-update enabled." or "Auto-update disabled.")
-end
-
--- A render started from an earlier panel may still be going. Python writes
--- its status at least once a frame, so a recent unfinished one means it is.
-local function run_in_progress()
-    if read_exit_code() then return false end
-    local st = read_status()
-    return st ~= nil and not st.done and st.updated ~= nil
-        and os.time() - st.updated < STALLED_AFTER
 end
 
 local function run_update(auto_mode)
@@ -962,7 +980,14 @@ else
     items.Meta.Text = short_path(REPO_ROOT, 68)
     refresh_source()
     set_status(SOURCE_PATH and "Ready." or items.SourceLabel.Text)
-    if AUTO_UPDATE then run_update(true) end
+    if run_in_progress() then
+        -- Closed mid-run and reopened: follow that run, and import it when done.
+        set_busy(true)
+        start_polling()
+        set_status("A run started earlier is still going. Its progress shows here.")
+    elseif AUTO_UPDATE then
+        run_update(true)
+    end
 end
 
 disp:RunLoop()
