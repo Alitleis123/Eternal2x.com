@@ -50,14 +50,21 @@ def remove_old_install() -> None:
         return
     # The panel saved its settings beside the old launcher. Carried over, they
     # survive the move, so an update opt-out is not turned back on.
-    # If the copy fails, the old conf stays, so the settings are not lost.
+    # The copy is made beside it under another name and renamed into place, so
+    # a copy that fails halfway leaves no partial conf. The old one is deleted
+    # only once the new one exists, so the settings are never lost.
     old_conf, new_conf = root / "Comp" / "Eternal2x.conf", root / "Utility" / "Eternal2x.conf"
     if old_conf.exists() and not new_conf.exists():
+        staged = new_conf.with_name(new_conf.name + ".moving")
         try:
             new_conf.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(old_conf, new_conf)
+            shutil.copy2(old_conf, staged)
+            os.replace(staged, new_conf)
         except OSError:
-            pass
+            try:
+                staged.unlink()
+            except OSError:
+                pass
     leftovers = ["Eternal2x.lua"] + (["Eternal2x.conf"] if new_conf.exists() else [])
     for name in leftovers:
         try:

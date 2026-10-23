@@ -99,6 +99,24 @@ def test_a_failed_settings_move_keeps_the_old_settings(fake_home, monkeypatch):
     assert (comp / "Eternal2x.conf").exists(), "the only copy of the settings was deleted"
 
 
+def test_a_settings_move_that_fails_halfway_keeps_the_old_settings(fake_home, monkeypatch):
+    """A copy that wrote part of the file and then failed left a destination,
+    which counted as done, so the full original was deleted."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text("auto_update=false" + chr(10) + "quality=ai" + chr(10))
+
+    def half(src, dst, *_args, **_kwargs):
+        Path(dst).write_text("auto_up")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(inst.shutil, "copy2", half)
+    inst.remove_old_install()
+    assert (comp / "Eternal2x.conf").exists()
+    assert not (inst._resolve_scripts_dir() / "Eternal2x.conf").exists(), "a partial copy was left"
+
+
 def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
                                                                         monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
