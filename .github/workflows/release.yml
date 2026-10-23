@@ -13,6 +13,11 @@ on:
 permissions:
   contents: write
 
+# One release at a time, so two runs cannot race to write the feed on main.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -61,6 +66,19 @@ jobs:
           # -f: the feed was just rewritten here, and a copy is saved above.
           # Without it the checkout refuses whenever main's feed has moved on.
           git checkout -f -B main origin/main
+          # A re-run of an older tag must not move the feed back, or installs
+          # between the two versions would never be offered the newer one.
+          if ! python - "$RUNNER_TEMP/latest.json" update/latest.json <<'PY'
+          import json, sys
+          def version(path):
+              with open(path, encoding="utf-8-sig") as f:
+                  return tuple(int(p) for p in json.load(f)["version"].split("."))
+          sys.exit(0 if version(sys.argv[1]) >= version(sys.argv[2]) else 1)
+          PY
+          then
+            echo "main's feed is for a newer version. Leaving it alone."
+            exit 0
+          fi
           cp "$RUNNER_TEMP/latest.json" update/latest.json
           if git diff --quiet -- update/latest.json; then
             echo "update/latest.json is already current."
