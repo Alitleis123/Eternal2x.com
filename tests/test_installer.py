@@ -299,6 +299,22 @@ def test_the_private_python_can_import_the_plugin():
     assert gui._patch_pth("\n".join(patched)).splitlines() == patched, "not idempotent"
 
 
+def test_a_reinstall_repairs_the_private_python_it_reuses(tmp_path, monkeypatch):
+    """Older installers left the ._pth without the plugin folder. Reusing that
+    Python as it was would keep the panel failing with No module named Stages."""
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(gui, "_check_python", lambda path: True)
+    python_dir = tmp_path / "python"
+    python_dir.mkdir()
+    (python_dir / "python.exe").write_bytes(b"")
+    pth = python_dir / "python311._pth"
+    pth.write_text("python311.zip\n.\nimport site\n", encoding="utf-8")
+    assert gui._find_embedded_python(tmp_path) == str(python_dir / "python.exe")
+    assert ".." in pth.read_text(encoding="utf-8").splitlines()
+
+
 def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):
     """Running `py Installer/gui_installer.py` works with no python on PATH."""
     import importlib
