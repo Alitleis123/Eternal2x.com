@@ -10,6 +10,7 @@ makes a plugin look like it is working when it is not.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -128,6 +129,50 @@ def clip_source_path(item: Any) -> Path:
     if not path:
         raise ResolveError("Could not read the clip's file path from Resolve.")
     return Path(str(path))
+
+
+def clip_source_range(item: Any) -> Optional[Tuple[float, float]]:
+    """Where the clip starts and ends in its media, in seconds from the start
+    of the file, or None to use the whole file.
+
+    This reads the range the way the panel's clip_range in
+    Installer/Eternal2x.lua does, so a direct run trims a cut the same way.
+    Resolve counts source frames from the start of the file at the media's
+    own rate, but source times from its start timecode, which can be an hour
+    in. So the frames are used, and without an end frame the times'
+    difference gives the length. The end frame is the last one the cut uses.
+    """
+    def number(value: Any) -> Optional[float]:
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def call(name: str) -> Optional[float]:
+        method = getattr(item, name, None)
+        if not callable(method):
+            return None
+        try:
+            return number(method())
+        except Exception:
+            return None
+
+    mpi = item.GetMediaPoolItem() if hasattr(item, "GetMediaPoolItem") else None
+    props = mpi.GetClipProperty() if hasattr(mpi, "GetClipProperty") else {}
+    rate = re.match(r"\s*([\d.]+)", str(props.get("FPS") or "")) \
+        if isinstance(props, dict) else None
+    fps = number(rate.group(1)) if rate else None
+    f0 = call("GetSourceStartFrame")
+    if not (fps and fps > 0) or f0 is None:
+        return None
+    start = f0 / fps
+    f1 = call("GetSourceEndFrame")
+    if f1 is not None and f1 >= f0:
+        return start, (f1 + 1) / fps
+    t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
+    if t0 is not None and t1 is not None and t1 > t0:
+        return start, start + (t1 - t0)
+    return None
 
 
 # --------------------------------------------------------------------------

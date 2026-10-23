@@ -231,18 +231,24 @@ def _run(args, summary: dict) -> int:
 
     resolve = None
     project = timeline = None
+    start_time, end_time = args.start_time, args.end_time
     if args.video:
         source = Path(args.video)
     else:
         try:
             resolve = bridge.connect()
             project, timeline = bridge.current_timeline(resolve)
-            source = bridge.clip_source_path(bridge.selected_clip(timeline))
+            item = bridge.selected_clip(timeline)
+            source = bridge.clip_source_path(item)
         except bridge.ResolveError as exc:
             print(f"Error: {exc}")
             summary["error"] = str(exc)
             status.write(done=True, ok=False, message=str(exc))
             return 2
+        # The panel passes the cut's range. Run directly, the stage reads it
+        # from Resolve the same way, or a trimmed cut would be rebuilt whole.
+        if start_time is None and end_time is None:
+            start_time, end_time = bridge.clip_source_range(item) or (None, None)
 
     if not source.exists():
         message = f"The clip's media is missing: {source.name}"
@@ -255,7 +261,7 @@ def _run(args, summary: dict) -> int:
     progress = _progress_printer(status)
 
     try:
-        frames = source_frames(source, args.start_time, args.end_time)
+        frames = source_frames(source, start_time, end_time)
         if frames:
             print(f"Trimmed to source frames {frames[0]} to {frames[1] - 1}.")
             summary["frames"] = list(frames)

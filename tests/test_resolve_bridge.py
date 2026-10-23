@@ -128,6 +128,32 @@ def test_a_missing_file_path_is_reported():
         bridge.clip_source_path(item)
 
 
+def trimmed_item(fps="24.000", **methods):
+    item = FakeTimelineItem(0, 6, FakeMediaPoolItem(properties={"FPS": fps}), left_offset=6)
+    for name, value in methods.items():
+        setattr(item, name, lambda value=value: value)
+    return item
+
+
+def test_a_cut_is_read_in_seconds_from_its_source_frames():
+    """The end frame is the last one the cut uses, so the range runs past it."""
+    item = trimmed_item(GetSourceStartFrame=6, GetSourceEndFrame=11)
+    assert bridge.clip_source_range(item) == (0.25, 0.5)
+
+
+def test_without_an_end_frame_the_source_times_give_the_length():
+    """Source times count from the media's start timecode, an hour in here."""
+    item = trimmed_item(GetSourceStartFrame=6, GetSourceStartTime=3600.25,
+                        GetSourceEndTime=3600.5)
+    assert bridge.clip_source_range(item) == (0.25, 0.5)
+
+
+def test_a_cut_with_no_known_range_is_the_whole_file():
+    assert bridge.clip_source_range(trimmed_item()) is None
+    assert bridge.clip_source_range(
+        trimmed_item(fps="", GetSourceStartFrame=6, GetSourceEndFrame=11)) is None
+
+
 # --------------------------------------------------------------------------
 # importing
 # --------------------------------------------------------------------------

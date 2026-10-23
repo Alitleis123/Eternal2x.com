@@ -494,6 +494,21 @@ def test_analyse_describes_only_the_trimmed_part(make_anime, monkeypatch, capsys
     assert "source frames 6 to 17" in out
 
 
+def test_a_direct_run_rebuilds_only_the_trimmed_cut(make_anime, install_fake_resolve,
+                                                    monkeypatch, capsys):
+    """Without --video the stage reads the cut from Resolve itself, so it has
+    to read the cut's range too, as the panel does."""
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    _r, _tl, items, mpi = install_fake_resolve([(0, 6, 6)], media_path=str(src))
+    mpi.SetClipProperty("FPS", "24.000")
+    items[0].GetSourceStartFrame = lambda: 6
+    items[0].GetSourceEndFrame = lambda: 11  # the last frame the cut uses
+    assert run(monkeypatch, ["--analyse"]) == 0
+    out = capsys.readouterr().out
+    assert "source frames 6 to 11" in out
+    assert "6 frames, 3 unique drawings" in out
+
+
 def test_in_and_out_points_outside_the_media_are_reported(make_anime, monkeypatch, capsys):
     src = make_anime(holds=(2,) * 12, fps=24.0)
     assert run(monkeypatch, ["--video", str(src), "--analyse",
