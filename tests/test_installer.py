@@ -100,7 +100,7 @@ def test_a_failed_install_keeps_the_settings_for_the_next_one(fake_home, monkeyp
     real_write = Path.write_text
 
     def refuse(self, *args, **kwargs):
-        if self.name == "Eternal2x.conf":
+        if self.name.startswith("Eternal2x.conf"):
             raise OSError("disk full")
         return real_write(self, *args, **kwargs)
 
@@ -115,6 +115,51 @@ def test_a_failed_install_keeps_the_settings_for_the_next_one(fake_home, monkeyp
     for kept in ("auto_update=false", "quality=ai", "grain=true"):
         assert kept in conf
     assert not legacy.exists()
+
+
+def test_a_conf_write_that_stops_halfway_keeps_the_settings(fake_home, monkeypatch):
+    """A write cut off after a few bytes left a partial conf, which the next
+    install trusted over the full one in Comp, and then deleted that."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("auto_update=false\nquality=ai\ngrain=true\n")
+    real_write = Path.write_text
+
+    def partial(self, data, *args, **kwargs):
+        if self.name.startswith("Eternal2x.conf"):
+            real_write(self, data[:7], *args, **kwargs)
+            raise OSError("disk full")
+        return real_write(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", partial)
+    with pytest.raises(OSError):
+        inst.main()
+    monkeypatch.setattr(Path, "write_text", real_write)
+    assert legacy.exists()
+    assert inst.main() == 0
+    conf = (inst._resolve_scripts_dir() / "Eternal2x.conf").read_text()
+    for kept in ("auto_update=false", "quality=ai", "grain=true"):
+        assert kept in conf
+    assert not list(inst._resolve_scripts_dir().glob("*.new")), "a partial file was left"
+
+
+def test_settings_that_cannot_be_read_stop_the_install(fake_home, monkeypatch):
+    """Reading them failed quietly, so defaults were written and the unread
+    settings deleted."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("auto_update=false\n")
+    real_read = Path.read_text
+
+    def refuse(self, *args, **kwargs):
+        if self == legacy:
+            raise PermissionError("locked")
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    with pytest.raises(PermissionError):
+        inst.main()
+    monkeypatch.setattr(Path, "read_text", real_read)
+    assert legacy.exists()
+    assert not (inst._resolve_scripts_dir() / "Eternal2x.conf").exists()
 
 
 def test_a_conf_written_into_comp_itself_is_kept(tmp_path):
