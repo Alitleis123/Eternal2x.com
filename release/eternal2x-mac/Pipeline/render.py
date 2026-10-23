@@ -14,6 +14,7 @@ than by RAM.
 
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, List, Optional, Sequence, Tuple
@@ -245,7 +246,8 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
 
 # Encoders to try per container, best quality first.
 _ENCODERS = {
-    ".avi": ("FFV1", "MJPG"),      # FFV1 is lossless
+    ".mkv": ("FFV1",),             # lossless; Resolve refuses FFV1 in AVI
+    ".avi": ("FFV1", "MJPG"),
     ".mp4": ("avc1", "mp4v"),      # H.264, which Resolve always reads
     ".mov": ("mp4v", "jpeg"),
 }
@@ -253,10 +255,18 @@ _ENCODERS = {
 
 def _writer(path: Path, size: Tuple[int, int], fps: float) -> cv2.VideoWriter:
     w, h = size
+    # OpenCV's FFmpeg writer takes the path as given. Where FFmpeg has no
+    # H.264 encoder, Windows falls back to Media Foundation, which garbles a
+    # name outside ASCII, so the render landed where the panel could not find
+    # it. Such a path gets FFmpeg alone.
+    apis = [cv2.CAP_FFMPEG]
+    if not sys.platform.startswith("win") or str(path).isascii():
+        apis.append(cv2.CAP_ANY)
     for fourcc in _ENCODERS.get(path.suffix.lower(), ("MJPG", "mp4v")):
-        writer = cv2.VideoWriter(str(path), cv2.VideoWriter_fourcc(*fourcc), fps, (w, h))
-        if writer.isOpened():
-            return writer
+        for api in apis:
+            writer = cv2.VideoWriter(str(path), api, cv2.VideoWriter_fourcc(*fourcc), fps, (w, h))
+            if writer.isOpened():
+                return writer
     raise SourceError(
         f"No encoder available for {path.suffix or 'this format'}. "
         "Try the lossless image sequence output instead."

@@ -116,8 +116,9 @@ def _progress_printer(status: "StatusFile"):
 
 # png    lossless image sequence; always readable by Resolve, many files
 # mp4    H.264; compact and universally readable, but lossy
-# avi    FFV1; lossless single file, though Resolve may not import it
-FORMATS = {"png": "", "mp4": ".mp4", "avi": ".avi"}
+# mkv    FFV1; lossless single file. Resolve Studio 20.3.1 imports FFV1 in
+#        MKV but refuses it in AVI.
+FORMATS = {"png": "", "mp4": ".mp4", "mkv": ".mkv"}
 
 # How Pipeline/render.py names sequence frames, as Resolve's ImportMedia wants it.
 SEQUENCE_PATTERN = "frame_%06d.png"
@@ -164,7 +165,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--format", default="png", choices=sorted(FORMATS),
                         help="png: lossless image sequence (default). "
                              "mp4: compact H.264 file. "
-                             "avi: lossless FFV1 file.")
+                             "mkv: lossless FFV1 file.")
     parser.add_argument("--threshold", type=float, default=None,
                         help="Duplicate-detection threshold override.")
     parser.add_argument("--base-hold", type=int, default=0,
