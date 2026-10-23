@@ -789,10 +789,13 @@ def test_a_placement_that_raises_removes_its_track_and_appends_once(lua, direct)
     assert "end of the timeline" in H.status()
 
 
-def _over_original(lua, direct, render):
-    H = load(lua, ui_script(direct), clip=render)
-    lua.execute("local H = ...; H.tracks = nil; H.src_span = nil; H.item_track = 2; "
-                "H.original_path = '/media/shot.mov'", H)
+def _stacked(lua, direct, top, *under):
+    """`top` under the playhead, with `under` lined up below it on tracks 1
+    and up, as an original and earlier renders are."""
+    H = load(lua, ui_script(direct), clip=top)
+    paths = ", ".join("'" + p.replace("\\", "\\\\") + "'" for p in under)
+    lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; "
+                f"H.item_track = {len(under) + 1}; H.under_paths = {{ {paths} }}", H)
     H.click("RefreshBtn")
     return H
 
@@ -801,7 +804,8 @@ def test_a_render_over_its_original_is_not_smoothed_again(lua, direct):
     """The render placed above is the top clip under the playhead from then
     on, so smoothing again with other settings smoothed the render. Seen in
     Resolve 20.3.1."""
-    H = _over_original(lua, direct, "/r/shot_f7-73_smooth_02/frame_[000000-000047].png")
+    H = _stacked(lua, direct, "/r/shot_f7-73_smooth_02/frame_[000000-000047].png",
+                 "/media/shot.mov")
     assert "shot.mov" in H.text_of("SourceLabel")
     H.click("AnalyseBtn")
     assert "/media/shot.mov" in H.last_command()
@@ -809,15 +813,34 @@ def test_a_render_over_its_original_is_not_smoothed_again(lua, direct):
 
 
 def test_a_single_file_render_over_its_original_is_skipped_too(lua, direct):
-    H = _over_original(lua, direct, "/r/shot_smooth.mkv")
+    H = _stacked(lua, direct, "/r/shot_smooth.mkv", "/media/shot.mov")
     H.click("AnalyseBtn")
     assert "/media/shot.mov" in H.last_command()
 
 
+def test_the_third_smooth_skips_both_earlier_renders(lua, direct):
+    """Two runs leave renders on V2 and V3. The third took the V2 render."""
+    H = _stacked(lua, direct, "C:\\r\\shot_f0-47_smooth_02.mkv",
+                 "C:\\media\\shot.mov", "C:\\r\\shot_f0-47_smooth.mkv")
+    H.click("SmoothBtn")
+    assert "shot.mov" in H.last_command()
+    assert "_f0-47_smooth" not in H.last_command()
+
+
 def test_a_clip_that_is_not_a_render_is_used_as_it_is(lua, direct):
-    H = _over_original(lua, direct, "/media/smooth_jazz.mov")
+    H = _stacked(lua, direct, "/media/smooth_jazz.mov", "/media/shot.mov")
     H.click("AnalyseBtn")
     assert "/media/smooth_jazz.mov" in H.last_command()
+
+
+def test_a_file_named_like_a_render_of_another_clip_is_used(lua, direct):
+    """Only a render named after the clip under it stands for that clip."""
+    for top in ("/media/camera_smooth123.mov", "/media/camera_smooth.mp4",
+                "/media/camera_smooth_02/frame_000000.png"):
+        H = _stacked(lua, direct, top, "/media/background.mov")
+        H.click("AnalyseBtn")
+        assert top.split("/")[2] in H.last_command(), top
+        assert "background.mov" not in H.last_command(), top
 
 
 def test_a_render_with_nothing_under_it_is_used(lua, direct):

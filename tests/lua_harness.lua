@@ -173,27 +173,33 @@ function H.make_resolve(clip_file_path)
         for n = 1, (H.item_track or 1) do H.tracks[n] = {} end
         table.insert(H.tracks[H.item_track or 1], H.src_span)
     end
-    -- H.original_path puts a clip of that file on track 1, lined up under
-    -- the source clip, as an original is under the render placed above it.
-    local original = nil
-    if H.original_path and not H.no_place_api then
-        if not H.original_span then
-            H.original_span = { H.src_span[1], H.src_span[2] }
-            table.insert(H.tracks[1], H.original_span)
+    -- H.under_paths lists files lined up under the source clip on tracks 1,
+    -- 2 and up, as an original and earlier renders are under the newest
+    -- render. H.item_track should be the track above the last of them.
+    local under = {}
+    if H.under_paths and not H.no_place_api then
+        H.under_spans = H.under_spans or {}
+        for i, file in ipairs(H.under_paths) do
+            if not H.under_spans[i] then
+                H.under_spans[i] = { H.src_span[1], H.src_span[2] }
+                table.insert(H.tracks[i], H.under_spans[i])
+            end
+            local span = H.under_spans[i]
+            local file_mpi = {
+                GetClipProperty = function(_self)
+                    return { ["File Path"] = file, FPS = H.clip_fps or "24" }
+                end,
+            }
+            local it = {}
+            for k, v in pairs(item) do it[k] = v end
+            it.GetMediaPoolItem = function(_self) return file_mpi end
+            it.GetStart = function(_self) return span[1] end
+            it.GetEnd = function(_self) return span[2] end
+            it.GetDuration = function(_self) return span[2] - span[1] end
+            it.GetUniqueId = function(_self) return "under-" .. i end
+            it.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", i }) end
+            under[span] = it
         end
-        local original_mpi = {
-            GetClipProperty = function(_self)
-                return { ["File Path"] = H.original_path, FPS = H.clip_fps or "24" }
-            end,
-        }
-        original = {}
-        for k, v in pairs(item) do original[k] = v end
-        original.GetMediaPoolItem = function(_self) return original_mpi end
-        original.GetStart = function(_self) return H.original_span[1] end
-        original.GetEnd = function(_self) return H.original_span[2] end
-        original.GetDuration = function(_self) return H.original_span[2] - H.original_span[1] end
-        original.GetUniqueId = function(_self) return "original-item" end
-        original.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", 1 }) end
     end
     H.track_names = H.track_names or {}
     H.placements = H.placements or {}
@@ -211,8 +217,7 @@ function H.make_resolve(clip_file_path)
         GetItemListInTrack = function(_self, kind, n)
             local out = {}
             for i, span in ipairs(H.tracks[n] or {}) do
-                table.insert(out, span == H.src_span and item
-                                  or span == H.original_span and original
+                table.insert(out, span == H.src_span and item or under[span]
                                   or span_item(span, n * 100 + i))
             end
             return resolve_list(out)

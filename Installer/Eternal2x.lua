@@ -195,21 +195,38 @@ local function clip_range(item, props)
     return nil
 end
 
--- Renders are named <clip>_smooth, with _02 and up for later ones: a folder
--- of frames, or one file.
-local function is_render(path)
-    return path:find("_smooth[_%d]*[/\\][^/\\]+$") ~= nil
-        or path:find("_smooth[_%d]*%.%w+$") ~= nil
+-- A file's name without its folder or extension.
+local function stem_of(path)
+    return ((path:match("([^/\\]+)$") or path):gsub("%.[^.]*$", ""))
 end
 
--- The clip a render placed above was lined up with: the highest one under it
--- that starts on the same frame. nil if there is none.
-local function original_under(timeline, item)
+-- What a render is called: its folder for a sequence of frames, its file
+-- name for one file. nil for a path Eternal2x does not write.
+local function render_name(path)
+    return path:match("([^/\\]+)[/\\]frame_[%d%[%]%-]+%.png$")
+        or path:match("([^/\\]+)%.mkv$") or path:match("([^/\\]+)%.mp4$")
+end
+
+-- Whether `name` is what Stages/resolve_smooth.py calls a render of a file
+-- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, then
+-- _smooth, then _<nn> for the second render and on.
+local function rendered_from(name, stem)
+    if stem == "" or name:sub(1, #stem) ~= stem then return false end
+    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1)
+    return rest == "_smooth" or rest:match("^_smooth_%d%d+$") ~= nil
+end
+
+-- The clip a render under the playhead was made from: on a track below it,
+-- starting on the same frame, its file the one the render is named after.
+-- Earlier renders stacked in between are passed over. nil if there is none.
+local function original_under(timeline, item, name)
     local ok, found = pcall(function()
         local start = item:GetStart()
         for track = tonumber(item:GetTrackTypeAndIndex()[2]) - 1, 1, -1 do
             for _, it in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
-                if it:GetStart() == start and it:GetMediaPoolItem() then return it end
+                local mpi = it:GetStart() == start and it:GetMediaPoolItem()
+                local file = mpi and (mpi:GetClipProperty() or {})["File Path"]
+                if file and rendered_from(name, stem_of(file)) then return it end
             end
         end
     end)
@@ -242,13 +259,13 @@ local function find_clip_path()
 
     -- A render placed above its original is the top clip under the playhead
     -- from then on, even switched off. Smoothing it would smooth the render
-    -- again, so the clip it was lined up with is used instead.
-    if is_render(path) then
-        local below = original_under(timeline, item)
-        local below_props = below and below:GetMediaPoolItem():GetClipProperty() or {}
-        if below_props["File Path"] and below_props["File Path"] ~= "" then
-            item, props, path = below, below_props, below_props["File Path"]
-        end
+    -- again, so the clip it was made from is used instead.
+    local name = render_name(path)
+    local below = name and original_under(timeline, item, name)
+    if below then
+        item = below
+        props = below:GetMediaPoolItem():GetClipProperty() or {}
+        path = props["File Path"]
     end
 
     -- Where the clip sits, so the result can go on a track above it, lined up
