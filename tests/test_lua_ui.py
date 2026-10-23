@@ -88,7 +88,7 @@ def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
     for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
-                     "CancelBtn", "UpdateBtn", "QualityCombo", "HoldCombo", "FormatCombo",
+                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo",
                      "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
@@ -99,24 +99,20 @@ def test_every_control_has_a_handler(lua, direct):
     handlers = set(H.handler_ids().split(","))
     for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
-                     "UpdateBtn.Clicked", "QualityCombo.CurrentIndexChanged",
+                     "UpdateBtn.Clicked",
                      "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
                      "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
                      "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
 
 
-def test_quality_choices_match_what_the_stage_accepts(lua, direct):
-    from Stages.resolve_smooth import build_parser
+def test_there_is_no_quality_choice(lua, direct):
+    """Pixel tracking doubled lines and smeared fast characters, and no check
+    caught every case, so the network draws every in-between."""
     H = load(lua, ui_script(direct))
-    labels = [x.lower() for x in H.combo_items("QualityCombo").split(",")]
-
-    accepted = None
-    for action in build_parser()._actions:
-        if "--quality" in action.option_strings:
-            accepted = set(action.choices)
-    assert accepted is not None
-    assert set(labels) == accepted, f"panel offers {labels}, stage accepts {accepted}"
+    assert "QualityCombo" not in H.widget_ids().split(",")
+    H.click("SmoothBtn")
+    assert "--quality" not in H.last_command()
 
 
 def test_output_format_choices_match_the_stage(lua, direct):
@@ -309,11 +305,11 @@ def test_smooth_passes_a_status_file(lua, direct):
     assert "--status-file" in H.last_command()
 
 
-def test_quality_selection_reaches_the_command(lua, direct):
+def test_interpolate_off_reaches_the_command(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 2)      # Best
-    H.click("AnalyseBtn")
-    assert "--quality best" in H.last_command()
+    H.set_checkbox("InterpCB", False)
+    H.click("SmoothBtn")
+    assert "--no-interpolate" in H.last_command()
 
 
 def test_hold_pattern_selection_reaches_the_command(lua, direct):
@@ -512,12 +508,10 @@ def test_refreshing_with_no_run_says_so(lua, direct):
 
 def test_settings_are_saved(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 2)
     H.set_combo("HoldCombo", 2)        # On 3s
     H.set_checkbox("UpscaleCB", False)
 
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "quality=best" in conf
     assert "base_hold=3" in conf
     assert "upscale=false" in conf
 
@@ -543,13 +537,13 @@ def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
 
 def test_saved_settings_are_restored_next_time(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 0)     # Fast
     H.set_combo("HoldCombo", 1)        # On 2s
+    H.set_checkbox("GrainCB", True)
 
     H2 = load(lua, ui_script(direct))
     H2.click("AnalyseBtn")
     cmd = H2.last_command()
-    assert "--quality fast" in cmd
+    assert "--grain" in cmd
     assert "--base-hold 2" in cmd
 
 
@@ -1071,7 +1065,7 @@ def test_odd_clip_names_reach_python_unchanged(lua, direct, tmp_path, name):
     H = load(lua, ui_script(direct), clip=clip)
     H.click("AnalyseBtn")
     cmd = H.last_command()
-    quoted = cmd.split("--video ")[1].split(" --quality")[0]
+    quoted = cmd.split("--video ")[1].split(" --format")[0]
     seen = subprocess.run(["sh", "-c", f"printf %s {quoted}"],
                           capture_output=True, text=True).stdout
     assert seen == clip
@@ -1618,9 +1612,11 @@ def test_a_frame_rate_that_cannot_be_read_back_is_not_trusted(lua, direct):
     assert "at 60 fps" not in H.status()
 
 
-def test_ai_is_the_default_quality(lua, direct):
-    """The flow qualities hold a drawing wherever an in-between would ghost,
-    so on fast motion they smooth little. AI draws those too."""
+def test_a_saved_quality_from_an_older_version_is_dropped(lua, direct):
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "quality=better\n")
     H = load(lua, ui_script(direct))
-    H.click("AnalyseBtn")
-    assert "--quality ai" in H.last_command()
+    H.set_checkbox("UpscaleCB", False)
+    assert "quality=" not in conf.read_text()
+    H.click("SmoothBtn")
+    assert "--quality" not in H.last_command()

@@ -82,7 +82,6 @@ local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
-local QUALITY = conf["quality"] or "ai"
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
 local GRAINY = parse_bool(conf["grain"], false)
@@ -111,7 +110,6 @@ local function save_conf()
     f:write("update_url=" .. UPDATE_URL .. "\n")
     f:write("auto_update=" .. (AUTO_UPDATE and "true" or "false") .. "\n")
     f:write("output_dir=" .. OUTPUT_DIR .. "\n")
-    f:write("quality=" .. QUALITY .. "\n")
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
     f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
@@ -475,10 +473,6 @@ end
 local ui = fu.UIManager
 local disp = bmd.UIDispatcher(ui)
 
-local QUALITIES = { "fast", "better", "best", "ai" }
--- AI is the RIFE network: the cleanest on fast motion, and the slowest. Its
--- first run installs ONNX Runtime and downloads the model, about 40 MB.
-local QUALITY_LABELS = { "Fast", "Better", "Best", "AI" }
 -- No "On 1s": planning on 1s gives every frame its own slot, so it would
 -- change nothing. A saved 1 from an older version falls back to Auto detect.
 local HOLDS = { 0, 2, 3 }
@@ -568,11 +562,6 @@ local win = disp:AddWindow({
 
     ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
     ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Quality", Weight = 0.4 },
-        ui:ComboBox{ ID = "QualityCombo", Weight = 0.6,
-                     ToolTip = "AI draws every in-between with the RIFE network, so moving characters stay solid. On Windows it runs on the GPU. Its first run downloads about 50 MB.\nFast, Better and Best track pixels instead, and keep a drawing as it is wherever an in-between would ghost, so they smooth less." },
-    },
-    ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Hold pattern", Weight = 0.4 },
         ui:ComboBox{ ID = "HoldCombo", Weight = 0.6,
                      ToolTip = "Leave on Auto detect unless a clip's timing trips the detector." },
@@ -586,7 +575,7 @@ local win = disp:AddWindow({
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
                      ToolTip = "Apply Super Scale 2x. It shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
-                     ToolTip = "Off keeps every drawing on its frame and generates nothing, to upscale only." },
+                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nOff keeps every drawing on its frame and draws nothing, to upscale only." },
         ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
                      ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
@@ -618,10 +607,8 @@ local win = disp:AddWindow({
 
 local items = win:GetItems()
 
-for _, label in ipairs(QUALITY_LABELS) do items.QualityCombo:AddItem(label) end
 for _, label in ipairs(HOLD_LABELS) do items.HoldCombo:AddItem(label) end
 for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
-items.QualityCombo.CurrentIndex = index_of(QUALITIES, QUALITY)
 items.HoldCombo.CurrentIndex = index_of(HOLDS, BASE_HOLD)
 items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
@@ -710,8 +697,6 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local quality = QUALITIES[(items.QualityCombo.CurrentIndex or 3) + 1] or "ai"
-    args = args .. " --quality " .. quality
     local hold = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
     if hold and hold > 0 then
         args = args .. " --base-hold " .. tostring(hold)
@@ -1303,11 +1288,6 @@ function win.On.CancelBtn.Clicked(ev)
     set_busy(false)
     set_progress(0, nil)
     set_status("Ready.")
-end
-
-function win.On.QualityCombo.CurrentIndexChanged(ev)
-    QUALITY = QUALITIES[(items.QualityCombo.CurrentIndex or 3) + 1] or "ai"
-    save_conf()
 end
 
 function win.On.HoldCombo.CurrentIndexChanged(ev)

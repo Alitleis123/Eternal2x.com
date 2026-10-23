@@ -190,7 +190,7 @@ def test_flicker_is_not_taken_for_grain(tmp_path):
 def _cel_on_ones(tmp_path, steps):
     """24 distinct cel drawings on 1s, moving the character `steps` pixels in turn."""
     import cv2
-    from tests.test_quality import cel
+    from tests.drawings import cel
     src = tmp_path / "ones.avi"
     writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 240))
     x = 100
@@ -407,14 +407,6 @@ def test_progress_is_reported(make_anime, tmp_path):
     assert max(f for s, f in seen if s == "Rendering") == pytest.approx(1.0, abs=0.01)
 
 
-def test_quality_presets_all_render(make_anime, tmp_path, read_frames):
-    src = make_anime(holds=(2,) * 6)
-    for quality in ("fast", "better", "best"):
-        c = cfg(quality=quality)
-        plan, _, _ = analyse_video(src, c)
-        result = render_plan(src, plan, tmp_path / f"out_{quality}.avi", c)
-        assert len(read_frames(result.output)) == 12, f"{quality} produced the wrong length"
-
 
 def test_render_rejects_an_empty_plan(make_anime, tmp_path):
     from Pipeline.dedupe import DedupePlan
@@ -519,33 +511,3 @@ def test_reaching_the_start_of_a_range_reports_progress(make_anime, tmp_path):
 def test_a_range_past_the_end_of_the_file_stops_at_the_end(make_anime):
     plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(20, 400))
     assert plan.source_frames == 4
-
-
-def _ball_clip(make_video_path, moves):
-    """A small cartoon face on a big frame, one drawing per move, on 2s."""
-    from tests.test_quality import cel
-
-    frames = []
-    x = 200
-    for dx in (0,) + tuple(moves):
-        x += dx
-        img = cel(x, 300, 960, 540)
-        frames += [img, img.copy()]
-    return make_video_path(frames)
-
-
-@pytest.fixture
-def ball_clip(tmp_path):
-    from tests.conftest import _write_video
-
-    return lambda moves: _ball_clip(lambda f: _write_video(tmp_path / "ball.avi", f, 24.0), moves)
-
-
-def test_the_render_counts_the_drawings_it_kept_rather_than_ghost(ball_clip, tmp_path):
-    """Two slow moves are smoothed, two fast ones held, so the panel can say so."""
-    src = ball_clip((8, 8, 50, 50))
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
-    result = render_plan(src, plan, tmp_path / "out", Eternal2xConfig(quality="better"),
-                         sequence=True)
-    assert (result.held, result.pairs) == (2, 4)
-    assert result.note == ""

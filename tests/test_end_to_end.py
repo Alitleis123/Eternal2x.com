@@ -21,6 +21,7 @@ pytest.importorskip("lupa", reason="lupa provides the Lua runtime")
 from lupa import LuaRuntime  # noqa: E402
 
 from Installer.install_eternal2x import write_config  # noqa: E402
+from tests import fake_rife  # noqa: E402
 
 HARNESS = Path(__file__).resolve().parent / "lua_harness.lua"
 
@@ -36,6 +37,10 @@ def install(tmp_path, repo_root, make_anime, folder):
     for name in ("Installer", "Stages", "Pipeline"):
         shutil.copytree(repo_root / name, plugin / name)
     shutil.copy2(repo_root / "VERSION", plugin / "VERSION")
+    # The stage runs in its own Python here, where the network would download
+    # its model. A blend stands in for it, as in the other tests.
+    (plugin / "Pipeline" / "rife.py").rename(plugin / "Pipeline" / "_rife_real.py")
+    (plugin / "Pipeline" / "rife.py").write_text(fake_rife.MODULE, encoding="utf-8")
 
     comp = tmp_path / "Comp"
     comp.mkdir()

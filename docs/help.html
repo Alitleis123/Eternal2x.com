@@ -127,9 +127,9 @@
                 Every frame has to be read and every missing in-between generated, so the time scales with the
                 length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so
                 trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
-                start first, shown as Seeking. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
-                Quality setting. <code>AI</code>, the default, runs on the GPU on Windows at about that speed,
-                and is about ten times slower where it has to use the CPU. With Grainy source on, the clip is read twice while Analyse measures its grain. Resolve stays usable
+                start first, shown as Seeking. On Windows the in-betweens are drawn on the GPU, and ten seconds
+                of 1080p takes roughly ten to twenty seconds. Where the CPU has to draw them it is about ten
+                times slower. With Grainy source on, the clip is read twice while Analyse measures its grain. Resolve stays usable
                 throughout, and <strong>Analyse</strong> is much quicker if you only want to see what a clip
                 contains.
             </div>
@@ -402,10 +402,8 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Choose your settings</h3>
-                <p><strong>Quality</strong> defaults to <code>AI</code>, which draws every in-between with the
-                   RIFE network so moving characters stay solid. Its first run downloads about 50 MB.
-                   <code>Fast</code>, <code>Better</code> and <code>Best</code> track pixels instead, and keep a
-                   drawing as it is wherever an in-between would ghost, so they smooth less.
+                <p>The in-betweens are drawn by the RIFE network, so moving characters stay solid. Its first
+                   run downloads about 50 MB.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
                    timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve imports
                    most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
@@ -453,12 +451,11 @@
 
         <div class="guide-step">
             <div class="step-content">
-                <h3>Very fast motion may stay stepped</h3>
-                <p>On <code>Fast</code>, <code>Better</code> and <code>Best</code> this is deliberate. Past a
-                   certain speed the areas a drawing uncovers exist in only one frame, so optical flow cannot
-                   rebuild an in-between. Wherever one would ghost, even on a small character running across a
-                   still background, Eternal2x holds the real drawing instead, and the status says how many it
-                   kept. The <code>AI</code> quality, the default, draws those moves cleanly.</p>
+                <h3>Nothing was smoothed</h3>
+                <p>The first render installs the network's runtime and downloads its model, so it needs a
+                   connection once. Without one, every drawing is kept as drawn rather than filled in some
+                   other way, since warping pixels doubles lines on drawn animation. The status says why.
+                   Smooth again once you are online.</p>
             </div>
         </div>
 

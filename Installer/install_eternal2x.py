@@ -81,7 +81,6 @@ def _pick_python(repo_root: Path) -> str:
 # Panel defaults. The UI rewrites this file whenever a setting changes.
 PANEL_DEFAULTS = {
     "output_dir": "",
-    "quality": "ai",
     "upscale": "true",
     "interpolate": "true",
     "grain": "false",

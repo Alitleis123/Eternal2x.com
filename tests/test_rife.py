@@ -1,4 +1,4 @@
-"""The AI quality setting: getting its runtime and model, and what it draws."""
+"""The network that draws the in-betweens: its runtime, its model, what it draws."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from Pipeline import rife
 from Pipeline.config import Eternal2xConfig
 from Pipeline.interpolate import frames_are_a_cut, frames_are_unrelated
 from Pipeline.render import SourceError, analyse_video, render_plan
-from tests.test_quality import cel
+from tests.drawings import cel
 
 
 def city(w=320, h=240):
@@ -322,36 +322,36 @@ class _FakeRife:
         return [np.full_like(a, 77) for _ in times]
 
 
-def test_only_the_ai_setting_uses_the_network(monkeypatch, make_anime, tmp_path, read_frames):
+def test_the_network_draws_the_in_betweens(monkeypatch, make_anime, tmp_path, read_frames):
     monkeypatch.setattr(rife, "Rife", _FakeRife)
     src = make_anime(holds=(2,) * 6)
     plan, _, _ = analyse_video(src, Eternal2xConfig())
 
     _FakeRife.made = 0
-    render_plan(src, plan, tmp_path / "better.avi", Eternal2xConfig(quality="better"))
-    assert _FakeRife.made == 0
-
-    out = read_frames(render_plan(src, plan, tmp_path / "ai.avi",
-                                  Eternal2xConfig(quality="ai")).output)
+    out = read_frames(render_plan(src, plan, tmp_path / "ai.avi", Eternal2xConfig()).output)
     assert _FakeRife.made == 1, "the model should load once per render"
     assert any(np.all(f == 77) for f in out), "the network's in-betweens were not used"
 
-    off = Eternal2xConfig(quality="ai", interpolate_enabled=False)
-    render_plan(src, plan, tmp_path / "off.avi", off)
+    render_plan(src, plan, tmp_path / "off.avi", Eternal2xConfig(interpolate_enabled=False))
     assert _FakeRife.made == 1, "Interpolate off still loaded the network"
 
 
-def test_an_ai_setup_failure_renders_with_best_and_says_why(monkeypatch, make_anime, tmp_path):
-    """AI is the panel's default, so offline it must still render."""
+def test_without_the_network_the_drawings_are_kept_as_drawn(monkeypatch, make_anime, tmp_path,
+                                                             read_frames):
+    """Offline on the first run it must still render, and invent nothing: no
+    other way of making an in-between avoids ghosting."""
     def broken(progress=None):
         raise rife.AIUnavailable("Could not download the AI model (offline).")
 
     monkeypatch.setattr(rife, "Rife", broken)
     src = make_anime(holds=(2,) * 6)
     plan, _, _ = analyse_video(src, Eternal2xConfig())
-    result = render_plan(src, plan, tmp_path / "out", Eternal2xConfig(quality="ai"), sequence=True)
-    assert result.frames_written == plan.source_frames
-    assert "Best" in result.note and "offline" in result.note
+    smooth = render_plan(src, plan, tmp_path / "out", Eternal2xConfig(), sequence=True)
+    plain = render_plan(src, plan, tmp_path / "plain", Eternal2xConfig(interpolate_enabled=False),
+                        sequence=True)
+    assert "kept as drawn" in smooth.note and "offline" in smooth.note
+    assert all(np.array_equal(x, y) for x, y in zip(read_frames(smooth.output),
+                                                   read_frames(plain.output)))
 
 
 # --------------------------------------------------------------------------

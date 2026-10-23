@@ -417,12 +417,11 @@ def test_panel_defaults_are_values_the_stage_accepts(tmp_path):
 
     conf = read_conf(inst.write_config(tmp_path, Path("/plugin"), "/usr/bin/python3"))
     assert conf["format"] in FORMATS
-
-    quality_choices = None
+    hold_choices = None
     for action in build_parser()._actions:
-        if "--quality" in action.option_strings:
-            quality_choices = set(action.choices)
-    assert conf["quality"] in quality_choices
+        if "--base-hold" in action.option_strings:
+            hold_choices = action.type
+    assert hold_choices(conf["base_hold"]) == 0
 
 
 def test_the_private_python_can_import_the_plugin():
@@ -534,6 +533,7 @@ def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):
     assert gui._find_system_python() == sys.executable
 
 
-def test_a_fresh_install_defaults_to_ai_quality(tmp_path):
+def test_a_fresh_install_has_no_quality_setting(tmp_path):
+    """The in-betweens are always drawn by the network, so there is no choice."""
     conf = inst.write_config(tmp_path, Path("/repo"), "python3").read_text()
-    assert "quality=ai" in conf
+    assert "quality=" not in conf

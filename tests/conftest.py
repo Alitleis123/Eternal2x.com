@@ -15,6 +15,18 @@ if str(REPO_ROOT) not in sys.path:
 from tests.fake_resolve import FakeBmdModule, build_session  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _stand_in_for_the_network(request, monkeypatch):
+    """Renders draw in-betweens with a blend instead of the RIFE network, whose
+    model would otherwise be downloaded. tests/test_rife.py tests the real one."""
+    if request.module.__name__.endswith("test_rife"):
+        return
+    from Pipeline import rife
+    from tests.fake_rife import StandInRife
+
+    monkeypatch.setattr(rife, "Rife", StandInRife)
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT

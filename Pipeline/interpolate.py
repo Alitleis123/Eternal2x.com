@@ -1,65 +1,24 @@
-"""Generate in-between frames from a pair of drawings using optical flow.
+"""Telling a cut from motion, and upscaling.
 
-The approach is the classic one: estimate motion in both directions, pull each
-drawing towards the in-between time, and blend. What matters for hand-drawn
-animation is the failure mode. Where the two flows disagree -- occlusions, a
-limb appearing from behind a body, a cut -- warping produces the tearing,
-melting and doubled lines that optical-flow retimers are notorious for. Such
-an in-between is never made: the earlier drawing is held instead, which is
-the original timing. Only thin seams the flow cannot place are softened into
-a dissolve.
-
-Two drawings that are identical produce zero flow and therefore an identical
-in-between, so deliberate held frames stay perfectly still.
+The in-between frames are drawn by the RIFE network in Pipeline/rife.py.
+Optical flow is used here only to tell whether two frames belong to one shot.
+An in-between made by warping pixels along it doubles lines and smears a
+character that moves far, on hand-drawn animation, and no check of the flow
+catches every case, so none is made from it.
 """
 
 from __future__ import annotations
 
-from typing import List
-
 import cv2
 import numpy as np
 
-
-_PRESETS = {
-    "fast": cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST,
-    "better": cv2.DISOPTICAL_FLOW_PRESET_MEDIUM,
-    "best": cv2.DISOPTICAL_FLOW_PRESET_MEDIUM,
-}
-
 # Above this mean absolute difference, two drawings are treated as unrelated
-# (a hard cut). Flow between them is meaningless, so we cut rather than blend.
+# (a hard cut).
 CUT_THRESHOLD = 0.38
 
-# How far the forward and backward warps may disagree before an in-between is
-# considered unsafe to generate.
-#
-# When a drawing moves a long way between frames, the areas it uncovers and
-# covers are visible in only one of the two frames, so no amount of blending
-# can reconstruct them and the result smears. Measured against known in-between
-# drawings, interpolation stops beating a plain dissolve at roughly this level
-# of disagreement, on both flat cel artwork and detailed footage. Past it the
-# first drawing is held until the next one starts, which is the original
-# stepped timing rather than a melted frame.
-MAX_DISAGREEMENT = 0.02
 
-# The same, inside any patch a sixteenth of the frame high. A small character
-# that moves a long way ghosts while the rest of the frame agrees, so the
-# whole-frame figure stays low. On the hand-drawn shots of the open movie
-# Hero, doubled lines and smeared hands show from about 0.04 up.
-MAX_LOCAL_DISAGREEMENT = 0.04
-
-
-def _flow_engine(quality: str):
-    preset = _PRESETS.get(str(quality).lower(), _PRESETS["better"])
-    engine = cv2.DISOpticalFlow_create(preset)
-    if str(quality).lower() == "best":
-        # Finest scale 0 tracks small features -- eyes, fingers, line detail --
-        # at the cost of speed.
-        engine.setFinestScale(0)
-        engine.setGradientDescentIterations(25)
-        engine.setVariationalRefinementIterations(10)
-    return engine
+def _flow_engine():
+    return cv2.DISOpticalFlow_create(cv2.DISOPTICAL_FLOW_PRESET_ULTRAFAST)
 
 
 def _to_gray(frame: np.ndarray) -> np.ndarray:
@@ -90,9 +49,8 @@ def frames_are_a_cut(a: np.ndarray, b: np.ndarray) -> bool:
 # Above this, the midpoint warps of two frames disagree too much for them to be
 # one shot, measured at UNRELATED_WIDTH. Most cuts change pixels by less than
 # CUT_THRESHOLD on average: across the 30 cuts in the open movie Hero it was
-# 0.22 to 0.34. The flow in-betweens hold there anyway, past MAX_DISAGREEMENT,
-# but a learned interpolator would morph one shot into the other. On Hero
-# every cut scored 0.098 or more here, and the fastest motion 0.045.
+# 0.22 to 0.34, and a learned interpolator would morph one shot into the other.
+# On Hero every cut scored 0.098 or more here, and the fastest motion 0.045.
 UNRELATED_DISAGREEMENT = 0.06
 UNRELATED_WIDTH = 480
 
@@ -106,7 +64,7 @@ def frames_are_unrelated(a: np.ndarray, b: np.ndarray) -> bool:
         size = (UNRELATED_WIDTH, max(1, int(round(h * UNRELATED_WIDTH / float(w)))))
         a = cv2.resize(a, size, interpolation=cv2.INTER_AREA)
         b = cv2.resize(b, size, interpolation=cv2.INTER_AREA)
-    engine = _flow_engine("fast")
+    engine = _flow_engine()
     ga, gb = _to_gray(a), _to_gray(b)
     flow_ab, flow_ba = engine.calc(ga, gb, None), engine.calc(gb, ga, None)
     probe_a = _warp(a.astype(np.float32), flow_ba * 0.5)
@@ -117,105 +75,6 @@ def frames_are_unrelated(a: np.ndarray, b: np.ndarray) -> bool:
 def _disagreement(warped_a: np.ndarray, warped_b: np.ndarray) -> float:
     """How far the two warps disagree, as a fraction of full scale."""
     return float(np.abs(warped_a - warped_b).mean()) / 255.0
-
-
-def _inside(flow: np.ndarray) -> np.ndarray:
-    """Where resampling along `flow` stays inside the frame."""
-    h, w = flow.shape[:2]
-    x = np.arange(w, dtype=np.float32)[None, :] + flow[..., 0]
-    y = np.arange(h, dtype=np.float32)[:, None] + flow[..., 1]
-    return (x >= 0) & (x <= w - 1) & (y >= 0) & (y <= h - 1)
-
-
-def _local_disagreement(warped_a: np.ndarray, warped_b: np.ndarray,
-                        inside: np.ndarray) -> float:
-    """The worst disagreement in any patch a sixteenth of the frame high.
-
-    What a pan brings in at the edge is in only one of the two frames, so the
-    warps always disagree there, and nothing ghosts. `inside` leaves it out.
-    """
-    diff = np.abs(warped_a - warped_b)
-    if diff.ndim == 3:
-        diff = diff.mean(axis=2)
-    diff = np.where(inside, diff / 255.0, 0.0).astype(np.float32)
-    k = max(3, diff.shape[0] // 16)
-    return float(cv2.blur(diff, (k, k)).max())
-
-
-def interpolate_pair(
-    a: np.ndarray,
-    b: np.ndarray,
-    times: List[float],
-    *,
-    quality: str = "better",
-    occlusion_softness: float = 0.5,
-    max_disagreement: float = MAX_DISAGREEMENT,
-    max_local_disagreement: float = MAX_LOCAL_DISAGREEMENT,
-) -> List[np.ndarray]:
-    """Produce in-between frames for `times` (each in 0..1) between a and b.
-
-    t == 0 returns `a` untouched and t == 1 returns `b` untouched, so real
-    drawings are never resampled and stay perfectly sharp.
-
-    If the motion is too large to interpolate cleanly anywhere in the frame,
-    or a and b are a cut, `a` is held until t == 1, so `b` still starts on its
-    own frame.
-    """
-    if not times:
-        return []
-
-    # Identical drawings: nothing to interpolate, and computing flow would only
-    # invent motion out of compression noise.
-    if np.array_equal(a, b):
-        return [a.copy() for _ in times]
-
-    # A hard cut: blending across it would produce a ghosted double image.
-    if frames_are_a_cut(a, b):
-        return [(a.copy() if t < 1.0 else b.copy()) for t in times]
-
-    engine = _flow_engine(quality)
-    ga, gb = _to_gray(a), _to_gray(b)
-    flow_ab = engine.calc(ga, gb, None)
-    flow_ba = engine.calc(gb, ga, None)
-
-    af = a.astype(np.float32)
-    bf = b.astype(np.float32)
-
-    # Probe the midpoint first. It is the hardest in-between of the pair, so if
-    # the warps disagree there they will disagree everywhere between.
-    probe_a = _warp(af, flow_ba * 0.5)
-    probe_b = _warp(bf, flow_ab * 0.5)
-    if (_disagreement(probe_a, probe_b) > max_disagreement
-            or _local_disagreement(probe_a, probe_b,
-                                   _inside(flow_ba * 0.5) & _inside(flow_ab * 0.5))
-            > max_local_disagreement):
-        return [(a.copy() if t < 1.0 else b.copy()) for t in times]
-
-    out: List[np.ndarray] = []
-    for t in times:
-        t = float(min(1.0, max(0.0, t)))
-        if t <= 0.0:
-            out.append(a.copy())
-            continue
-        if t >= 1.0:
-            out.append(b.copy())
-            continue
-
-        warped_a = _warp(af, flow_ba * t)
-        warped_b = _warp(bf, flow_ab * (1.0 - t))
-        warped = warped_a * (1.0 - t) + warped_b * t
-
-        # Where the two warps disagree, the flow could not explain the change,
-        # so trust it less and fade towards a straight dissolve.
-        disagreement = np.abs(warped_a - warped_b).mean(axis=2) / 255.0
-        confidence = np.clip(1.0 - disagreement * (1.0 + 3.0 * occlusion_softness), 0.0, 1.0)
-        confidence = cv2.GaussianBlur(confidence, (0, 0), 3.0)[..., None]
-
-        dissolve = af * (1.0 - t) + bf * t
-        blended = warped * confidence + dissolve * (1.0 - confidence)
-        out.append(np.clip(blended, 0, 255).astype(np.uint8))
-
-    return out
 
 
 def upscale(frame: np.ndarray, factor: int) -> np.ndarray:

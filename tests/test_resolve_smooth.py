@@ -261,9 +261,10 @@ def test_json_summary_is_machine_readable(make_anime, monkeypatch, capsys, tmp_p
     assert payload["render"]["frames_written"] == 16
 
 
-def test_quality_presets_are_accepted(make_anime, monkeypatch, tmp_path):
+def test_a_quality_from_an_older_panel_is_accepted(make_anime, monkeypatch, tmp_path):
+    """A panel left open across an update still sends the quality it offered."""
     src = make_anime(holds=(2,) * 6)
-    for quality in ("fast", "better", "best"):
+    for quality in ("fast", "better", "best", "ai"):
         assert run(monkeypatch, ["--video", str(src), "--quality", quality,
                                  "--output-dir", str(tmp_path / quality)]) == 0
 
@@ -597,24 +598,14 @@ class _Plan:
 class _Result:
     frames_written = 24
     note = ""
-    held = 0
-    pairs = 11
 
 
-def test_the_message_says_how_many_drawings_were_kept_as_drawn():
+def test_the_message_says_when_no_in_betweens_could_be_drawn():
     result = _Result()
-    result.held = 4
+    result.note = "No in-betweens were drawn, so every drawing is kept as drawn. Offline."
     message = smooth._finished(_Plan(), result)
     assert message.startswith("Rendered 12 drawings into 24 smooth frames.")
-    assert "Kept 4 of 11 drawings as drawn" in message and "AI" in message
-
-
-def test_the_message_says_when_ai_could_not_run():
-    result = _Result()
-    result.note = "AI could not run, so this used Best. Could not download the AI model."
-    result.held = 3
-    message = smooth._finished(_Plan(), result)
-    assert "used Best" in message and "Kept" not in message
+    assert "kept as drawn" in message and "Offline" in message
 
 
 def test_a_clean_render_says_only_what_it_made():
