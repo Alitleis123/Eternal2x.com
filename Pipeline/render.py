@@ -246,7 +246,8 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
 
 # Encoders to try per container, best quality first.
 _ENCODERS = {
-    ".avi": ("FFV1", "MJPG"),      # FFV1 is lossless
+    ".mkv": ("FFV1",),             # lossless; Resolve refuses FFV1 in AVI
+    ".avi": ("FFV1", "MJPG"),
     ".mp4": ("avc1", "mp4v"),      # H.264, which Resolve always reads
     ".mov": ("mp4v", "jpeg"),
 }

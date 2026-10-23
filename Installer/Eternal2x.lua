@@ -399,8 +399,10 @@ local QUALITY_LABELS = { "Fast", "Better", "Best" }
 -- change nothing. A saved 1 from an older version falls back to Auto detect.
 local HOLDS = { 0, 2, 3 }
 local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
-local FORMATS = { "png", "mp4", "avi" }
-local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "AVI (lossless)" }
+-- No AVI: Resolve refuses its lossless FFV1 there, so that file is MKV. A
+-- saved avi from an older version falls back to the image sequence.
+local FORMATS = { "png", "mp4", "mkv" }
+local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "MKV (lossless)" }
 
 local function index_of(list, value)
     for i, v in ipairs(list) do

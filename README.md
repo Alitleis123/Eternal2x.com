@@ -108,7 +108,7 @@ Whole file when Resolve does not report one.
 |---|---|
 | **Quality** | `Fast` for a quick look, `Better` for normal work, `Best` tracks fine detail like eyes and fingers at the cost of speed. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
-| **Output** | `Image sequence` is lossless and always imports. `MP4` is a single compact file but lossy. `AVI` is a lossless single file that some Resolve builds will not import. |
+| **Output** | `Image sequence` is lossless and always imports. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. |
 | **Interpolate** | Off means de-duplicate only, without generating in-betweens. |
 

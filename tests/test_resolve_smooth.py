@@ -106,7 +106,7 @@ def test_the_default_output_is_a_lossless_sequence(anime_in_resolve, monkeypatch
     assert len(list(folders[0].glob("*.png"))) == 24
 
 
-@pytest.mark.parametrize("fmt,pattern", [("mp4", "*.mp4"), ("avi", "*.avi")])
+@pytest.mark.parametrize("fmt,pattern", [("mp4", "*.mp4"), ("mkv", "*.mkv")])
 def test_single_file_formats_render(anime_in_resolve, monkeypatch, tmp_path, fmt, pattern):
     """Decode the result back. A writer that opens but silently encodes
     nothing, which happens when a platform is missing a codec, would
@@ -308,7 +308,7 @@ def test_the_no_interpolate_flag_changes_the_output(make_anime, monkeypatch, tmp
     import cv2
 
     def frames_of(folder):
-        path = list(folder.glob("*.avi"))[0]
+        path = list(folder.glob("*.mkv"))[0]
         cap, out = cv2.VideoCapture(str(path)), []
         while True:
             ok, frame = cap.read()
@@ -319,9 +319,9 @@ def test_the_no_interpolate_flag_changes_the_output(make_anime, monkeypatch, tmp
         return out
 
     src = make_anime(holds=(2,) * 8)
-    run(monkeypatch, ["--video", str(src), "--format", "avi",
+    run(monkeypatch, ["--video", str(src), "--format", "mkv",
                       "--output-dir", str(tmp_path / "on")])
-    run(monkeypatch, ["--video", str(src), "--format", "avi", "--no-interpolate",
+    run(monkeypatch, ["--video", str(src), "--format", "mkv", "--no-interpolate",
                       "--output-dir", str(tmp_path / "off")])
 
     on, off = frames_of(tmp_path / "on"), frames_of(tmp_path / "off")
@@ -503,7 +503,7 @@ def test_a_clip_named_outside_the_system_code_page_runs(make_anime, repo_root, t
     assert "ヴァイオレット" in text
 
 
-@pytest.mark.parametrize("fmt,ext", [("mp4", ".mp4"), ("avi", ".avi")])
+@pytest.mark.parametrize("fmt,ext", [("mp4", ".mp4"), ("mkv", ".mkv")])
 def test_a_single_file_render_keeps_a_name_outside_ascii(make_anime, monkeypatch, tmp_path,
                                                          fmt, ext):
     """On Windows, OpenCV falls back to its Media Foundation writer for H.264,

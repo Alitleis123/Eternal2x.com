@@ -503,6 +503,17 @@ def test_settings_are_saved(lua, direct):
     assert "upscale=false" in conf
 
 
+def test_a_saved_avi_output_falls_back_to_the_image_sequence(lua, direct):
+    """Resolve Studio 20.3.1 refuses FFV1 in AVI, so the lossless file is now
+    MKV, and a setting saved by an older version picks the safe default."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "format=avi\n")
+    H = load(lua, ui_script(direct))
+    assert "MKV" in H.combo_items("FormatCombo") and "AVI" not in H.combo_items("FormatCombo")
+    H.click("SmoothBtn")
+    assert "--format png" in H.last_command()
+
+
 def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
     H = load(lua, ui_script(direct))
     H.set_checkbox("UpscaleCB", False)
