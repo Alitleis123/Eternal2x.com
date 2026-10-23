@@ -71,8 +71,9 @@ def test_a_failed_download_says_what_to_do(tmp_path):
 
 
 def test_two_downloads_at_once_do_not_trip_over_each_other(tmp_path, monkeypatch):
-    """Two first runs of the AI setting both download. They shared one
-    temporary file, so one could rename it away while the other still wrote."""
+    """Two renders drawing their first in-betweens at once both download.
+    They shared one temporary file, so one could rename it away while the
+    other still wrote."""
     data = b"model" * 600_000
     sha = hashlib.sha256(data).hexdigest()
     target = tmp_path / "models" / "rife.onnx"
@@ -414,8 +415,9 @@ def test_real_drawings_pass_through_untouched(model):
     assert np.array_equal(first, a) and np.array_equal(last, b)
 
 
-def test_the_network_draws_one_figure_where_flow_draws_two(model):
-    """A move too fast for the flow guard: the network still lands it halfway."""
+def test_the_network_draws_one_figure_where_warping_draws_two(model):
+    """A move far enough that warping pixels doubled it: the network still
+    lands it halfway."""
     a, b = cel(80, 120), cel(200, 120)
     truth = cel(140, 120)
     mid = model.interpolate_pair(a, b, [0.5])[0]
