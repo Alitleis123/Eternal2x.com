@@ -107,6 +107,8 @@ class FakeMediaPoolItem:
 # "Super Scale" is documented as 1 / 2 / 3 / 4 / Auto -- not "2x".
 _MEDIA_POOL_WRITABLE = {
     "Super Scale": {"1", "2", "3", "4", "Auto"},
+    # An image sequence's rate can be changed, as in Clip Attributes.
+    "FPS": None,
     "Clip Name": None,
     "Comments": None,
     "Keywords": None,

@@ -162,19 +162,62 @@ def test_import_a_png_sequence(install_fake_resolve, tmp_path):
     assert (descriptor["StartIndex"], descriptor["EndIndex"]) == (0, 3)
 
 
-def test_sequence_import_falls_back_when_descriptors_are_rejected(install_fake_resolve,
-                                                                  tmp_path):
-    """Older builds only accept plain paths, so the descriptor form must not be
-    the only thing tried."""
+def test_a_refused_sequence_is_not_imported_as_a_still(install_fake_resolve, tmp_path):
+    """Handed its first frame instead, Resolve imports one still, which would
+    go on the timeline in place of the render. Better to say it was refused."""
     resolve, _tl, _items, _ = install_fake_resolve([(0, 10)], import_mode="file_only")
+    project, _ = bridge.current_timeline(resolve)
+    folder = tmp_path / "seq"
+    folder.mkdir()
+    for i in range(4):
+        (folder / f"frame_{i:06d}.png").write_bytes(b"png")
+
+    item, outcome = bridge.import_media(project, folder, fps=24.0)
+    assert not outcome
+    assert item is None
+    assert "Tried:" in outcome.detail
+    pool = project.GetMediaPool()
+    assert pool.imported == []
+    assert len(pool.import_calls) == 1, "something other than the sequence was tried"
+
+
+@pytest.mark.parametrize("fps,text", [(60.0, "60"), (23.976, "23.976")])
+def test_a_sequence_gets_the_rate_it_was_rendered_at(install_fake_resolve, tmp_path,
+                                                     fps, text):
+    """A sequence has no rate of its own, so Resolve would play a 60 fps render
+    at a 24 fps project's rate, 40% speed."""
+    resolve, _tl, _items, _ = install_fake_resolve([(0, 10)])
     project, _ = bridge.current_timeline(resolve)
     folder = tmp_path / "seq"
     folder.mkdir()
     (folder / "frame_000000.png").write_bytes(b"png")
 
-    item, outcome = bridge.import_media(project, folder)
+    item, outcome = bridge.import_media(project, folder, frame_count=1, fps=fps)
     assert outcome, outcome.detail
-    assert outcome.method == "ImportMedia(first frame)"
+    assert item.GetClipProperty("FPS") == text
+    assert f"{text} fps" in outcome.detail
+
+
+def test_a_frame_rate_resolve_ignores_is_reported():
+    """Resolve does not always report a refusal, so the rate is read back."""
+    class Ignores:
+        def SetClipProperty(self, *_args):
+            return True
+
+        def GetClipProperty(self, _name=None):
+            return {"FPS": "24"}
+    outcome = bridge.set_sequence_fps(Ignores(), 60.0)
+    assert not outcome
+    assert "Clip Attributes" in outcome.detail
+
+
+def test_a_frame_rate_refusal_is_reported():
+    class Refuses:
+        def SetClipProperty(self, *_args):
+            return False
+    outcome = bridge.set_sequence_fps(Refuses(), 60.0)
+    assert not outcome
+    assert "60" in outcome.detail
 
 
 def test_an_empty_sequence_folder_is_reported(install_fake_resolve, tmp_path):

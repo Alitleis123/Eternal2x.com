@@ -141,6 +141,32 @@ def test_super_scale_is_applied_to_the_imported_clip(anime_in_resolve, monkeypat
     assert pool.imported[0].GetClipProperty("Super Scale") == "2"
 
 
+def test_a_sequence_has_its_rate_before_it_is_appended(anime_in_resolve, monkeypatch,
+                                                       tmp_path):
+    """Its length on the timeline depends on its rate, so set it first."""
+    anime_in_resolve()
+    seen = []
+    real_append = smooth.bridge.append_to_timeline
+
+    def append(project, media_item):
+        seen.append(media_item.GetClipProperty("FPS"))
+        return real_append(project, media_item)
+
+    monkeypatch.setattr(smooth.bridge, "append_to_timeline", append)
+    assert run(monkeypatch, ["--output-dir", str(tmp_path / "out")]) == 0
+    assert seen == ["24"]
+
+
+def test_a_refused_sequence_leaves_the_timeline_alone(anime_in_resolve, monkeypatch,
+                                                      capsys, tmp_path):
+    _src, _r, timeline, _items, _ = anime_in_resolve(import_mode="file_only")
+    before = len(timeline.GetItemListInTrack("video", 1))
+    assert run(monkeypatch, ["--output-dir", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    assert "Import failed" in out and "waiting at" in out
+    assert len(timeline.GetItemListInTrack("video", 1)) == before
+
+
 def test_no_upscale_flag_skips_super_scale(anime_in_resolve, monkeypatch, tmp_path):
     _src, resolve, _tl, _items, _ = anime_in_resolve()
     run(monkeypatch, ["--no-upscale", "--output-dir", str(tmp_path / "out")])

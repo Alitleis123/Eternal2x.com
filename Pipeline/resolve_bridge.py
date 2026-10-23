@@ -145,9 +145,9 @@ def import_media(project: Any, path: Path, *, frame_count: int = 0,
                  fps: float = 0.0) -> Tuple[Optional[Any], Outcome]:
     """Bring a rendered file or image sequence into the media pool.
 
-    Image sequences need a different call shape from single files, and the
-    accepted shape differs between Resolve versions, so the known forms are
-    tried in order.
+    An image sequence is imported from the descriptor form only. If Resolve
+    refuses it there is no fallback, since handed the first frame it imports
+    a single still, which would go on the timeline in place of the render.
     """
     pool = _media_pool(project)
     is_sequence = path.is_dir()
@@ -164,8 +164,6 @@ def import_media(project: Any, path: Path, *, frame_count: int = 0,
             "StartIndex": 0,
             "EndIndex": max(0, len(frames) - 1),
         }]))
-        attempts.append(("ImportMedia(first frame)", [str(frames[0])]))
-        attempts.append(("ImportMedia(folder)", [str(path)]))
     else:
         attempts.append(("ImportMedia(file)", [str(path)]))
 
@@ -181,13 +179,51 @@ def import_media(project: Any, path: Path, *, frame_count: int = 0,
             continue
         if items:
             item = items[0] if isinstance(items, (list, tuple)) else items
-            return item, Outcome(True, f"Imported {path.name}.", label)
+            detail = f"Imported {path.name}."
+            if is_sequence and fps > 0:
+                detail += " " + set_sequence_fps(item, fps).detail
+            return item, Outcome(True, detail, label)
         errors.append(f"{label}: returned nothing")
 
     return None, Outcome(
         False,
         "Resolve would not import the rendered clip. Tried: " + "; ".join(errors),
     )
+
+
+def set_sequence_fps(media_item: Any, fps: float) -> Outcome:
+    """Give an imported image sequence the rate it was rendered at.
+
+    A sequence has no frame rate of its own, so Resolve gives it the
+    project's, and a 60 fps render in a 24 fps project plays at 40% speed.
+    Resolve does not always report a refusal, so the value is read back. Call
+    this before the clip is appended, since its length there depends on it.
+    """
+    text = str(round(fps)) if abs(fps - round(fps)) < 0.001 else f"{fps:.3f}"
+    failed = Outcome(False, f"Set its frame rate to {text} in Clip Attributes, "
+                            f"or it plays at the project's.")
+    setter = getattr(media_item, "SetClipProperty", None)
+    if not callable(setter):
+        return failed
+    try:
+        if not setter("FPS", text):
+            return failed
+    except Exception:
+        return failed
+    getter = getattr(media_item, "GetClipProperty", None)
+    if callable(getter):
+        try:
+            got = getter("FPS")
+        except Exception:
+            got = text  # cannot check, so trust the set
+        if isinstance(got, dict):
+            got = got.get("FPS")
+        try:
+            if abs(float(got) - fps) > 0.01:
+                return failed
+        except (TypeError, ValueError):
+            return failed
+    return Outcome(True, f"Frame rate set to {text} fps.", "SetClipProperty")
 
 
 def append_to_timeline(project: Any, media_item: Any) -> Outcome:
