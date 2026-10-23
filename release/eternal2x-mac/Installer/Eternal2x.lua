@@ -195,6 +195,27 @@ local function clip_range(item, props)
     return nil
 end
 
+-- Renders are named <clip>_smooth, with _02 and up for later ones: a folder
+-- of frames, or one file.
+local function is_render(path)
+    return path:find("_smooth[_%d]*[/\\][^/\\]+$") ~= nil
+        or path:find("_smooth[_%d]*%.%w+$") ~= nil
+end
+
+-- The clip a render placed above was lined up with: the highest one under it
+-- that starts on the same frame. nil if there is none.
+local function original_under(timeline, item)
+    local ok, found = pcall(function()
+        local start = item:GetStart()
+        for track = tonumber(item:GetTrackTypeAndIndex()[2]) - 1, 1, -1 do
+            for _, it in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
+                if it:GetStart() == start and it:GetMediaPoolItem() then return it end
+            end
+        end
+    end)
+    return ok and found or nil
+end
+
 local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
@@ -218,6 +239,17 @@ local function find_clip_path()
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then return nil, "Could not read the clip's file path." end
+
+    -- A render placed above its original is the top clip under the playhead
+    -- from then on, even switched off. Smoothing it would smooth the render
+    -- again, so the clip it was lined up with is used instead.
+    if is_render(path) then
+        local below = original_under(timeline, item)
+        local below_props = below and below:GetMediaPoolItem():GetClipProperty() or {}
+        if below_props["File Path"] and below_props["File Path"] ~= "" then
+            item, props, path = below, below_props, below_props["File Path"]
+        end
+    end
 
     -- Where the clip sits, so the result can go on a track above it, lined up
     -- with it. Without these calls, as before Resolve 18, the result goes at
@@ -446,27 +478,35 @@ local function index_of(list, value)
     return 0
 end
 
+-- Resolve's UI Manager ignores #name selectors in a window's style sheet, so
+-- every widget that looks different from the rest carries its own.
+local TITLE = "QLabel { font-size: 20px; font-weight: 700; color: #ededf4; }"
+local SUBTITLE = "QLabel { color: #6e6e82; font-size: 11px; padding-bottom: 4px; }"
+local SECTION = [[QLabel { color: #9a9ab0; font-size: 10px; font-weight: 700;
+    padding-top: 8px; letter-spacing: 0.6px; }]]
+local CARD = [[QLabel { background-color: #121216; border: 1px solid #1e1e26;
+    border-radius: 6px; padding: 6px 9px; color: #c8c8d6; font-size: 11px; }]]
+local META = "QLabel { color: #5c5c70; font-size: 10px; }"
+local PROGRESS = "QLabel { color: #7c6fef; font-size: 11px; font-family: monospace; }"
+local START = [[
+    QPushButton { background-color: #7c6fef; border: 1px solid #9b90f5; border-radius: 7px;
+        color: #0b0b0f; font-size: 13px; font-weight: 700; min-height: 34px; }
+    QPushButton:hover { background-color: #9b90f5; }
+    QPushButton:disabled { background-color: #2a2740; color: #6a6a80; border-color: #2a2740; }
+]]
+local GHOST = [[
+    QPushButton { background-color: #121216; border: 1px solid #1e1e26; border-radius: 6px;
+        min-height: 22px; padding: 3px 10px; font-size: 11px; font-weight: 500; color: #b4b4c6; }
+    QPushButton:hover { background-color: #1a1a22; border-color: #7c6fef; color: #e2e2ea; }
+    QPushButton:disabled { background-color: #0f0f13; border-color: #18181f; color: #4a4a5a; }
+]]
+
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
     Geometry = { 100, 100, 460, 700 },
     StyleSheet = [[
         QWidget { background-color: #0b0b0f; color: #e2e2ea; font-size: 12px; }
-        QLabel#Title { font-size: 22px; font-weight: 700; color: #ededf4; padding-top: 2px; }
-        QLabel#SubTitle { color: #6e6e82; font-size: 11px; padding-bottom: 8px; }
-        QLabel#Section {
-            color: #9a9ab0; font-size: 10px; font-weight: 700;
-            padding-top: 10px; padding-bottom: 2px; letter-spacing: 0.6px;
-        }
-        QLabel#Card {
-            background-color: #121216; border: 1px solid #1e1e26;
-            border-radius: 6px; padding: 8px 10px; color: #c8c8d6; font-size: 11px;
-        }
-        QLabel#Meta { color: #5c5c70; font-size: 10px; padding-top: 2px; }
-        QLabel#Progress {
-            color: #7c6fef; font-size: 11px; font-family: monospace;
-            padding: 2px 0px;
-        }
         QPushButton {
             background-color: #16161e; border: 1px solid #28283a; border-radius: 7px;
             min-height: 32px; padding: 6px 14px; font-weight: 600; color: #e2e2ea;
@@ -474,17 +514,6 @@ local win = disp:AddWindow({
         QPushButton:hover { background-color: #1e1e28; border-color: #7c6fef; }
         QPushButton:pressed { background-color: #121218; }
         QPushButton:disabled { color: #4a4a5a; border-color: #1e1e26; background-color: #101014; }
-        QPushButton#StartBtn {
-            background-color: #7c6fef; border: 1px solid #9b90f5; color: #0b0b0f;
-            font-size: 13px; font-weight: 700; min-height: 40px;
-        }
-        QPushButton#StartBtn:hover { background-color: #9b90f5; }
-        QPushButton#StartBtn:disabled { background-color: #2a2740; color: #6a6a80; border-color: #2a2740; }
-        QPushButton#GhostBtn {
-            background-color: #121216; border: 1px solid #1e1e26;
-            min-height: 26px; font-size: 11px; color: #6e6e82; font-weight: 500;
-        }
-        QPushButton#GhostBtn:hover { background-color: #1a1a22; color: #9a9ab0; }
         QComboBox {
             background-color: #16161e; border: 1px solid #28283a; border-radius: 6px;
             padding: 5px 8px; min-height: 24px; color: #e2e2ea;
@@ -504,23 +533,23 @@ local win = disp:AddWindow({
 }, ui:VGroup{
     Spacing = 2,
 
-    ui:Label{ ID = "Title", Text = "Eternal2x", ObjectName = "Title" },
-    ui:Label{ ID = "SubTitle", ObjectName = "SubTitle",
+    ui:Label{ ID = "Title", Text = "Eternal2x", StyleSheet = TITLE },
+    ui:Label{ ID = "SubTitle", StyleSheet = SUBTITLE,
               Text = "Smooth 2x for hand-drawn animation  \xC2\xB7  v" .. CURRENT_VERSION },
 
-    ui:Label{ ID = "SourceSection", Text = "SOURCE CLIP", ObjectName = "Section" },
-    ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", ObjectName = "Card",
-              WordWrap = true },
+    ui:Label{ ID = "SourceSection", Text = "SOURCE CLIP", StyleSheet = SECTION },
+    ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
+              WordWrap = true, MinimumSize = { 0, 46 } },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", ObjectName = "GhostBtn",
+        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = GHOST,
                    ToolTip = "Read the clip under the playhead. Resolve does not tell scripts which clip is selected." },
-        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", ObjectName = "GhostBtn",
+        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = GHOST,
                    ToolTip = "Count the drawings and read the timing. Changes nothing." },
     },
     ui:Label{ ID = "AnalysisLabel", Text = "Analyse to see how this clip is animated.",
-              ObjectName = "Card", WordWrap = true },
+              StyleSheet = CARD, WordWrap = true, MinimumSize = { 0, 46 } },
 
-    ui:Label{ ID = "SettingsSection", Text = "SETTINGS", ObjectName = "Section" },
+    ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
     ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Quality", Weight = 0.4 },
         ui:ComboBox{ ID = "QualityCombo", Weight = 0.6,
@@ -545,25 +574,27 @@ local win = disp:AddWindow({
                      ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
 
-    ui:Label{ ID = "RunSection", Text = "RUN", ObjectName = "Section" },
-    ui:Button{ ID = "SmoothBtn", Text = "\xE2\x96\xB2  Smooth Clip", ObjectName = "StartBtn" },
-    ui:Label{ ID = "Progress", Text = "", ObjectName = "Progress" },
-    ui:Label{ ID = "Status", Text = "Ready.", ObjectName = "Card", WordWrap = true },
+    ui:Label{ ID = "RunSection", Text = "RUN", StyleSheet = SECTION },
+    ui:Button{ ID = "SmoothBtn", Text = "\xE2\x96\xB2  Smooth Clip", StyleSheet = START,
+               MinimumSize = { 0, 38 }, MaximumSize = { 16777215, 38 } },
+    ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
+    ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = CARD, WordWrap = true,
+              MinimumSize = { 0, 60 } },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "CompareBtn", Text = "Show Original", ObjectName = "GhostBtn",
+        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = GHOST,
                    Enabled = false,
                    ToolTip = "Switch the smoothed clip off and on to compare it with the original under it." },
-        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", ObjectName = "GhostBtn",
+        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = GHOST,
                    Enabled = false, ToolTip = "Open the folder the render was saved to." },
     },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", ObjectName = "GhostBtn" },
-        ui:Button{ ID = "CancelBtn", Text = "Reset", ObjectName = "GhostBtn" },
+        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = GHOST },
+        ui:Button{ ID = "CancelBtn", Text = "Reset", StyleSheet = GHOST },
     },
 
-    ui:Label{ ID = "Meta", Text = "", ObjectName = "Meta", WordWrap = true },
+    ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "UpdateBtn", Text = "\xE2\x86\xBB  Check for Updates", ObjectName = "GhostBtn" },
+        ui:Button{ ID = "UpdateBtn", Text = "\xE2\x86\xBB  Check for Updates", StyleSheet = GHOST },
         ui:CheckBox{ ID = "AutoUpdateCB", Text = "Auto-update", Checked = AUTO_UPDATE },
     },
 })
@@ -873,7 +904,8 @@ local function import_result(st)
         return false, "Resolve would not import it.", where
     end
 
-    local notes = "Imported " .. basename(path)
+    local notes = "Imported " .. basename(st.sequence_pattern ~= "" and path:match("^(.+)[/\\]")
+                                         or path)
     local hint = nil
     local rate_ok = true
     if st.sequence_pattern ~= "" and st.fps > 0 then
