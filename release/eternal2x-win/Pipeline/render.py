@@ -235,9 +235,12 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
         while read_upto < want:
             ok, frame = cap.read()
             if not ok:
-                if current is not None:
-                    yield current
-                return
+                # Analysis read this frame, so it exists. Repeating the last
+                # one instead would freeze the rest of the shot and still
+                # report a finished render.
+                raise SourceError(f"Could not read source frame {read_upto + 1} the second "
+                                  "time through. The file may be damaged, or still being "
+                                  "written.")
             read_upto += 1
             current = frame
         held_index = want
@@ -344,6 +347,14 @@ def render_plan(
                                   "has space and the folder is writable.") from exc
         else:
             if state["writer"] is None:
+                # Every writer here rounds an odd size down to even without a
+                # word, so the file would be a pixel short of what it reports.
+                if state["width"] % 2 or state["height"] % 2:
+                    raise SourceError(
+                        f"{output.suffix.lstrip('.').upper() or 'Video'} output needs an even "
+                        f"width and height, and this clip is {state['width']}x"
+                        f"{state['height']}. Use the image sequence output, which keeps "
+                        f"any size.")
                 state["writer"] = _writer(output, (state["width"], state["height"]),
                                           plan.fps)
             state["writer"].write(frame)

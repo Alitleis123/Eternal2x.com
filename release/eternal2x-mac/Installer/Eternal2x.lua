@@ -281,6 +281,18 @@ local function build_command(module_name, args, background, log)
         .. shell_quote(EXIT_PATH) .. ") &"
 end
 
+-- cmd expands %NAME% in a command line even inside quotes, and nothing
+-- escapes it there, so a plugin folder whose path holds a % cannot be handed
+-- to it. The batch file the render runs from doubles them, but `start /D` and
+-- `cd /d` see the path as typed.
+local function launch_problem()
+    if is_windows() and (REPO_ROOT ~= "" and REPO_ROOT or root):find("%%") then
+        return "The plugin folder's path contains %, which Windows cannot start Python "
+            .. "from. Move the Eternal2x folder to a path without %, then re-run the installer."
+    end
+    return nil
+end
+
 local function run_blocking(module_name, args, log)
     local cmd = build_command(module_name, args, false, log)
     print("[Eternal2x] " .. cmd)
@@ -1011,6 +1023,10 @@ function win.On.AnalyseBtn.Clicked(ev)
         set_status("Plugin folder not configured. Re-run the installer.")
         return
     end
+    if launch_problem() then
+        set_status(launch_problem())
+        return
+    end
     if not pick_source() then return end
     -- Backgrounded like the render: analysis is quick on a short clip but can
     -- take tens of seconds on a long one, and Resolve must not freeze for it.
@@ -1030,6 +1046,10 @@ end
 function win.On.SmoothBtn.Clicked(ev)
     if REPO_ROOT == "" then
         set_status("Plugin folder not configured. Re-run the installer.")
+        return
+    end
+    if launch_problem() then
+        set_status(launch_problem())
         return
     end
     if not pick_source() then return end
@@ -1145,6 +1165,10 @@ local function run_update(auto_mode)
     end
     if UPDATE_URL == "" then
         set_status("No update URL configured.")
+        return
+    end
+    if launch_problem() then
+        if not auto_mode then set_status(launch_problem()) end
         return
     end
     -- An update replaces the files a running render is using.
