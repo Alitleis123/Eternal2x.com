@@ -170,8 +170,10 @@ end
 -- own rate, but the source time from the media's start timecode, so on
 -- footage that starts at 01:00:00:00 the times are an hour out. The frames
 -- are used, and without an end frame the times' difference, anchored on the
--- start frame. On Resolve Studio 20.3.1 the end time also fell a frame short
--- of the end frame, and a render from it came out a frame short of the cut.
+-- start frame. The end frame is the last one the cut uses: on Resolve Studio
+-- 20.3.1 a 119 frame cut from 1200 reported 1318. Where the timeline's rate
+-- differs from the media's, the end time fell short of it, and a render from
+-- the times came out a timeline frame short of the cut.
 local function clip_range(item, props)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
@@ -182,7 +184,7 @@ local function clip_range(item, props)
     if not (fps and fps > 0 and f0) then return nil end
     local start = f0 / fps
     local f1 = call("GetSourceEndFrame")
-    if f1 and f1 > f0 then return { start = start, finish = f1 / fps } end
+    if f1 and f1 >= f0 then return { start = start, finish = (f1 + 1) / fps } end
     local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
     if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
     return nil
