@@ -70,7 +70,8 @@ def test_the_character_does_not_ghost():
 
 
 def test_the_in_between_moves_the_right_way():
-    a, b = cel(100, 120), cel(160, 120)
+    # Slow enough to interpolate. A faster move is held, so both frames are a.
+    a, b = cel(100, 120), cel(140, 120)
     quarter, three_quarter = interpolate_pair(a, b, [0.25, 0.75])
     assert subject_span(quarter)[0] < subject_span(three_quarter)[0]
 
@@ -81,7 +82,7 @@ def test_an_in_between_is_never_worse_than_the_source(dx, dy):
 
     Past a certain speed the areas a drawing uncovers exist in only one of the
     two frames and no in-between can be reconstructed. Rather than emit a
-    melted frame, the nearer drawing is held, which just reads as the original
+    melted frame, the first drawing is held, which just reads as the original
     stepped timing.
     """
     a = cel(140, 120)
@@ -103,6 +104,13 @@ def test_motion_that_is_too_fast_holds_instead_of_smearing():
     assert np.array_equal(mid, a) or np.array_equal(mid, b), (
         "a very fast move should hold a real drawing, not invent a smeared one"
     )
+
+
+def test_motion_that_is_too_fast_keeps_the_source_timing():
+    """Held means held: the next drawing still starts on its own frame."""
+    a, b = cel(80, 120), cel(240, 120)
+    for frame in interpolate_pair(a, b, [0.25, 0.5, 0.75]):
+        assert np.array_equal(frame, a), "the next drawing appeared early"
 
 
 def test_ordinary_motion_is_still_interpolated():

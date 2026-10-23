@@ -136,6 +136,14 @@ def test_a_cut_snaps_rather_than_dissolving():
         )
 
 
+def test_a_cut_holds_the_first_shot_until_the_second_starts():
+    """The second shot starts on its own frame, or the cut moves off the edit."""
+    dark = np.full((120, 200, 3), 10, np.uint8)
+    bright = np.full((120, 200, 3), 245, np.uint8)
+    for frame in interpolate_pair(dark, bright, [0.25, 0.5, 0.75]):
+        assert np.array_equal(frame, dark), "the second shot appeared early"
+
+
 def test_cut_threshold_is_above_ordinary_motion(texture):
     """The cut detector must not fire on fast but continuous movement."""
     fast = shifted(texture, 40)

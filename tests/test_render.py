@@ -168,6 +168,23 @@ def test_a_hard_cut_does_not_ghost(make_anime, tmp_path, read_frames):
     )
 
 
+def test_a_hard_cut_stays_on_its_frame(make_anime, tmp_path, read_frames):
+    """A cut that lands a frame early is out of sync with the edit and the audio."""
+    src = make_anime(holds=(2,) * 12, cut_at=6)
+    plan, _, _ = analyse_video(src, cfg())
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    source = read_frames(src)
+
+    def jump(frames):
+        deltas = [float(np.abs(frames[i].astype(float) - frames[i - 1].astype(float)).mean())
+                  for i in range(1, len(frames))]
+        return 1 + int(np.argmax(deltas))
+
+    assert jump(out) == jump(source), (
+        f"the cut is at frame {jump(out)}, not frame {jump(source)} as in the source"
+    )
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())
@@ -262,6 +279,21 @@ def test_interpolation_can_be_turned_off(make_anime, tmp_path, read_frames):
         assert frame.tobytes() in originals.values(), (
             "an output frame was synthesised even though interpolation was off"
         )
+
+
+def test_interpolation_off_keeps_every_drawing_on_its_frame(make_anime, tmp_path,
+                                                            read_frames):
+    """With nothing generated, a drawing shown a frame early is just out of sync."""
+    src = make_anime(holds=(2, 3, 2, 4, 2, 2, 3))
+    source = read_frames(src)
+
+    c = cfg(interpolate_enabled=False)
+    plan, _w, _h = analyse_video(src, c)
+    out = read_frames(render_plan(src, plan, tmp_path / "off.avi", c).output)
+
+    assert len(out) == len(source)
+    moved = [i for i, (a, b) in enumerate(zip(out, source)) if not np.array_equal(a, b)]
+    assert not moved, f"frames {moved} show a different drawing than the source"
 
 
 def test_turning_interpolation_off_changes_the_result(make_anime, tmp_path, read_frames):
