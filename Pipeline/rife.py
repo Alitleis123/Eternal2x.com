@@ -19,6 +19,7 @@ import importlib
 import os
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from pathlib import Path
 from typing import Callable, List, Optional
@@ -83,30 +84,45 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
 
 def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,
                  url: str = MODEL_URL, sha256: str = MODEL_SHA256) -> Path:
-    """The model file, downloaded and checked the first time it is needed."""
+    """The model file, downloaded and checked the first time it is needed.
+
+    Two runs can both find it missing and download at once, so each writes its
+    own temporary file. Whichever finishes second finds a good model in place,
+    and Windows will not replace a file the other run has open, so it keeps
+    that one.
+    """
     if path.exists() and _sha256(path) == sha256:
         return path
     path.parent.mkdir(parents=True, exist_ok=True)
-    part = path.with_name(path.name + ".part")
+    handle, name = tempfile.mkstemp(dir=str(path.parent), prefix=path.name + ".",
+                                    suffix=".part")
+    part = Path(name)
     try:
-        with urllib.request.urlopen(url, timeout=60) as response, open(part, "wb") as f:
-            total = int(response.headers.get("Content-Length") or MODEL_BYTES)
-            got = 0
-            for chunk in iter(lambda: response.read(1 << 20), b""):
-                f.write(chunk)
-                got += len(chunk)
-                if progress:
-                    progress("Downloading AI model", min(1.0, got / float(total)))
-    except OSError as exc:
+        with os.fdopen(handle, "wb") as f:
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    total = int(response.headers.get("Content-Length") or MODEL_BYTES)
+                    got = 0
+                    for chunk in iter(lambda: response.read(1 << 20), b""):
+                        f.write(chunk)
+                        got += len(chunk)
+                        if progress:
+                            progress("Downloading AI model", min(1.0, got / float(total)))
+            except OSError as exc:
+                raise AIUnavailable(f"Could not download the AI model ({exc}). Check the "
+                                    f"connection and try again, or pick another "
+                                    f"quality.") from exc
+        if _sha256(part) != sha256:
+            raise AIUnavailable("The downloaded AI model did not match its checksum, so it "
+                                "was not used. Try again, or pick another quality.")
+        try:
+            os.replace(part, path)
+        except OSError:
+            if not (path.exists() and _sha256(path) == sha256):
+                raise
+        return path
+    finally:
         part.unlink(missing_ok=True)
-        raise AIUnavailable(f"Could not download the AI model ({exc}). Check the "
-                            f"connection and try again, or pick another quality.") from exc
-    if _sha256(part) != sha256:
-        part.unlink()
-        raise AIUnavailable("The downloaded AI model did not match its checksum, so it "
-                            "was not used. Try again, or pick another quality.")
-    os.replace(part, path)
-    return path
 
 
 class Rife:

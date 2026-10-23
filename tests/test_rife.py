@@ -70,6 +70,42 @@ def test_a_failed_download_says_what_to_do(tmp_path):
     assert not target.exists()
 
 
+def test_two_downloads_at_once_do_not_trip_over_each_other(tmp_path, monkeypatch):
+    """Two first runs of the AI setting both download. They shared one
+    temporary file, so one could rename it away while the other still wrote."""
+    data = b"model" * 600_000
+    sha = hashlib.sha256(data).hexdigest()
+    target = tmp_path / "models" / "rife.onnx"
+    state = {"nested": False}
+
+    class Response:
+        headers = {"Content-Length": str(len(data))}
+
+        def __init__(self, first):
+            self.first, self.pos = first, 0
+
+        def read(self, n):
+            if self.first and self.pos and not state["nested"]:
+                state["nested"] = True
+                # The other run downloads all of it while this one is halfway.
+                rife.ensure_model(path=target, url="second", sha256=sha)
+            chunk = data[self.pos:self.pos + n]
+            self.pos += len(chunk)
+            return chunk
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(rife.urllib.request, "urlopen",
+                        lambda url, timeout=60: Response(first=(url == "first")))
+    assert rife.ensure_model(path=target, url="first", sha256=sha) == target
+    assert state["nested"] and target.read_bytes() == data
+    assert not list(target.parent.glob("*.part")), "a temporary file was left behind"
+
+
 def test_an_unavailable_ai_setting_fails_like_any_render_problem():
     """resolve_smooth reports SourceError to the panel as a clean failure."""
     assert issubclass(rife.AIUnavailable, SourceError)
