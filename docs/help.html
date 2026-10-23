@@ -399,10 +399,15 @@
             <div class="step-number">4</div>
             <div class="step-content">
                 <h3>Smooth Clip</h3>
-                <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar,
-                   so Resolve stays usable. When it finishes, the rebuilt clip is imported with 2x Super Scale
-                   applied and added to the end of your timeline, at the same length and frame rate as the
-                   clip you trimmed. Only that part of the file is rebuilt.</p>
+                <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar
+                   and the time left, so Resolve stays usable. When it finishes, the rebuilt clip is imported
+                   with 2x Super Scale applied and placed on the track above the original, starting on the same
+                   frame, at the same length and frame rate. It uses the lowest track that is empty there, or a
+                   new track named Eternal2x, so none of your clips are covered. Only the part of the file you
+                   trimmed is rebuilt.</p>
+                <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through,
+                   and <strong>Show Eternal2x</strong> switches it back. <strong>Show in Folder</strong> opens
+                   where the render was saved.</p>
             </div>
         </div>
 

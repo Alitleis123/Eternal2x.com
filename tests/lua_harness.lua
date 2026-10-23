@@ -142,9 +142,48 @@ function H.make_resolve(clip_file_path)
         item.GetSourceStartFrame = function(_self) return H.source_frames[1] end
         item.GetSourceEndFrame = function(_self) return H.source_frames[2] end
     end
+    -- Where the clip sits on the timeline. H.no_place_api models a build
+    -- without these calls.
+    local start, duration = H.item_start or 86400, H.item_duration or 48
+    if not H.no_place_api then
+        item.GetStart = function(_self) return start end
+        item.GetDuration = function(_self) return duration end
+        item.GetTrackTypeAndIndex = function(_self) return { "video", H.item_track or 1 } end
+    end
+    -- H.tracks[n] lists the spans already on video track n. By default only
+    -- the source clip, on track 1.
+    if not H.tracks then
+        H.tracks = {}
+        for n = 1, (H.item_track or 1) do H.tracks[n] = {} end
+        table.insert(H.tracks[H.item_track or 1], { start, start + duration })
+    end
+    H.track_names = H.track_names or {}
+    H.placements = H.placements or {}
+    local function span_item(s, e) return {
+        GetStart = function(_self) return s end,
+        GetEnd = function(_self) return e end,
+    } end
     -- No GetSelectedItems: Resolve's API has no timeline selection.
     local timeline = {
         GetCurrentVideoItem = function(_self) return H.under_playhead and item or nil end,
+        GetUniqueId = function(_self) return H.timeline_id or "timeline-1" end,
+        GetTrackCount = function(_self, kind) return kind == "video" and #H.tracks or 0 end,
+        GetItemListInTrack = function(_self, kind, n)
+            local out = {}
+            for _, s in ipairs(H.tracks[n] or {}) do table.insert(out, span_item(s[1], s[2])) end
+            return out
+        end,
+        AddTrack = function(_self, kind)
+            if H.add_track_works == false then return false end
+            table.insert(H.tracks, {})
+            return true
+        end,
+        DeleteTrack = function(_self, kind, n) table.remove(H.tracks, n) return true end,
+        SetTrackName = function(_self, kind, n, name) H.track_names[n] = name return true end,
+        GetSetting = function(_self, key)
+            if key == "timelineResolutionWidth" then return H.timeline_width or "1920" end
+            return nil
+        end,
     }
     local pool = {
         ImportMedia = function(_self, paths)
@@ -169,6 +208,8 @@ function H.make_resolve(clip_file_path)
                     end,
                     GetClipProperty = function(_s, k)
                         if k == "FPS" then return H.clip_properties.FPS or "24" end
+                        if k == "Frames" then return H.media_frames or "48" end
+                        if k == "Resolution" then return H.media_resolution or "1920x1080" end
                         return H.clip_properties[k]
                     end,
                 })
@@ -176,8 +217,24 @@ function H.make_resolve(clip_file_path)
             return made
         end,
         AppendToTimeline = function(_self, clips)
-            H.appended = H.appended + #clips
-            return clips
+            local out = {}
+            for _, clip in ipairs(clips) do
+                -- A clipInfo says where on the timeline it goes.
+                if clip.mediaPoolItem then
+                    if H.place_works == false then return {} end
+                    table.insert(H.placements, clip)
+                    local track = H.tracks[clip.trackIndex]
+                    local length = clip.endFrame - clip.startFrame + 1
+                    table.insert(track, { clip.recordFrame, clip.recordFrame + length })
+                end
+                H.appended = H.appended + 1
+                local placed = { enabled = true }
+                function placed:GetClipEnabled() return self.enabled end
+                function placed:SetClipEnabled(on) self.enabled = on return true end
+                H.last_placed = placed
+                table.insert(out, placed)
+            end
+            return out
         end,
     }
     local project = {

@@ -213,15 +213,28 @@ local function find_clip_path()
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then return nil, "Could not read the clip's file path." end
-    return path, nil, clip_range(item, props)
+
+    -- Where the clip sits, so the result can go on a track above it, lined up
+    -- with it. Without these calls, as before Resolve 18, the result goes at
+    -- the end of the timeline instead.
+    local place = nil
+    pcall(function()
+        local kind = item:GetTrackTypeAndIndex()
+        place = { track = tonumber(kind[2]), start = tonumber(item:GetStart()),
+                  duration = tonumber(item:GetDuration()), timeline = timeline:GetUniqueId() }
+    end)
+    if place and not (place.track and place.start and place.duration and place.timeline) then
+        place = nil
+    end
+    return path, nil, clip_range(item, props), place
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an
 -- error would stop the window from ever appearing.
 local function selected_clip_path()
-    local ok, path, err, range = pcall(find_clip_path)
+    local ok, path, err, range, place = pcall(find_clip_path)
     if not ok then return nil, "Could not read the clip from Resolve: " .. tostring(path) end
-    return path, err, range
+    return path, err, range, place
 end
 
 -- ---------------------------------------------------------------------------
@@ -414,7 +427,7 @@ end
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 460, 660 },
+    Geometry = { 100, 100, 460, 700 },
     StyleSheet = [[
         QWidget { background-color: #0b0b0f; color: #e2e2ea; font-size: 12px; }
         QLabel#Title { font-size: 22px; font-weight: 700; color: #ededf4; padding-top: 2px; }
@@ -506,6 +519,12 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Progress", Text = "", ObjectName = "Progress" },
     ui:Label{ ID = "Status", Text = "Ready.", ObjectName = "Card", WordWrap = true },
     ui:HGroup{ Spacing = 6,
+        ui:Button{ ID = "CompareBtn", Text = "Show Original", ObjectName = "GhostBtn",
+                   Enabled = false },
+        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", ObjectName = "GhostBtn",
+                   Enabled = false },
+    },
+    ui:HGroup{ Spacing = 6,
         ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", ObjectName = "GhostBtn" },
         ui:Button{ ID = "CancelBtn", Text = "Reset", ObjectName = "GhostBtn" },
     },
@@ -532,6 +551,13 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
+-- Where the source clip sits on the timeline, and where the running render's
+-- clip sat when it started, since the playhead can move while it renders.
+local SOURCE_PLACE = nil
+local RUN_PLACE = nil
+-- The last render on disk, and the clip it became on the timeline.
+local LAST_OUTPUT = nil
+local LAST_ITEM = nil
 local RUNNING = false
 -- When this panel started its run, which counts as the first heartbeat until
 -- Python, a second or two later, writes its own.
@@ -579,15 +605,17 @@ local function range_text(range)
 end
 
 local function refresh_source()
-    local path, err, range = selected_clip_path()
+    local path, err, range, place = selected_clip_path()
     if not path then
         SOURCE_PATH = nil
         SOURCE_RANGE = nil
+        SOURCE_PLACE = nil
         items.SourceLabel.Text = err or "No clip under the playhead."
         return false
     end
     SOURCE_PATH = path
     SOURCE_RANGE = range
+    SOURCE_PLACE = place
     items.SourceLabel.Text = basename(path) .. "\n" .. range_text(range)
     items.Meta.Text = short_path(path, 68)
     return true
@@ -638,6 +666,81 @@ local function set_sequence_fps(mpi, fps)
     return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)"
 end
 
+-- One clip property. Asked for a single key, Resolve can hand back the value or
+-- a table holding it, depending on the build.
+local function clip_property(mpi, key)
+    if not mpi.GetClipProperty then return nil end
+    local ok, got = pcall(function() return mpi:GetClipProperty(key) end)
+    if not ok then return nil end
+    if type(got) == "table" then got = got[key] end
+    return got
+end
+
+-- The first entry of a list from Resolve, whatever its keys.
+local function first_of(list)
+    if type(list) ~= "table" then return nil end
+    if list[1] ~= nil then return list[1] end
+    for _, v in pairs(list) do return v end
+    return nil
+end
+
+-- The lowest video track above the source clip with nothing in its span, so
+-- no clip of the edit is covered or cut. Adds a track when every one has
+-- something there.
+local function free_track(timeline, place)
+    local finish = place.start + place.duration
+    for track = place.track + 1, tonumber(timeline:GetTrackCount("video")) or 0 do
+        local clear = true
+        for _, other in pairs(timeline:GetItemListInTrack("video", track) or {}) do
+            if other:GetStart() < finish and other:GetEnd() > place.start then
+                clear = false
+                break
+            end
+        end
+        if clear then return track, false end
+    end
+    if not timeline:AddTrack("video") then return nil end
+    return tonumber(timeline:GetTrackCount("video")), true
+end
+
+-- Put the render on a track above the clip it came from, starting on the same
+-- frame, so it lines up with the edit and the audio. nil when that cannot be
+-- done, as when the timeline has changed since the run started.
+local function place_above(pool, project, mpi, frames)
+    local place = RUN_PLACE
+    if not (place and frames and frames > 0) then return nil end
+    local ok, track, item = pcall(function()
+        local timeline = project:GetCurrentTimeline()
+        if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
+        local track, added = free_track(timeline, place)
+        if not track then return nil end
+        local got = first_of(pool:AppendToTimeline({ {
+            mediaPoolItem = mpi, startFrame = 0, endFrame = frames - 1,
+            trackIndex = track, recordFrame = place.start, mediaType = 1,
+        } }))
+        if not got then
+            if added then timeline:DeleteTrack("video", track) end
+            return nil
+        end
+        if added then timeline:SetTrackName("video", track, "Eternal2x") end
+        return track, got
+    end)
+    if ok and track then return track, item end
+    return nil
+end
+
+-- Super Scale makes the clip bigger than its file, which only shows on a
+-- timeline bigger than the clip. On one the same size it is scaled back down.
+local function upscale_hint(project, mpi)
+    local ok, width = pcall(function()
+        return project:GetCurrentTimeline():GetSetting("timelineResolutionWidth")
+    end)
+    local w, h = tostring(clip_property(mpi, "Resolution") or ""):match("(%d+)%s*[xX]%s*(%d+)")
+    w, h, width = tonumber(w), tonumber(h), ok and tonumber(width) or nil
+    if not (w and h and width) or width > w then return nil end
+    return string.format("To see the 2x upscale, set the timeline to %dx%d.", w * 2, h * 2)
+end
+
 local function import_result(st)
     local path = st.import_path
     if not path or path == "" then return false, "Nothing to import." end
@@ -676,6 +779,7 @@ local function import_result(st)
     end
 
     local notes = "Imported " .. basename(path)
+    local hint = nil
     if st.sequence_pattern ~= "" and st.fps > 0 then
         notes = notes .. set_sequence_fps(mpi, st.fps)
     end
@@ -690,19 +794,51 @@ local function import_result(st)
         end
         notes = notes .. ((called and scaled) and ", upscaled 2x"
                           or ", upscale not applied (Super Scale needs Resolve Studio)")
+        if called and scaled then hint = upscale_hint(project, mpi) end
     end
     if pool.AppendToTimeline then
-        local called, appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
-        local added = called and appended and (type(appended) ~= "table" or #appended > 0)
-        notes = notes .. (added and ", added to the timeline."
-                                or ". Drag it onto your timeline.")
+        local frames = st.sequence_frames > 0 and st.sequence_frames
+            or tonumber(clip_property(mpi, "Frames"))
+        local track, item = place_above(pool, project, mpi, frames)
+        if track then
+            LAST_ITEM = item
+            notes = notes .. ", placed on V" .. track .. " above the original."
+        else
+            local called, appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
+            local added = called and appended and (type(appended) ~= "table" or #appended > 0)
+            if added then LAST_ITEM = first_of(appended) end
+            notes = notes .. (added and ", added to the end of the timeline."
+                                    or ". Drag it onto your timeline.")
+        end
     end
-    return true, notes
+    return true, notes, nil, hint
+end
+
+-- How long the current stage has left, from its pace since the panel first
+-- saw it. Each stage counts from 0 to 1 on its own, so its start is reset.
+local STAGE = { name = nil, at = 0, from = 0 }
+
+local function time_left(st)
+    if st.stage ~= STAGE.name or st.fraction < STAGE.from then
+        STAGE.name, STAGE.at, STAGE.from = st.stage, os.time(), st.fraction
+        return ""
+    end
+    local spent, done = os.time() - STAGE.at, st.fraction - STAGE.from
+    if st.done or spent < 3 or done < 0.02 or st.fraction >= 1 then return "" end
+    local left = spent * (1 - st.fraction) / done
+    if left < 60 then return string.format("  about %d s left", math.ceil(left)) end
+    return string.format("  about %d min left", math.ceil(left / 60))
+end
+
+-- The folder holding a render: a sequence is its folder, a file is itself.
+local function render_location(st)
+    if st.sequence_pattern ~= "" then return st.import_path:match("^(.+)[/\\]") end
+    return st.import_path
 end
 
 local function apply_status(st)
     if not st then return false end
-    set_progress(st.fraction, st.stage)
+    set_progress(st.fraction, st.stage .. time_left(st))
     -- Until the run is done its message only ever says Starting, and shown on
     -- every poll it would hide what the panel itself has to say.
     if st.done and st.message ~= "" then set_status(st.message) end
@@ -729,9 +865,15 @@ local function apply_status(st)
         end
         if st.import_path ~= "" and not IMPORTED then
             IMPORTED = true
-            local ok, notes, where = import_result(st)
+            LAST_OUTPUT = render_location(st)
+            items.FolderBtn.Enabled = LAST_OUTPUT ~= nil
+            local ok, notes, where, hint = import_result(st)
+            items.CompareBtn.Enabled = LAST_ITEM ~= nil
+            items.CompareBtn.Text = "Show Original"
             if ok then
                 set_status(st.message .. " " .. notes)
+                -- Two lines of status leave no room for a tip as well.
+                if hint then items.Meta.Text = hint end
             elseif where then
                 -- The status box fits two lines, too few for a path as well.
                 items.Meta.Text = short_path(where, 68)
@@ -848,11 +990,13 @@ end
 -- Work on the clip under the playhead now, not the one there when the panel
 -- opened. If the playhead has moved off every clip, keep the last one.
 local function pick_source()
-    local previous, label, range = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE
+    local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
+                                          SOURCE_PLACE
     if refresh_source() then return true end
     if previous then
         SOURCE_PATH = previous
         SOURCE_RANGE = range
+        SOURCE_PLACE = place
         items.SourceLabel.Text = label
         return true
     end
@@ -871,6 +1015,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     clear_status()
     ANALYSING = true
     IMPORTED = false
+    STAGE.name = nil
     set_busy(true)
     set_progress(0.01, "Starting")
     set_status("Analysing. Resolve stays usable while this runs.")
@@ -889,12 +1034,49 @@ function win.On.SmoothBtn.Clicked(ev)
     clear_status()
     IMPORTED = false
     ANALYSING = false
+    STAGE.name = nil
+    RUN_PLACE = SOURCE_PLACE
+    LAST_ITEM = nil
+    items.CompareBtn.Enabled = false
     set_busy(true)
     set_progress(0.01, "Starting")
     set_status("Working. Resolve stays usable while this runs.")
     LAUNCHED_AT = os.time()
     run_background("Stages.resolve_smooth", current_args(""))
     start_polling()
+end
+
+-- Switch the smoothed clip off and on, so the original under it shows through.
+function win.On.CompareBtn.Clicked(ev)
+    local ok, showing = pcall(function()
+        local now = not LAST_ITEM:GetClipEnabled()
+        if not LAST_ITEM:SetClipEnabled(now) then error("refused") end
+        return now
+    end)
+    if not ok then
+        LAST_ITEM = nil
+        items.CompareBtn.Enabled = false
+        set_status("The smoothed clip is no longer on the timeline.")
+        return
+    end
+    items.CompareBtn.Text = showing and "Show Original" or "Show Eternal2x"
+    set_status(showing and "Showing the Eternal2x version." or "Showing the original.")
+end
+
+function win.On.FolderBtn.Clicked(ev)
+    if not LAST_OUTPUT then return end
+    local cmd
+    if is_windows() then
+        -- /select opens the parent with the render picked out. Explorer
+        -- reports 1 even when it worked, so its answer is not checked.
+        cmd = "explorer /select," .. shell_quote((LAST_OUTPUT:gsub("/", "\\")))
+    else
+        local q = shell_quote(LAST_OUTPUT)
+        cmd = "open -R " .. q .. " 2>/dev/null || xdg-open " ..
+              shell_quote(LAST_OUTPUT:match("^(.+)/") or ".") .. " >/dev/null 2>&1 &"
+    end
+    print("[Eternal2x] " .. cmd)
+    os.execute(cmd)
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)

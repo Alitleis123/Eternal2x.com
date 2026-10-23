@@ -92,9 +92,19 @@ move it.
    Nothing is changed, so this is safe to run on anything.
 4. Click **Smooth Clip**.
 
-The render runs in the background and the panel shows progress, so Resolve
-stays usable while it works. When it finishes, the rebuilt clip is imported and
-added to the end of your timeline.
+The render runs in the background and the panel shows progress and the time
+left, so Resolve stays usable while it works. When it finishes, the rebuilt
+clip is imported and placed on the track above the original, starting on the
+same frame, so it lines up with your edit and audio. It goes on the lowest
+track that is empty there, or a new track named Eternal2x. Your other clips are
+never covered or moved. If the timeline changed while it rendered, it goes at
+the end instead.
+
+Then:
+
+- **Show Original** switches the smoothed clip off so the original shows
+  through, and **Show Eternal2x** switches it back. Scrub or play to compare.
+- **Show in Folder** opens the render's location.
 
 Only the part of the file the timeline clip uses is analysed and rebuilt. To
 reach it, the file is still decoded from its start, once for Analyse and again

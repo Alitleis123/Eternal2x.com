@@ -156,7 +156,7 @@ def test_smooth_renders_imports_and_reports(installation):
     status = H.status()
     assert "12 drawings" in status, f"panel showed: {status!r}"
     assert "48 smooth frames" in status or "24 smooth frames" in status
-    assert "added to the timeline" in status
+    assert "above the original" in status
 
     assert H.imported_count() == 1
     assert H.appended == 1
@@ -238,7 +238,7 @@ def test_a_clip_path_with_spaces_survives_the_shell(installation, read_frames):
     H, src = installation(clip_name="my shot 01.avi")
     H.click("SmoothBtn")
     finish(H)
-    assert "added to the timeline" in H.status()
+    assert "above the original" in H.status()
     assert len(read_frames(rendered_output(src))) == 24
 
 
