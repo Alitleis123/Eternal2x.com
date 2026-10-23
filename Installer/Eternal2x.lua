@@ -94,6 +94,9 @@ local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_la
 -- renders. Sharing a log wiped the render's, the one worth sending in.
 local UPDATE_LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_update.log")
 local RUN_SCRIPT = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_run.cmd")
+-- Opens Explorer at a render, for the same reason the run goes through a
+-- script: see Show in Folder.
+local REVEAL_SCRIPT = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_reveal.cmd")
 -- Written by the shell once Python exits, however it exits. A Python that
 -- cannot start never writes a status file, so this is how the panel tells a
 -- run that is still going from one that died.
@@ -1145,9 +1148,23 @@ function win.On.FolderBtn.Clicked(ev)
     if not LAST_OUTPUT then return end
     local cmd
     if is_windows() then
+        if launch_problem() then
+            set_status(launch_problem())
+            return
+        end
         -- /select opens the parent with the render picked out. Explorer
-        -- reports 1 even when it worked, so its answer is not checked.
-        cmd = "explorer /select," .. shell_quote((LAST_OUTPUT:gsub("/", "\\")))
+        -- reports 1 even when it worked, so its answer is not checked. cmd
+        -- expands %NAME% in a command line, so the path goes in a script,
+        -- where doubling % keeps it literal, started as the render is.
+        local f = io.open(REVEAL_SCRIPT, "wb")
+        if not f then return end
+        local target = shell_quote((LAST_OUTPUT:gsub("/", "\\")))
+        f:write("@echo off\r\nchcp 65001 >nul\r\nexplorer /select,",
+                (target:gsub("%%", "%%%%")), "\r\n")
+        f:close()
+        local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
+        cmd = "start \"Eternal2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
+            .. basename(REVEAL_SCRIPT)
     else
         local q = shell_quote(LAST_OUTPUT)
         cmd = "open -R " .. q .. " 2>/dev/null || xdg-open " ..

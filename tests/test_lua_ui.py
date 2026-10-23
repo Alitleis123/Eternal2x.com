@@ -1444,3 +1444,14 @@ def test_a_percent_in_the_plugin_path_is_refused_on_windows(lua, tmp_path, repo_
         assert H.command_count() == 0, f"{button} ran a command from the % folder"
         assert "contains %" in H.status()
     assert H.enabled("SmoothBtn"), "the panel was left busy"
+
+
+def test_show_in_folder_keeps_a_percent_in_the_path_literal(lua, direct):
+    """cmd would expand %TEMP% in a command line and open somewhere else."""
+    H = load(lua, ui_script(direct))
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    finish_render(H, direct, import_path="C:/renders/%TEMP%/out.mp4")
+    H.click("FolderBtn")
+    command, _, script = H.last_command().partition("\n")
+    assert "%TEMP%" not in command, "the path went through cmd's own command line"
+    assert "%%TEMP%%" in script and "explorer /select," in script
