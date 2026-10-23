@@ -17,9 +17,9 @@
 <!-- Mobile Header -->
 <div class="mobile-header">
     <img src="assets/logo.png" alt="Eternal2x" class="mobile-logo-img">
-    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <button class="hamburger" id="menu-button" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
 </div>
-<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="overlay"></div>
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
@@ -81,106 +81,127 @@
         <h2 class="section-title">Troubleshooting</h2>
         <p class="section-subtitle">Common issues and their solutions.</p>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
+        <details class="faq-item">
+            <summary class="faq-question">
                 The plugin doesn't appear in Resolve
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 Make sure you ran the installer and it completed successfully. The plugin should appear at
                 <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>. If it's not there, restart Resolve.
-                If it still doesn't appear, re-run the installer.
+                If it still doesn't appear, re-run the installer. If Resolve says you need Studio when you open
+                it, you are on the free edition, which blocks script panels since Resolve 19.1.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
-                "Plugin folder not configured"
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+        <details class="faq-item">
+            <summary class="faq-question">
+                Clicking Eternal2x does nothing
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
-                The plugin cannot find the folder you extracted it to. The usual cause is moving or renaming
-                that folder after installing, since the config records its path. Re-run the installer from the
-                new location.
+                Open <strong>Workspace &rarr; Console</strong>. If it says <code>UI script not found</code> or
+                <code>Missing repo_root</code>, the plugin folder was moved, renamed or deleted after installing,
+                since the config records its path. Re-run the installer from where the folder is now. The panel's
+                "Plugin folder not configured" means the same thing.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
+        <details class="faq-item">
+            <summary class="faq-question">
                 "Could not reach Resolve"
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 The panel is not running inside DaVinci Resolve. Open it from
                 <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>, not by double-clicking the Lua file.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
+        <details class="faq-item">
+            <summary class="faq-question">
                 Rendering is slow on long clips
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 Every frame has to be read and every missing in-between generated, so the time scales with the
-                length of the clip. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
-                Quality setting. Resolve stays usable throughout, and <strong>Analyse</strong> is much quicker if
-                you only want to see what a clip contains.
+                length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so
+                trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
+                start first, shown as Seeking. On Windows the in-betweens are drawn on the GPU, and ten seconds
+                of 1080p takes roughly ten to twenty seconds. Where the CPU has to draw them it is about ten
+                times slower. With Grainy source on, the clip is read twice while Analyse measures its grain. Resolve stays usable
+                throughout, and <strong>Analyse</strong> is much quicker if you only want to see what a clip
+                contains.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
-                Analyse says there is nothing to do
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+        <details class="faq-item">
+            <summary class="faq-question">
+                "No duplicate frames. This clip is already on 1s."
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
-                The clip has no duplicated frames, so there is nothing to recover. It is either live action or
+                Analyse found nothing to do. The clip has no duplicated frames, so there is nothing to recover. It is either live action or
                 animation already drawn on 1s. Smoothing it would only invent motion that was never there, so
-                Eternal2x stops instead.
+                Eternal2x stops instead. If the panel adds that the differences look like grain, tick
+                <strong>Grainy source</strong> and analyse again. Leave it off for clean animation, where it can
+                merge fine real changes.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
-                The upscale was skipped
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+        <details class="faq-item">
+            <summary class="faq-question">
+                "...has a variable frame rate"
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
-                Super Scale is a DaVinci Resolve Studio feature. On the free edition Eternal2x tells you it
-                was skipped rather than silently leaving it out. De-duplication and smoothing still run.
+                Phone and screen recordings often space their frames unevenly. Eternal2x writes every frame for
+                the same time, so such a clip would come out a different length and drift against its audio, and
+                it stops instead. Render the clip to a constant frame rate first, from Resolve's Deliver page or
+                with <code>ffmpeg -i clip.mp4 -r 24 clip_cfr.mp4</code> at your timeline's rate, then use that.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
-                Resolve would not import the result
-                <span class="faq-chevron">&#9660;</span>
+        <details class="faq-item">
+            <summary class="faq-question">
+                The upscale was skipped
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
+            <div class="faq-answer">
+                Super Scale is a DaVinci Resolve Studio feature. If the panel says the upscale was not applied,
+                check that Studio is activated. De-duplication and smoothing still run.
             </div>
+        </details>
+
+        <details class="faq-item">
+            <summary class="faq-question">
+                Resolve would not import the result
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 The render still finished. The panel prints where it is, so you can drag it into your media
-                pool. Setting <strong>Output</strong> to <code>Image sequence</code> avoids this, since Resolve
-                always imports those.
+                pool. Setting <strong>Output</strong> to <code>Image sequence</code> usually avoids this, since Resolve
+                imports those most reliably.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
+        <details class="faq-item">
+            <summary class="faq-question">
                 Progress seems stuck
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 Press <strong>Refresh Progress</strong>. If a run was interrupted, press <strong>Reset</strong>
                 to clear it. For anything else, email the panel's status text and the
                 <code>.eternal2x_last_run.log</code> file from the plugin folder.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
+        <details class="faq-item">
+            <summary class="faq-question">
                 "python" is not recognised, or the installer window does not open
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
                 Install Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
                 On Windows, tick <strong>Add python.exe to PATH</strong> in its installer, then open a new
@@ -188,17 +209,19 @@
                 the manual install commands further down this page instead. They do the same job without a
                 window.
             </div>
-        </div>
+        </details>
 
-        <div class="faq-item" onclick="this.classList.toggle('open')">
-            <div class="faq-question">
-                "No clip selected"
-                <span class="faq-chevron">&#9660;</span>
-            </div>
+        <details class="faq-item">
+            <summary class="faq-question">
+                "No clip under the playhead"
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
             <div class="faq-answer">
-                Click a clip on the timeline, then press <strong>Use Selected Clip</strong> in the panel.
+                Eternal2x works on the clip under the playhead, since Resolve does not tell scripts which
+                clip is selected. Move the playhead over the clip, then press
+                <strong>Use Clip at Playhead</strong> in the panel.
             </div>
-        </div>
+        </details>
     </div>
 
     <!-- ============================================================ -->
@@ -234,7 +257,8 @@
             <div class="step-content">
                 <h3>Run the installer</h3>
                 <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
-                   Open the extracted folder, type <code>cmd</code> in the address bar and press Enter, then run:</p>
+                   Open the extracted folder, then the <code>eternal2x-win</code> folder inside it, the one that
+                   contains <code>Installer</code>. Type <code>cmd</code> in the address bar and press Enter, then run:</p>
                 <div class="code-block">
                     python Installer\gui_installer.py
                     <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -263,7 +287,7 @@
         <p class="text-dim text-sm mb-16">If the installer window does not open, run these from the same folder instead.</p>
 
         <div class="code-block">
-            pip install numpy opencv-python
+            python -m pip install numpy opencv-python
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
 
@@ -331,7 +355,7 @@
         <h3 class="mb-16 mt-24">Manual install (alternative)</h3>
 
         <div class="code-block">
-            pip3 install numpy opencv-python
+            python3 -m pip install numpy opencv-python
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
         </div>
 
@@ -354,11 +378,12 @@
         <div class="guide-step">
             <div class="step-number">1</div>
             <div class="step-content">
-                <h3>Select a clip</h3>
-                <p>Click the clip you want on your timeline, then open
+                <h3>Put the playhead on a clip</h3>
+                <p>Move the playhead over the clip you want on your timeline, then open
                    <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>. The panel shows the
-                   clip it picked up. If you select a different one, press
-                   <strong>Use Selected Clip</strong>.</p>
+                   clip it picked up. Analyse and Smooth Clip always use the clip under the playhead
+                   when you press them, and <strong>Use Clip at Playhead</strong> shows you which
+                   one that is.</p>
             </div>
         </div>
 
@@ -377,11 +402,15 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Choose your settings</h3>
-                <p><strong>Quality</strong> trades speed for detail, with <code>Better</code> suiting most work.
+                <p>The in-betweens are drawn by the RIFE network, so moving characters stay solid. Its first
+                   run downloads about 50 MB.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
-                   timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve always
-                   imports. <strong>Upscale 2x</strong> applies Super Scale to the result, and turning off
-                   <strong>Interpolate</strong> removes the duplicates without generating in-betweens.
+                   timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve imports
+                   most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
+                   timeline bigger than the clip, such as 3840x2160 for 1080p footage. Turning off
+                   <strong>Interpolate</strong> skips the in-betweens and keeps every drawing on its original frame.
+                   Tick <strong>Grainy source</strong> for film grain, which otherwise makes every held frame
+                   look new.
                    Settings are remembered between sessions.</p>
             </div>
         </div>
@@ -390,10 +419,15 @@
             <div class="step-number">4</div>
             <div class="step-content">
                 <h3>Smooth Clip</h3>
-                <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar,
-                   so Resolve stays usable. When it finishes, the rebuilt clip is imported with 2x Super Scale
-                   applied and added to the end of your timeline, at the same length and frame rate as the
-                   original.</p>
+                <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar
+                   and the time left, so Resolve stays usable. When it finishes, the rebuilt clip is imported
+                   with 2x Super Scale applied and placed on the track above the original, starting on the same
+                   frame, at the same length and frame rate. It uses the lowest track that is empty there, or a
+                   new track named Eternal2x, so none of your clips are covered. Only the part of the file you
+                   trimmed is rebuilt.</p>
+                <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through,
+                   and <strong>Show Eternal2x</strong> switches it back. <strong>Show in Folder</strong> opens
+                   where the render was saved.</p>
             </div>
         </div>
 
@@ -417,10 +451,11 @@
 
         <div class="guide-step">
             <div class="step-content">
-                <h3>Very fast motion may stay stepped</h3>
-                <p>This is deliberate. Past a certain speed the areas a drawing uncovers exist in only one
-                   frame, so no in-between can be reconstructed. Eternal2x holds a real drawing rather than
-                   producing a smeared one.</p>
+                <h3>Nothing was smoothed</h3>
+                <p>The first render installs the network's runtime and downloads its model, so it needs a
+                   connection once. Without one, every drawing is kept as drawn rather than filled in some
+                   other way, since warping pixels doubles lines on drawn animation. The status says why.
+                   Smooth again once you are online.</p>
             </div>
         </div>
 
@@ -440,15 +475,17 @@
             <div class="step-content">
                 <h3>On demand</h3>
                 <p>Press <strong>Check for Updates</strong> at any time. If nothing has changed it says so and
-                   leaves your install alone. A failed check never stops you working, it is reported and skipped.</p>
+                   leaves your install alone. A failed check never stops you working, it is reported and skipped.
+                   An update that cannot finish is undone, so you keep the version you had.</p>
             </div>
         </div>
 
         <div class="guide-step">
             <div class="step-content">
                 <h3>Re-running the installer</h3>
-                <p>Only needed if you move or rename the plugin folder, since the config records where it lives.
-                   Updates themselves do not require it.</p>
+                <p>Needed once when updating from 0.3.1 or earlier. Those versions put the launcher where Resolve
+                   lists it only on the Fusion page, or on Windows not at all. After that, only if you move or
+                   rename the plugin folder, since the config records where it lives.</p>
             </div>
         </div>
     </div>
@@ -464,23 +501,12 @@
 
 </main>
 
+<script src="js/site.js"></script>
 <script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('overlay').classList.toggle('open');
-}
-
-// On a phone the sidebar covers the page, so close it once a link is chosen.
-document.querySelectorAll('.sidebar a').forEach(function(link) {
-    link.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('overlay').classList.remove('open');
-    });
-});
-
 function copyCode(btn) {
     const block = btn.parentElement;
-    const text = block.innerText.replace('Copy', '').trim();
+    // The button's own label is part of the block's text, as Copy or Copied!.
+    const text = block.innerText.replace(/(Copy|Copied!)\s*$/, '').trim();
     navigator.clipboard.writeText(text).then(() => {
         btn.textContent = 'Copied!';
         setTimeout(() => { btn.textContent = 'Copy'; }, 1500);

@@ -1,0 +1,3 @@
+# LF everywhere, so a release built on Windows has the same bytes, and the
+# same checksums in update/latest.json, as one built by CI on Linux.
+* text=auto eol=lf

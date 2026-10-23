@@ -79,6 +79,19 @@ def test_archive_entries_have_a_fixed_timestamp(built):
     assert stamps == {builder.ZIP_TIMESTAMP}
 
 
+def test_windows_and_linux_build_the_same_archive(built, monkeypatch):
+    """zipfile marks entries as made on MS-DOS when run on Windows, and the
+    deflate output depends on the zlib build (zlib-ng in Windows Python), so
+    a Windows build could never match the checksums CI publishes."""
+    shas = []
+    for platform in ("win32", "linux"):
+        monkeypatch.setattr("sys.platform", platform)
+        shas.append(builder.sha256(builder.zip_folder(builder.build_folder("eternal2x-win"))))
+    assert shas[0] == shas[1]
+    with zipfile.ZipFile(built / "release" / "eternal2x-win.zip") as zf:
+        assert {i.compress_type for i in zf.infolist()} == {zipfile.ZIP_STORED}
+
+
 def test_archive_entries_are_sorted_the_same_way_everywhere(built):
     """Case-sensitive byte order, not the platform's path ordering.
 

@@ -57,16 +57,19 @@ each drawing held for a chosen number of frames. Because the exact timing is
 known, the rebuilt output can be checked frame by frame rather than eyeballed.
 `make_video` does the same for arbitrary per-frame motion.
 
-The texture matters. Optical flow needs something to track, and a flat shape on
-a flat background gives it nothing, so a synthetic test built that way measures
-the fallback path rather than the engine.
+The texture matters to the cut detector, which tracks it to tell motion from a
+change of shot. The in-betweens themselves are drawn by a plain blend standing
+in for the RIFE network (`fake_rife.py`), so no test downloads the model.
+`test_rife.py` tests the real network, and skips those tests when its model is
+not on disk.
 
 ## Layout
 
 | File | Covers |
 |------|--------|
 | `test_dedupe.py` | held-frame detection, hold patterns, rebuild planning |
-| `test_interpolate.py` | optical flow in-betweens, stills, cuts, occlusion |
+| `test_interpolate.py` | in-betweens around the real drawings, stills, cuts, upscale |
+| `test_rife.py` | the network: its runtime, its model, the GPU, what it draws |
 | `test_render.py` | video in, smooth video out, at every output format |
 | `test_resolve_bridge.py` | connecting, importing, appending, Super Scale, probing |
 | `test_resolve_smooth.py` | the stage the buttons run, end to end |
@@ -74,6 +77,5 @@ the fallback path rather than the engine.
 | `test_installer.py` | install locations, config contract, installer parity |
 | `test_lua_ui.py` | the panel: handlers, commands, progress, persistence |
 | `test_edge_cases.py` | tiny clips, static shots, odd rates and sizes, broken input |
-| `test_quality.py` | rebuilt frames measured against the drawing that should be there |
 | `test_end_to_end.py` | install, open panel, click, render, import, for real |
 | `test_packaging.py` | release parity, update metadata, encodings, docs |

@@ -107,6 +107,8 @@ class FakeMediaPoolItem:
 # "Super Scale" is documented as 1 / 2 / 3 / 4 / Auto -- not "2x".
 _MEDIA_POOL_WRITABLE = {
     "Super Scale": {"1", "2", "3", "4", "Auto"},
+    # An image sequence's rate can be changed, as in Clip Attributes.
+    "FPS": None,
     "Clip Name": None,
     "Comments": None,
     "Keywords": None,
@@ -370,7 +372,9 @@ class FakeResolve:
         return self._pm
 
     def GetVersionString(self) -> str:
-        return f"{self._version} {'Studio' if self._studio else 'Lite'}"
+        # Only the number, as on Resolve Studio 20.3.1, which reports
+        # "20.3.1.6". The edition is in the product name.
+        return self._version
 
     def GetProductName(self) -> str:
         return "DaVinci Resolve Studio" if self._studio else "DaVinci Resolve"

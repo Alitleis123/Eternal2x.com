@@ -65,6 +65,19 @@ def test_free_edition_is_detected():
     assert bridge.is_studio(FakeResolve(studio=False)) is False
 
 
+@pytest.mark.parametrize("product,studio", [("DaVinci Resolve Studio", True),
+                                            ("DaVinci Resolve", False)])
+def test_the_edition_comes_from_the_product_name(product, studio):
+    """Resolve's version string is only a number, so it cannot tell."""
+    class Resolve20:
+        def GetVersionString(self):
+            return "20.3.1.6"
+
+        def GetProductName(self):
+            return product
+    assert bridge.is_studio(Resolve20()) is studio
+
+
 def test_unknown_edition_returns_none():
     class Bare:
         pass
@@ -109,7 +122,7 @@ def test_source_path_is_read_from_the_media_pool_item(install_fake_resolve):
 
 
 def test_no_selection_says_so_plainly():
-    with pytest.raises(bridge.ResolveError, match="No clip selected"):
+    with pytest.raises(bridge.ResolveError, match="No clip under the playhead"):
         bridge.clip_source_path(None)
 
 
@@ -126,6 +139,32 @@ def test_a_missing_file_path_is_reported():
     item = FakeTimelineItem(0, 10, mpi)
     with pytest.raises(bridge.ResolveError, match="file path"):
         bridge.clip_source_path(item)
+
+
+def trimmed_item(fps="24.000", **methods):
+    item = FakeTimelineItem(0, 6, FakeMediaPoolItem(properties={"FPS": fps}), left_offset=6)
+    for name, value in methods.items():
+        setattr(item, name, lambda value=value: value)
+    return item
+
+
+def test_a_cut_is_read_in_seconds_from_its_source_frames():
+    """The end frame is the last one the cut uses, so the range runs past it."""
+    item = trimmed_item(GetSourceStartFrame=6, GetSourceEndFrame=11)
+    assert bridge.clip_source_range(item) == (0.25, 0.5)
+
+
+def test_without_an_end_frame_the_source_times_give_the_length():
+    """Source times count from the media's start timecode, an hour in here."""
+    item = trimmed_item(GetSourceStartFrame=6, GetSourceStartTime=3600.25,
+                        GetSourceEndTime=3600.5)
+    assert bridge.clip_source_range(item) == (0.25, 0.5)
+
+
+def test_a_cut_with_no_known_range_is_the_whole_file():
+    assert bridge.clip_source_range(trimmed_item()) is None
+    assert bridge.clip_source_range(
+        trimmed_item(fps="", GetSourceStartFrame=6, GetSourceEndFrame=11)) is None
 
 
 # --------------------------------------------------------------------------
@@ -156,20 +195,68 @@ def test_import_a_png_sequence(install_fake_resolve, tmp_path):
     assert outcome, outcome.detail
     assert item is not None
 
+    # Resolve steps through a printf pattern, not the first frame's own name.
+    descriptor = project.GetMediaPool().import_calls[0][0]
+    assert descriptor["FilePath"] == str(folder / "frame_%06d.png")
+    assert (descriptor["StartIndex"], descriptor["EndIndex"]) == (0, 3)
 
-def test_sequence_import_falls_back_when_descriptors_are_rejected(install_fake_resolve,
-                                                                  tmp_path):
-    """Older builds only accept plain paths, so the descriptor form must not be
-    the only thing tried."""
+
+def test_a_refused_sequence_is_not_imported_as_a_still(install_fake_resolve, tmp_path):
+    """Handed its first frame instead, Resolve imports one still, which would
+    go on the timeline in place of the render. Better to say it was refused."""
     resolve, _tl, _items, _ = install_fake_resolve([(0, 10)], import_mode="file_only")
+    project, _ = bridge.current_timeline(resolve)
+    folder = tmp_path / "seq"
+    folder.mkdir()
+    for i in range(4):
+        (folder / f"frame_{i:06d}.png").write_bytes(b"png")
+
+    item, outcome = bridge.import_media(project, folder, fps=24.0)
+    assert not outcome
+    assert item is None
+    assert "Tried:" in outcome.detail
+    pool = project.GetMediaPool()
+    assert pool.imported == []
+    assert len(pool.import_calls) == 1, "something other than the sequence was tried"
+
+
+@pytest.mark.parametrize("fps,text", [(60.0, "60"), (23.976, "23.976")])
+def test_a_sequence_gets_the_rate_it_was_rendered_at(install_fake_resolve, tmp_path,
+                                                     fps, text):
+    """A sequence has no rate of its own, so Resolve would play a 60 fps render
+    at a 24 fps project's rate, 40% speed."""
+    resolve, _tl, _items, _ = install_fake_resolve([(0, 10)])
     project, _ = bridge.current_timeline(resolve)
     folder = tmp_path / "seq"
     folder.mkdir()
     (folder / "frame_000000.png").write_bytes(b"png")
 
-    item, outcome = bridge.import_media(project, folder)
+    item, outcome = bridge.import_media(project, folder, frame_count=1, fps=fps)
     assert outcome, outcome.detail
-    assert outcome.method == "ImportMedia(first frame)"
+    assert item.GetClipProperty("FPS") == text
+    assert f"{text} fps" in outcome.detail
+
+
+def test_a_frame_rate_resolve_ignores_is_reported():
+    """Resolve does not always report a refusal, so the rate is read back."""
+    class Ignores:
+        def SetClipProperty(self, *_args):
+            return True
+
+        def GetClipProperty(self, _name=None):
+            return {"FPS": "24"}
+    outcome = bridge.set_sequence_fps(Ignores(), 60.0)
+    assert not outcome
+    assert "Clip Attributes" in outcome.detail
+
+
+def test_a_frame_rate_refusal_is_reported():
+    class Refuses:
+        def SetClipProperty(self, *_args):
+            return False
+    outcome = bridge.set_sequence_fps(Refuses(), 60.0)
+    assert not outcome
+    assert "60" in outcome.detail
 
 
 def test_an_empty_sequence_folder_is_reported(install_fake_resolve, tmp_path):

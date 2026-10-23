@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
+
 import numpy as np
 import pytest
 
@@ -112,38 +115,73 @@ def test_unusual_dimensions_are_preserved(make_anime, tmp_path, read_frames, siz
     assert (result.width, result.height) == source_size
 
 
-def test_the_lossless_sequence_keeps_odd_dimensions_exactly(tmp_path, read_frames):
-    """PNG has no even-dimension requirement, which video codecs do."""
+class _Frames:
+    """Stands in for the decoder, so a test controls exactly what it hands over.
+
+    OpenCV's video writers all round 161x121 down to 160x120, so a clip written
+    to test odd sizes is no longer odd by the time it is read back.
+    """
+
+    def __init__(self, frames, fail_after=None):
+        self.frames, self.fail_after, self.reads = list(frames), fail_after, 0
+
+    def read(self):
+        if not self.frames or (self.fail_after is not None and self.reads >= self.fail_after):
+            return False, None
+        self.reads += 1
+        return True, self.frames.pop(0)
+
+    def release(self):
+        pass
+
+
+def _odd_clip(drawings=6, hold=2, size=(161, 121)):
     import cv2
-    frames = []
+    w, h = size
     rng = np.random.default_rng(3)
-    tex = cv2.GaussianBlur(rng.integers(0, 255, (121, 161), dtype=np.uint8), (0, 0), 2.0)
-    for drawing in range(6):
+    tex = cv2.GaussianBlur(rng.integers(0, 255, (h, w), dtype=np.uint8), (0, 0), 2.0)
+    frames = []
+    for drawing in range(drawings):
         M = np.float32([[1, 0, drawing * 3], [0, 1, 0]])
-        shifted = cv2.warpAffine(np.dstack([tex] * 3), M, (161, 121),
+        shifted = cv2.warpAffine(np.dstack([tex] * 3), M, (w, h),
                                  borderMode=cv2.BORDER_REPLICATE)
-        frames.extend([shifted] * 2)
+        frames.extend([shifted] * hold)
+    scores = [0.0] + [0.5 if i % hold == 0 else 0.0 for i in range(1, len(frames))]
+    return frames, plan_from_scores(scores, 24.0, threshold=0.004)
 
-    seq_in = tmp_path / "src"
-    seq_in.mkdir()
-    for i, frame in enumerate(frames):
-        cv2.imwrite(str(seq_in / f"f{i:04d}.png"), frame)
 
-    # Feed the sequence back through as a video the analyser can open.
-    src = tmp_path / "odd.avi"
-    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (161, 121))
-    for frame in frames:
-        writer.write(frame)
-    writer.release()
-
-    c = cfg()
-    plan, _w, _h = analyse_video(src, c)
-    result = render_plan(src, plan, tmp_path / "seq_out", c)
-    assert result.is_sequence
+def test_the_lossless_sequence_keeps_odd_dimensions_exactly(monkeypatch, tmp_path, read_frames):
+    """PNG has no even-dimension requirement, which video codecs do."""
+    from Pipeline import render
+    frames, plan = _odd_clip()
+    monkeypatch.setattr(render, "_open", lambda *a, **k: _Frames(frames))
+    result = render_plan(tmp_path / "odd.mov", plan, tmp_path / "seq_out", cfg(),
+                         sequence=True)
     out = read_frames(result.output)
     assert len(out) == 12
-    # Whatever the decoder handed us, the sequence writes it back unchanged.
-    assert out[0].shape[:2] == (result.height, result.width)
+    assert (result.width, result.height) == (161, 121)
+    assert out[0].shape[:2] == (121, 161)
+    assert np.array_equal(out[0], frames[0]), "a real drawing was resampled"
+
+
+@pytest.mark.parametrize("suffix", [".mp4", ".mkv"])
+def test_a_video_file_refuses_odd_dimensions(monkeypatch, tmp_path, suffix):
+    """Every writer here crops 161x121 to 160x120 without a word."""
+    from Pipeline import render
+    frames, plan = _odd_clip()
+    monkeypatch.setattr(render, "_open", lambda *a, **k: _Frames(frames))
+    with pytest.raises(SourceError, match="image sequence"):
+        render_plan(tmp_path / "odd.mov", plan, tmp_path / f"out{suffix}", cfg())
+    assert not (tmp_path / f"out{suffix}").exists()
+
+
+def test_a_frame_that_cannot_be_read_stops_the_render(monkeypatch, tmp_path):
+    """It used to repeat the last frame it had, and report a finished render."""
+    from Pipeline import render
+    frames, plan = _odd_clip(size=(160, 120))
+    monkeypatch.setattr(render, "_open", lambda *a, **k: _Frames(frames, fail_after=5))
+    with pytest.raises(SourceError, match="frame 5"):
+        render_plan(tmp_path / "src.mov", plan, tmp_path / "seq_out", cfg(), sequence=True)
 
 
 @pytest.mark.parametrize("fps", [12.0, 23.976, 25.0, 29.97, 60.0])
@@ -151,6 +189,43 @@ def test_various_frame_rates_are_preserved(make_anime, tmp_path, read_frames, fp
     src = make_anime(holds=(2,) * 6, fps=fps)
     plan, result, _frames = roundtrip(src, tmp_path, read_frames, name=f"o{int(fps)}.avi")
     assert result.fps == pytest.approx(fps, rel=0.02)
+
+
+def _ffmpeg(*args):
+    """Make a fixture OpenCV cannot write, one with its own timestamps."""
+    exe = shutil.which("ffmpeg")
+    if not exe:
+        pytest.skip("ffmpeg makes the timestamped fixtures")
+    subprocess.run([exe, "-hide_banner", "-loglevel", "error", "-y", *map(str, args)],
+                   check=True)
+
+
+def test_a_variable_frame_rate_clip_is_refused(make_anime, tmp_path):
+    """The render runs at one rate, so a clip whose frames are unevenly spaced
+    would change length: 0.72 s of input once came out as 0.24 s."""
+    src = make_anime(holds=(2,) * 3, fps=25.0)
+    vfr = tmp_path / "vfr.mkv"
+    # Frames 0-2 are 40 ms apart, then 120 and 200 ms.
+    _ffmpeg("-i", src, "-vf", "setpts='if(lt(N,3),N,5*N-10)/(25*TB)'",
+            "-fps_mode", "vfr", "-c:v", "ffv1", vfr)
+    with pytest.raises(SourceError, match="variable frame rate"):
+        analyse_video(vfr, cfg())
+    # A range after the uneven part starts at the wrong time too.
+    with pytest.raises(SourceError, match="variable frame rate"):
+        analyse_video(vfr, cfg(), frames=(4, 6))
+
+
+@pytest.mark.parametrize("fps", [23.976, 29.97, 59.94])
+def test_rounded_timestamps_still_count_as_a_constant_rate(make_anime, tmp_path, fps):
+    """Matroska and WebM store whole milliseconds, so frames at these rates sit
+    up to half a millisecond off their exact time."""
+    src = make_anime(holds=(2,) * 60, fps=fps)
+    mkv = tmp_path / "cfr.mkv"
+    _ffmpeg("-i", src, "-c:v", "ffv1", mkv)
+    plan, _w, _h = analyse_video(mkv, cfg())
+    assert plan.source_frames == 120
+    plan, _w, _h = analyse_video(mkv, cfg(), frames=(100, 120))
+    assert plan.source_frames == 20
 
 
 def test_upscale_doubles_whatever_the_source_is(make_anime, tmp_path, read_frames):

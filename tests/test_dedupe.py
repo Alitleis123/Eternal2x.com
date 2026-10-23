@@ -11,6 +11,7 @@ from Pipeline.dedupe import (
     detect_base_hold,
     flag_new_drawings,
     holds_from_flags,
+    noise_threshold,
     output_time_map,
     plan_from_scores,
 )
@@ -51,6 +52,44 @@ def test_threshold_is_inclusive():
 def test_noise_below_threshold_is_still_a_duplicate():
     """Codec noise must not be mistaken for a new drawing."""
     assert flag_new_drawings([0.0, 0.0009, 0.0012], T) == [True, False, False]
+
+
+# --------------------------------------------------------------------------
+# noise floor
+# --------------------------------------------------------------------------
+
+def test_clean_holds_keep_the_configured_threshold():
+    assert noise_threshold(scores_for([2] * 12), T) == T
+
+
+def test_grain_lifts_the_threshold_between_held_frames_and_drawings():
+    """Scores measured on 12 drawings on 2s with grain of 1 code value."""
+    t = noise_threshold([0.0] + [0.0045, 0.043] * 11 + [0.0045], T)
+    assert 0.0045 < t < 0.043
+
+
+def test_steady_motion_is_not_mistaken_for_grain():
+    """Scrolling credits score the same on every frame, as grain on a still
+    would, but every frame is new."""
+    assert noise_threshold([0.0] + [0.0177] * 23, T) == T
+
+
+def test_a_couple_of_cuts_do_not_make_steady_motion_look_like_grain():
+    assert noise_threshold([0.0] + [0.0177] * 21 + [0.5, 0.6], T) == T
+
+
+def test_live_action_keeps_the_configured_threshold():
+    """Real motion spreads its scores out, with no gap between still and moving."""
+    assert noise_threshold([0.0] + [0.005 * 1.1 ** i for i in range(30)], T) == T
+
+
+def test_a_slow_fade_is_not_mistaken_for_grain():
+    """Creeping one level a frame scores 1 and 2 levels in turn, a 2x jump."""
+    assert noise_threshold([0.0] + [1 / 255, 2 / 255] * 12, T) == T
+
+
+def test_too_few_frames_to_judge_the_noise():
+    assert noise_threshold([0.0, 0.0045, 0.043, 0.0045, 0.043], T) == T
 
 
 # --------------------------------------------------------------------------

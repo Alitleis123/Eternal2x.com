@@ -56,6 +56,174 @@ def test_analyse_handles_mixed_holds(make_anime):
     assert plan.unique_drawings == 8
 
 
+def test_a_colour_change_at_equal_brightness_is_a_new_drawing(tmp_path):
+    """Pure red and this green have the same luma, so comparing brightness
+    alone saw no change and the green drawing vanished from the result."""
+    import cv2
+    src = tmp_path / "colour.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    for bgr in [(0, 0, 255)] * 2 + [(0, 130, 0)] * 2 + [(220, 220, 220)] * 2:
+        writer.write(np.full((120, 160, 3), bgr, np.uint8))
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert [(h.index, h.length) for h in plan.holds] == [(0, 2), (2, 2), (4, 2)]
+
+
+def test_a_slow_fade_keeps_moving(tmp_path, read_frames):
+    """One level a frame is under the threshold, so comparing each frame only
+    with the one before found no change and froze 22 frames of a fade."""
+    import cv2
+    src = tmp_path / "fade.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    for level in range(40, 64):
+        writer.write(np.full((120, 160, 3), level, np.uint8))
+    writer.release()
+    c = cfg(interpolate_enabled=False)
+    plan, _w, _h = analyse_video(src, c)
+    assert max(h.length for h in plan.holds) <= 2
+    out = read_frames(render_plan(src, plan, tmp_path / "out", c, sequence=True).output)
+    lag = max(40 + i - int(f[0, 0, 0]) for i, f in enumerate(out))
+    assert lag <= 1, f"the fade fell {lag} levels behind the source"
+
+
+def test_a_slow_pan_is_not_one_long_hold(make_anime):
+    """A tenth of a pixel a frame never crossed the threshold between
+    neighbours, so a moving shot came out as one still drawing. Holds up to
+    4 frames still count as timing, not as a deliberate still."""
+    plan, _w, _h = analyse_video(make_anime(holds=(1,) * 24, step=0.1), cfg())
+    assert max(h.length for h in plan.holds) <= 4
+
+
+def _drawings_on_twos(tmp_path, change=None):
+    """12 flat drawings, each held two frames, with `change(frame, i)` applied."""
+    import cv2
+    src = tmp_path / "twos.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 180))
+    for i in range(24):
+        d = i // 2
+        frame = np.full((180, 320, 3), 180, np.uint8)
+        cv2.rectangle(frame, (40 + d * 4, 40), (80 + d * 4, 110), (30, 30, 30), 3)
+        cv2.circle(frame, (60 + d * 4, 70), 12, (75, 110, 180), -1)
+        writer.write(change(frame, i) if change else frame)
+    writer.release()
+    return src
+
+
+@pytest.mark.parametrize("sigma", [1, 2, 4])
+def test_grain_does_not_hide_the_drawings(tmp_path, sigma):
+    """Grain of 1 code value put every held frame over the threshold, so 12
+    drawings on 2s came out as 24 unique frames and nothing was rebuilt."""
+    rng = np.random.default_rng(17)
+
+    def grain(frame, _i):
+        noise = rng.normal(0, sigma, frame.shape[:2] + (1,))
+        return np.clip(frame + noise, 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg(grain=True))
+    assert plan.unique_drawings == 12
+    assert plan.base_hold == 2
+
+
+def test_correlated_grain_does_not_hide_the_drawings(tmp_path):
+    """Grain blurred across neighbouring pixels, as compression leaves it."""
+    import cv2
+    rng = np.random.default_rng(5)
+
+    def grain(frame, _i):
+        noise = cv2.GaussianBlur(rng.normal(0, 1, frame.shape[:2]), (0, 0), 1.0)
+        noise *= 1.0 / noise.std()
+        return np.clip(frame + noise[..., None], 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg(grain=True))
+    assert plan.unique_drawings == 12
+
+
+def test_grain_is_only_seen_through_when_asked(tmp_path):
+    """Unasked, a grainy clip is all new frames, and says it looks grainy."""
+    rng = np.random.default_rng(17)
+
+    def grain(frame, _i):
+        noise = rng.normal(0, 1, frame.shape[:2] + (1,))
+        return np.clip(frame + noise, 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg())
+    assert plan.unique_drawings == 24
+    assert plan.grain_suspected
+
+
+def test_a_clean_clip_is_not_suspected_of_grain(make_anime):
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg())
+    assert not plan.grain_suspected
+
+
+def test_fine_moving_detail_keeps_every_drawing(tmp_path):
+    """Diagonal shading moving 1 px a frame inside a shape that moves 8 px every
+    fourth frame. Every frame is distinct and over the threshold, and taking
+    the small steps for grain merged half of them."""
+    import cv2
+    src = tmp_path / "detail.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (640, 360))
+    yy, xx = np.mgrid[0:48, 0:48]
+    for i in range(24):
+        frame = np.full((360, 640, 3), 200, np.uint8)
+        x = 200 + 8 * (i // 4)
+        cv2.rectangle(frame, (x, 120), (x + 120, 240), (90, 90, 90), -1)
+        shade = np.where(((xx + yy + i) // 2) % 2 == 0, 96, 160).astype(np.uint8)
+        frame[150:198, x + 30:x + 78] = shade[..., None]
+        writer.write(frame)
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert plan.unique_drawings == 24
+
+
+def test_flicker_is_not_taken_for_grain(tmp_path):
+    """Flicker shifts every pixel the same way, as a fade does, and a fade's
+    steps are real. Taking it for grain would merge real frames elsewhere, so
+    a flickering clip reads as all new frames and nothing is merged."""
+    def flicker(frame, i):
+        return np.clip(frame.astype(int) + 2 * (i % 2), 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, flicker), cfg())
+    assert plan.unique_drawings == 24
+
+
+def _cel_on_ones(tmp_path, steps):
+    """24 distinct cel drawings on 1s, moving the character `steps` pixels in turn."""
+    import cv2
+    from tests.drawings import cel
+    src = tmp_path / "ones.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 240))
+    x = 100
+    for i in range(24):
+        writer.write(cel(x, 120))
+        x += steps[i % len(steps)]
+    writer.release()
+    return src
+
+
+@pytest.mark.parametrize("steps", [(1, 1, 1, 4), (2, 10)])
+def test_small_real_moves_are_not_taken_for_grain(tmp_path, steps):
+    """A clip moving 1 px three times and 4 px the fourth has two clusters of
+    scores, as grain on held frames does. Read as grain, half its drawings were
+    merged away. A real move survives a slight blur, and grain does not."""
+    plan, _w, _h = analyse_video(_cel_on_ones(tmp_path, steps), cfg())
+    assert plan.unique_drawings == 24
+
+
+def test_a_fade_with_uneven_steps_keeps_every_frame(tmp_path):
+    """A fade of 1, 1, 1 then 4 levels clusters like grain too."""
+    import cv2
+    src = tmp_path / "fade.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    level = 40
+    for i in range(24):
+        writer.write(np.full((120, 160, 3), level, np.uint8))
+        level += (1, 1, 1, 4)[i % 4]
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert max(h.length for h in plan.holds) <= 2, "the fade froze"
+
+
 def test_analyse_rejects_a_missing_file(tmp_path):
     with pytest.raises(SourceError, match="Could not open"):
         analyse_video(tmp_path / "nope.avi", cfg())
@@ -168,6 +336,23 @@ def test_a_hard_cut_does_not_ghost(make_anime, tmp_path, read_frames):
     )
 
 
+def test_a_hard_cut_stays_on_its_frame(make_anime, tmp_path, read_frames):
+    """A cut that lands a frame early is out of sync with the edit and the audio."""
+    src = make_anime(holds=(2,) * 12, cut_at=6)
+    plan, _, _ = analyse_video(src, cfg())
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    source = read_frames(src)
+
+    def jump(frames):
+        deltas = [float(np.abs(frames[i].astype(float) - frames[i - 1].astype(float)).mean())
+                  for i in range(1, len(frames))]
+        return 1 + int(np.argmax(deltas))
+
+    assert jump(out) == jump(source), (
+        f"the cut is at frame {jump(out)}, not frame {jump(source)} as in the source"
+    )
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())
@@ -222,14 +407,6 @@ def test_progress_is_reported(make_anime, tmp_path):
     assert max(f for s, f in seen if s == "Rendering") == pytest.approx(1.0, abs=0.01)
 
 
-def test_quality_presets_all_render(make_anime, tmp_path, read_frames):
-    src = make_anime(holds=(2,) * 6)
-    for quality in ("fast", "better", "best"):
-        c = cfg(quality=quality)
-        plan, _, _ = analyse_video(src, c)
-        result = render_plan(src, plan, tmp_path / f"out_{quality}.avi", c)
-        assert len(read_frames(result.output)) == 12, f"{quality} produced the wrong length"
-
 
 def test_render_rejects_an_empty_plan(make_anime, tmp_path):
     from Pipeline.dedupe import DedupePlan
@@ -264,6 +441,21 @@ def test_interpolation_can_be_turned_off(make_anime, tmp_path, read_frames):
         )
 
 
+def test_interpolation_off_keeps_every_drawing_on_its_frame(make_anime, tmp_path,
+                                                            read_frames):
+    """With nothing generated, a drawing shown a frame early is just out of sync."""
+    src = make_anime(holds=(2, 3, 2, 4, 2, 2, 3))
+    source = read_frames(src)
+
+    c = cfg(interpolate_enabled=False)
+    plan, _w, _h = analyse_video(src, c)
+    out = read_frames(render_plan(src, plan, tmp_path / "off.avi", c).output)
+
+    assert len(out) == len(source)
+    moved = [i for i, (a, b) in enumerate(zip(out, source)) if not np.array_equal(a, b)]
+    assert not moved, f"frames {moved} show a different drawing than the source"
+
+
 def test_turning_interpolation_off_changes_the_result(make_anime, tmp_path, read_frames):
     src = make_anime(holds=(2,) * 10)
     plan, _w, _h = analyse_video(src, cfg())
@@ -276,3 +468,46 @@ def test_turning_interpolation_off_changes_the_result(make_anime, tmp_path, read
     assert any(not np.array_equal(a, b) for a, b in zip(on, off)), (
         "the interpolate setting made no difference to the output"
     )
+
+
+# --------------------------------------------------------------------------
+# a trimmed range of the source
+# --------------------------------------------------------------------------
+
+def test_analysing_a_range_reads_only_that_range(make_anime):
+    """A two second cut of a long file must not cost the whole file."""
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(6, 18))
+    assert plan.source_frames == 12
+    assert plan.unique_drawings == 6
+
+
+def test_a_range_starts_on_exactly_the_frame_asked_for(make_anime, tmp_path, read_frames):
+    """Off by one here would shift every drawing against the edit."""
+    src = make_anime(holds=(2,) * 12)
+    source = read_frames(src)
+    plan, _w, _h = analyse_video(src, cfg(), frames=(6, 18))
+    out = tmp_path / "range"
+    result = render_plan(src, plan, out, cfg(), sequence=True, frames=(6, 18))
+    frames = read_frames(out)
+    assert result.frames_written == len(frames) == 12
+    assert np.array_equal(frames[0], source[6]), "the render did not start at frame 6"
+
+
+def test_reaching_the_start_of_a_range_reports_progress(make_anime, tmp_path):
+    """Every frame before the range is decoded to reach it, which can take
+    minutes deep into an episode. The panel takes minutes of silence for a
+    dead run, so both passes must report while they get there."""
+    src = make_anime(holds=(2,) * 12)
+    stages = []
+    plan, _w, _h = analyse_video(src, cfg(), frames=(6, 18),
+                                 progress=lambda s, f: stages.append(s))
+    assert stages[0] == "Seeking"
+    stages.clear()
+    render_plan(src, plan, tmp_path / "range", cfg(), sequence=True, frames=(6, 18),
+                progress=lambda s, f: stages.append(s))
+    assert stages[0] == "Seeking"
+
+
+def test_a_range_past_the_end_of_the_file_stops_at_the_end(make_anime):
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(20, 400))
+    assert plan.source_frames == 4

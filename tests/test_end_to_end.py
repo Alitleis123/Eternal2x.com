@@ -21,6 +21,7 @@ pytest.importorskip("lupa", reason="lupa provides the Lua runtime")
 from lupa import LuaRuntime  # noqa: E402
 
 from Installer.install_eternal2x import write_config  # noqa: E402
+from tests import fake_rife  # noqa: E402
 
 HARNESS = Path(__file__).resolve().parent / "lua_harness.lua"
 
@@ -28,10 +29,18 @@ HARNESS = Path(__file__).resolve().parent / "lua_harness.lua"
 @pytest.fixture
 def installation(tmp_path, repo_root, make_anime):
     """A real install, a real clip, and a panel loaded through the launcher."""
-    plugin = tmp_path / "Eternal2x"
+    return install(tmp_path, repo_root, make_anime, "Eternal2x")
+
+
+def install(tmp_path, repo_root, make_anime, folder):
+    plugin = tmp_path / folder
     for name in ("Installer", "Stages", "Pipeline"):
         shutil.copytree(repo_root / name, plugin / name)
     shutil.copy2(repo_root / "VERSION", plugin / "VERSION")
+    # The stage runs in its own Python here, where the network would download
+    # its model. A blend stands in for it, as in the other tests.
+    (plugin / "Pipeline" / "rife.py").rename(plugin / "Pipeline" / "_rife_real.py")
+    (plugin / "Pipeline" / "rife.py").write_text(fake_rife.MODULE, encoding="utf-8")
 
     comp = tmp_path / "Comp"
     comp.mkdir()
@@ -152,7 +161,7 @@ def test_smooth_renders_imports_and_reports(installation):
     status = H.status()
     assert "12 drawings" in status, f"panel showed: {status!r}"
     assert "48 smooth frames" in status or "24 smooth frames" in status
-    assert "added to the timeline" in status
+    assert "above the original" in status
 
     assert H.imported_count() == 1
     assert H.appended == 1
@@ -180,9 +189,16 @@ def test_the_panel_hands_resolve_a_path_it_can_import(installation):
     H.click("SmoothBtn")
     finish(H)
 
-    imported = Path(H.imported_at(1))
-    assert imported.is_file(), f"Resolve was given {imported}, which is not a file"
-    assert cv2.imread(str(imported)) is not None, "the imported frame is not readable"
+    # A sequence goes in as Resolve's clipInfo: a printf pattern and a range.
+    assert H.sequence_import_count() == 1
+    pattern = H.last_sequence_field("FilePath")
+    first, last = H.last_sequence_field("StartIndex"), H.last_sequence_field("EndIndex")
+    assert last - first + 1 == 24, "the range does not cover the whole clip"
+    for index in (first, last):
+        frame = Path(pattern % index)
+        assert frame.is_file(), f"Resolve was given {pattern}, but {frame.name} is missing"
+        assert cv2.imread(str(frame)) is not None, f"{frame.name} is not readable"
+    assert not Path(pattern % (last + 1)).exists(), "the range stops short of the last frame"
 
 
 def test_progress_reaches_the_end(installation):
@@ -227,5 +243,48 @@ def test_a_clip_path_with_spaces_survives_the_shell(installation, read_frames):
     H, src = installation(clip_name="my shot 01.avi")
     H.click("SmoothBtn")
     finish(H)
-    assert "added to the timeline" in H.status()
+    assert "above the original" in H.status()
     assert len(read_frames(rendered_output(src))) == 24
+
+
+def test_a_python_that_cannot_start_is_reported_not_waited_on(installation, tmp_path):
+    """No status file is ever written, so only the exit code says it is over."""
+    H, _src = installation()
+    conf = Path(H.plugin_root).parent / "Comp" / "Eternal2x.conf"
+    missing = tmp_path / "no such python" / ("python.exe" if sys.platform.startswith("win")
+                                              else "python3")
+    conf.write_text(conf.read_text(encoding="utf-8").replace(
+        f"python={sys.executable}", f"python={missing}"), encoding="utf-8")
+    H, _src = installation(clip_name="second.avi")
+    H.click("SmoothBtn")
+
+    exit_file = Path(H.plugin_root) / ".eternal2x_exit"
+    deadline = time.time() + 60
+    while not exit_file.exists() and time.time() < deadline:
+        time.sleep(0.05)
+    assert exit_file.exists(), "the shell never recorded how the run ended"
+    time.sleep(0.2)  # let the shell finish writing it
+    H.click("RefreshStatusBtn")
+    assert "Stopped without finishing" in H.status(), H.status()
+    assert H.enabled("SmoothBtn"), "the panel stayed busy"
+
+
+def test_a_trimmed_timeline_clip_is_rebuilt_from_just_its_range(installation, read_frames):
+    """The panel reads the clip's in and out points and Python renders only those."""
+    H, src = installation(holds=(2,) * 12)
+    H.set_source_range(0.25, 0.75)       # frames 6 to 17 of a 24 fps file
+    H.click("SmoothBtn")
+    finish(H)
+    assert len(read_frames(rendered_output(src))) == 12
+    assert H.last_sequence_field("EndIndex") == 11
+
+
+def test_a_plugin_folder_with_shell_characters_still_runs(tmp_path, repo_root, make_anime,
+                                                       read_frames):
+    """cmd strips the quotes around a script path holding &, and splits there.
+    `call` would fix that but doubles a ^ in the path."""
+    H, src = install(tmp_path, repo_root, make_anime, "VFX & Tools ^1/Eternal2x")(
+        holds=(2,) * 6)
+    H.click("SmoothBtn")
+    finish(H)
+    assert len(read_frames(rendered_output(src))) == 12

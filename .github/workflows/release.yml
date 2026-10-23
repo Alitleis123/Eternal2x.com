@@ -10,20 +10,29 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Only the publish job can write. The test job installs packages from PyPI and
+# runs them, and none of that needs to push a tag or a commit. Actions are
+# pinned to commits, since a tag can be moved to point at different code.
 permissions:
-  contents: write
+  contents: read
+
+# One release at a time, so two runs cannot race to write the feed on main.
+# queue: max keeps every waiting release. By default a new one cancels the
+# one already pending.
+concurrency:
+  group: release
+  cancel-in-progress: false
+  queue: max
 
 jobs:
-  publish:
+  test:
     runs-on: ubuntu-latest
     steps:
-      # Build the commit the tag points at. Checking out main here would ship
+      # Test the commit the tag points at. Checking out main here would test
       # whatever landed after the tag.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.12"
 
@@ -37,6 +46,30 @@ jobs:
             exit 1
           fi
 
+      # Auto-update is on by default, so a broken release reaches every user
+      # the next time they open the panel.
+      - name: Run the test suite
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1 libglib2.0-0
+          pip install -r requirements.txt -r requirements-dev.txt
+          python -m pytest -q
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # Build the commit the tag points at, as tested above.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
+        with:
+          python-version: "3.12"
+
       - name: Build, publish and verify
         env:
           GH_TOKEN: ${{ github.token }}
@@ -46,9 +79,30 @@ jobs:
       # than pushing the tag's commit.
       - name: Commit the refreshed update feed to main
         run: |
+          version=$(python -c "print(open('VERSION',encoding='utf-8-sig').read().strip())")
           cp update/latest.json "$RUNNER_TEMP/latest.json"
           git fetch origin main
-          git checkout -B main origin/main
+          # -f: the feed was just rewritten here, and a copy is saved above.
+          # Without it the checkout refuses whenever main's feed has moved on.
+          git checkout -f -B main origin/main
+          # A re-run of an older tag must not move the feed back, or installs
+          # between the two versions would never be offered the newer one. A
+          # feed that cannot be read fails the step, rather than passing for
+          # a newer one.
+          if [ -f update/latest.json ]; then
+            main_is_newer=$(python - "$RUNNER_TEMP/latest.json" update/latest.json <<'PY'
+          import json, sys
+          def version(path):
+              with open(path, encoding="utf-8-sig") as f:
+                  return tuple(int(p) for p in json.load(f)["version"].split("."))
+          print("yes" if version(sys.argv[2]) > version(sys.argv[1]) else "no")
+          PY
+            )
+            if [ "$main_is_newer" = yes ]; then
+              echo "main's feed is for a newer version. Leaving it alone."
+              exit 0
+            fi
+          fi
           cp "$RUNNER_TEMP/latest.json" update/latest.json
           if git diff --quiet -- update/latest.json; then
             echo "update/latest.json is already current."
@@ -57,5 +111,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update/latest.json
-          git commit -m "Refresh the update feed for $(cat VERSION)"
+          git commit -m "Refresh the update feed for ${version}"
           git push origin main

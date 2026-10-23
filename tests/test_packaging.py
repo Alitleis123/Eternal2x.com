@@ -206,6 +206,6 @@ def test_readme_documents_every_command_line_flag(repo_root):
 
 
 def test_readme_states_the_studio_requirement(repo_root):
-    """Super Scale and Optical Flow are Studio-only, so this cannot be vague."""
+    """Super Scale is Studio-only, so this cannot be vague."""
     readme = (repo_root / "README.md").read_text(encoding="utf-8")
     assert "Resolve Studio" in readme

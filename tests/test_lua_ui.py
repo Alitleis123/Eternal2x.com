@@ -88,9 +88,9 @@ def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
     for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
-                     "CancelBtn", "UpdateBtn", "QualityCombo", "HoldCombo", "FormatCombo",
-                     "UpscaleCB", "InterpCB", "AutoUpdateCB", "Status",
-                     "Progress", "SourceLabel", "AnalysisLabel"):
+                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo",
+                     "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
+                     "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
 
 
@@ -99,23 +99,20 @@ def test_every_control_has_a_handler(lua, direct):
     handlers = set(H.handler_ids().split(","))
     for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
-                     "UpdateBtn.Clicked", "QualityCombo.CurrentIndexChanged",
+                     "UpdateBtn.Clicked",
                      "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
-                     "InterpCB.Clicked", "AutoUpdateCB.Clicked"):
+                     "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
+                     "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
 
 
-def test_quality_choices_match_what_the_stage_accepts(lua, direct):
-    from Stages.resolve_smooth import build_parser
+def test_there_is_no_quality_choice(lua, direct):
+    """Pixel tracking doubled lines and smeared fast characters, and no check
+    caught every case, so the network draws every in-between."""
     H = load(lua, ui_script(direct))
-    labels = [x.lower() for x in H.combo_items("QualityCombo").split(",")]
-
-    accepted = None
-    for action in build_parser()._actions:
-        if "--quality" in action.option_strings:
-            accepted = set(action.choices)
-    assert accepted is not None
-    assert set(labels) == accepted, f"panel offers {labels}, stage accepts {accepted}"
+    assert "QualityCombo" not in H.widget_ids().split(",")
+    H.click("SmoothBtn")
+    assert "--quality" not in H.last_command()
 
 
 def test_output_format_choices_match_the_stage(lua, direct):
@@ -172,12 +169,42 @@ def test_launcher_reaches_the_panel(lua, installed):
     assert load(lua, comp / "Eternal2x.lua").window is not None
 
 
-def test_launcher_reports_a_missing_config(lua, tmp_path, repo_root):
+@pytest.fixture
+def no_real_install(tmp_path, monkeypatch):
+    """Point the launcher's fallback away from this machine's real install."""
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setenv("APPDATA", str(home / "AppData" / "Roaming"))
+    return home
+
+
+def test_launcher_reports_a_missing_config(lua, tmp_path, repo_root, no_real_install):
     comp = tmp_path / "Comp"
     comp.mkdir()
     shutil.copy2(repo_root / "Installer" / "Eternal2xLauncher.lua", comp / "Eternal2x.lua")
     H = load(lua, comp / "Eternal2x.lua")
     assert "Missing repo_root" in " ".join(str(v) for v in dict(H.prints).values())
+
+
+def test_launcher_finds_the_installed_config_when_its_own_path_is_mapped(
+        lua, tmp_path, repo_root, installed, no_real_install):
+    """Resolve may report the script as Scripts:/... which io.open cannot open."""
+    comp, plugin_root = installed
+    if sys.platform.startswith("win"):
+        utility = (no_real_install / "AppData" / "Roaming" / "Blackmagic Design"
+                   / "DaVinci Resolve" / "Support" / "Fusion" / "Scripts" / "Utility")
+    elif sys.platform == "darwin":
+        utility = (no_real_install / "Library" / "Application Support" / "Blackmagic Design"
+                   / "DaVinci Resolve" / "Fusion" / "Scripts" / "Utility")
+    else:
+        utility = no_real_install / ".local" / "share" / "DaVinciResolve" / "Fusion" / "Scripts" / "Utility"
+    utility.mkdir(parents=True)
+    shutil.move(str(comp / "Eternal2x.conf"), str(utility / "Eternal2x.conf"))
+
+    H = load(lua, comp / "Eternal2x.lua")
+    assert H.window is not None, "the launcher did not fall back to the installed config"
+    H.click("AnalyseBtn")
+    assert f"cd '{plugin_root}'" in H.last_command() or f'"{plugin_root}"' in H.last_command()
 
 
 def test_buttons_run_from_the_folder_that_holds_the_code(lua, installed):
@@ -278,11 +305,11 @@ def test_smooth_passes_a_status_file(lua, direct):
     assert "--status-file" in H.last_command()
 
 
-def test_quality_selection_reaches_the_command(lua, direct):
+def test_interpolate_off_reaches_the_command(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 2)      # Best
-    H.click("AnalyseBtn")
-    assert "--quality best" in H.last_command()
+    H.set_checkbox("InterpCB", False)
+    H.click("SmoothBtn")
+    assert "--no-interpolate" in H.last_command()
 
 
 def test_hold_pattern_selection_reaches_the_command(lua, direct):
@@ -311,6 +338,24 @@ def test_unchecking_interpolate_reaches_the_command(lua, direct):
     H.set_checkbox("InterpCB", False)
     H.click("AnalyseBtn")
     assert "--no-interpolate" in H.last_command()
+
+
+def test_grainy_source_is_off_unless_ticked(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--grain" not in H.last_command()
+    H.set_checkbox("GrainCB", True)
+    H.click("AnalyseBtn")
+    assert "--grain" in H.last_command()
+
+
+def test_grainy_source_is_remembered(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.set_checkbox("GrainCB", True)
+    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
+    assert "grain=true" in conf
+    H = load(lua, ui_script(direct))
+    assert H.widgets["GrainCB"].Checked is True
 
 
 def test_defaults_send_no_opt_out_flags(lua, direct):
@@ -400,6 +445,23 @@ def test_completion_message_is_surfaced(lua, direct):
     assert "12 drawings" in H.status()
 
 
+def test_a_finished_render_is_imported_once_even_after_reopening(lua, direct):
+    """The status file outlives the panel. Pressing Refresh Progress in a new
+    panel must not import the last render again and append a second copy."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
+                 import_path=str(direct / "shot_smooth.mp4"))
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 1
+    H.click("RefreshStatusBtn")
+
+    H = load(lua, ui_script(direct))
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 0, "the reopened panel imported the render again"
+    assert "No run in progress" in H.status()
+
+
 def test_a_failure_is_surfaced(lua, direct):
     H = load(lua, ui_script(direct))
     write_status(direct, done=True, ok=False, message="The clip's media is missing.")
@@ -424,8 +486,10 @@ def test_buttons_come_back_when_the_render_finishes(lua, direct):
 
 
 def test_reset_clears_a_stuck_run(lua, direct):
+    """The run ended without saying it was done, and the panel never polled."""
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
+    (direct / ".eternal2x_exit").write_text("1\n")
     H.click("CancelBtn")
     assert H.enabled("SmoothBtn")
     assert H.widgets["Progress"].Text == ""
@@ -444,14 +508,23 @@ def test_refreshing_with_no_run_says_so(lua, direct):
 
 def test_settings_are_saved(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 2)
     H.set_combo("HoldCombo", 2)        # On 3s
     H.set_checkbox("UpscaleCB", False)
 
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "quality=best" in conf
     assert "base_hold=3" in conf
     assert "upscale=false" in conf
+
+
+def test_a_saved_avi_output_falls_back_to_the_image_sequence(lua, direct):
+    """Resolve Studio 20.3.1 refuses FFV1 in AVI, so the lossless file is now
+    MKV, and a setting saved by an older version picks the safe default."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "format=avi\n")
+    H = load(lua, ui_script(direct))
+    assert "MKV" in H.combo_items("FormatCombo") and "AVI" not in H.combo_items("FormatCombo")
+    H.click("SmoothBtn")
+    assert "--format png" in H.last_command()
 
 
 def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
@@ -464,13 +537,13 @@ def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
 
 def test_saved_settings_are_restored_next_time(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("QualityCombo", 0)     # Fast
     H.set_combo("HoldCombo", 1)        # On 2s
+    H.set_checkbox("GrainCB", True)
 
     H2 = load(lua, ui_script(direct))
     H2.click("AnalyseBtn")
     cmd = H2.last_command()
-    assert "--quality fast" in cmd
+    assert "--grain" in cmd
     assert "--base-hold 2" in cmd
 
 
@@ -538,7 +611,380 @@ def test_a_finished_render_is_imported_and_appended(lua, direct):
     assert H.imported_count() == 1
     assert H.imported_at(1) == "/tmp/out/frame_000000.png"
     assert H.appended == 1
-    assert "added to the timeline" in H.status()
+    assert "above the original" in H.status()
+
+
+def finish_render(H, root, **fields):
+    H.click("SmoothBtn")
+    status = {"fraction": 1.0, "done": True, "ok": True, "message": "Rendered.",
+              "import_path": "/tmp/out.mp4"}
+    status.update(fields)
+    write_status(root, **status)
+    H.click("RefreshStatusBtn")
+
+
+def test_the_render_lines_up_on_a_new_track_above_the_original(lua, direct):
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct)
+
+    assert len(H.placements) == 1
+    placed = H.placements[1]
+    assert placed.trackIndex == 2
+    assert placed.recordFrame == 86400, "it does not start where the original does"
+    # Resolve 20.3 reads endFrame as one past the last frame, so 0 to 48 is
+    # all 48 frames. 0 to 47 left the original showing on the last one.
+    assert (placed.startFrame, placed.endFrame) == (0, 48)
+    assert placed.mediaType == 1
+    assert H.track_names[2] == "Eternal2x"
+    assert "V2 above the original" in H.status()
+
+
+def test_a_free_track_above_is_used_as_it_is(lua, direct):
+    H = load(lua, ui_script(direct))
+    lua.execute("local H = ...; H.tracks[2] = {}; H.tracks[3] = {}", H)
+    finish_render(H, direct)
+    assert H.placements[1].trackIndex == 2
+    assert len(H.tracks) == 3, "a track was added though one was free"
+    assert H.track_names[2] is None, "the user's track was renamed"
+
+
+def test_a_track_with_a_clip_in_the_way_is_skipped(lua, direct):
+    H = load(lua, ui_script(direct))
+    # Track 2 has a clip overlapping the span, track 3 one well after it.
+    lua.execute("local H = ...; H.tracks[2] = { { 86440, 86500 } }; "
+                "H.tracks[3] = { { 90000, 90100 } }", H)
+    finish_render(H, direct)
+    assert H.placements[1].trackIndex == 3
+
+
+def test_a_sequence_is_placed_with_its_own_length(lua, direct):
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=118, fps=60.0)
+    assert H.placements[1].endFrame == 118
+
+
+def test_without_the_placement_calls_it_goes_at_the_end(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.no_place_api = True
+    H.click("RefreshBtn")
+    finish_render(H, direct)
+    assert len(H.placements) == 0
+    assert H.appended == 1
+    assert "end of the timeline" in H.status()
+
+
+def test_a_different_timeline_gets_the_render_at_its_end(lua, direct):
+    """Lined up against another timeline, the frame numbers mean nothing."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    H.timeline_id = "another-timeline"
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert len(H.placements) == 0
+    assert "end of the timeline" in H.status()
+
+
+def test_a_refused_placement_removes_its_track_and_appends(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.place_works = False
+    finish_render(H, direct)
+    assert len(H.tracks) == 1, "the empty track it added was left behind"
+    assert H.appended == 1
+    assert "end of the timeline" in H.status()
+
+
+def test_a_source_moved_during_the_render_is_followed(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; H.src_span[1] = 86500; H.src_span[2] = 86548", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert H.placements[1].recordFrame == 86500
+
+
+def test_a_source_retrimmed_during_the_render_gets_the_render_at_the_end(lua, direct):
+    """Lined up with a different cut of the clip, it would not match it."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; H.src_span[2] = 86430", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert len(H.placements) == 0
+    assert "end of the timeline" in H.status()
+
+
+def test_a_source_deleted_during_the_render_gets_the_render_at_the_end(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; table.remove(H.tracks[1], 1)", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert len(H.placements) == 0
+    assert H.appended == 1
+
+
+def test_a_render_longer_than_the_source_is_cut_to_it(lua, direct):
+    """Lined up over a 48 frame clip, the rest of a 120 frame render would
+    cover the next shot."""
+    H = load(lua, ui_script(direct))
+    H.media_frames = "120"
+    lua.execute("local H = ...; H.tracks[2] = { { 86460, 86480 } }", H)
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 48
+    assert H.placements[1].trackIndex == 2
+
+
+def test_a_render_a_frame_longer_than_the_source_ends_with_it(lua, direct):
+    """Resolve can report a clip's last frame one past where it ends, so the
+    render has a frame more. Seen in Resolve 20.3.1."""
+    H = load(lua, ui_script(direct))
+    H.media_frames = "49"
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 48
+    assert H.tracks[2][1][2] == 86448, "it runs past the original"
+
+
+def _with_source(lua, direct, **fields):
+    H = load(lua, ui_script(direct))
+    sets = "; ".join(f"H.{k} = {str(v).lower() if isinstance(v, bool) else repr(v)}"
+                     for k, v in fields.items())
+    lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; {sets}", H)
+    H.click("RefreshBtn")
+    return H
+
+
+def test_a_slower_render_on_a_faster_timeline_ends_inside_the_original(lua, direct):
+    """20 frames at 24 fps last 50 frames of a 60 fps timeline, two past a
+    48 frame original, so 19 are placed."""
+    H = _with_source(lua, direct, timeline_fps="60")
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=20, fps=24.0)
+    assert H.placements[1].endFrame == 19
+    assert H.tracks[2][1][2] <= 86448, "it runs into the next shot"
+    assert "past it" not in H.status()
+
+
+def test_a_long_ntsc_render_fills_the_original(lua, direct):
+    """23.976 is 24000/1001. Counted with 23.976, 999 frames came out one
+    short of a 999 frame original on a 24 fps timeline."""
+    H = _with_source(lua, direct, item_duration=999)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=999, fps=23.976)
+    assert H.placements[1].endFrame == 999
+    assert H.tracks[2][1][2] == 86400 + 999
+
+
+def test_a_rate_near_ntsc_is_taken_as_it_is(lua, direct):
+    """23.98 is not 24000/1001. Taken for it, 1000 frames were cut to 999
+    over a 1000 frame original, a frame short."""
+    H = _with_source(lua, direct, item_duration=1000)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=1000, fps=23.98)
+    assert H.placements[1].endFrame == 1000
+    assert H.tracks[2][1][2] == 86400 + 1000
+
+
+def test_a_placement_that_runs_past_the_original_says_so(lua, direct):
+    """A Resolve that rounds lengths to nearest, not down, places 47.6
+    timeline frames as 48 over a 47 frame original."""
+    H = _with_source(lua, direct, item_duration=47, place_rounds=True)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.placements[1].endFrame == 119
+    assert "runs 1 frame past it" in H.status()
+
+
+def test_a_render_a_frame_short_is_placed_whole(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_frames = "47"
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 47
+
+
+def test_a_sequence_at_an_unconfirmed_rate_stays_in_the_media_pool(lua, direct):
+    """At the wrong rate it plays at the wrong speed and covers more timeline."""
+    H = load(lua, ui_script(direct))
+    H.fps_sticks = False
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.appended == 0
+    assert "Clip Attributes" in H.status() and "media pool" in H.status()
+
+
+def test_a_failed_track_rename_does_not_add_a_second_copy(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.rename_throws = True
+    finish_render(H, direct)
+    assert H.appended == 1
+    assert "above the original" in H.status()
+
+
+def test_a_placement_that_raises_removes_its_track_and_appends_once(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.place_throws = True
+    finish_render(H, direct)
+    assert len(H.tracks) == 1, "the empty track it added was left behind"
+    assert H.appended == 1
+    assert "end of the timeline" in H.status()
+
+
+def _stacked(lua, direct, top, *under):
+    """`top` under the playhead, with `under` lined up below it on tracks 1
+    and up, as an original and earlier renders are."""
+    H = load(lua, ui_script(direct), clip=top)
+    paths = ", ".join("'" + p.replace("\\", "\\\\") + "'" for p in under)
+    lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; "
+                f"H.item_track = {len(under) + 1}; H.under_paths = {{ {paths} }}", H)
+    H.click("RefreshBtn")
+    return H
+
+
+def test_a_render_over_its_original_is_not_smoothed_again(lua, direct):
+    """The render placed above is the top clip under the playhead from then
+    on, so smoothing again with other settings smoothed the render. Seen in
+    Resolve 20.3.1."""
+    H = _stacked(lua, direct, "/r/shot_f7-73_smooth_02/frame_[000000-000047].png",
+                 "/media/shot.mov")
+    assert "shot.mov" in H.text_of("SourceLabel")
+    H.click("AnalyseBtn")
+    assert "/media/shot.mov" in H.last_command()
+    assert "shot_f7-73" not in H.last_command()
+
+
+def test_a_single_file_render_over_its_original_is_skipped_too(lua, direct):
+    H = _stacked(lua, direct, "/r/shot_smooth.mkv", "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "/media/shot.mov" in H.last_command()
+
+
+def test_the_third_smooth_skips_both_earlier_renders(lua, direct):
+    """Two runs leave renders on V2 and V3. The third took the V2 render."""
+    H = _stacked(lua, direct, "C:\\r\\shot_f0-47_smooth_02.mkv",
+                 "C:\\media\\shot.mov", "C:\\r\\shot_f0-47_smooth.mkv")
+    H.click("SmoothBtn")
+    assert "shot.mov" in H.last_command()
+    assert "_f0-47_smooth" not in H.last_command()
+
+
+def test_a_clip_that_is_not_a_render_is_used_as_it_is(lua, direct):
+    H = _stacked(lua, direct, "/media/smooth_jazz.mov", "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "/media/smooth_jazz.mov" in H.last_command()
+
+
+def test_a_file_named_like_a_render_of_another_clip_is_used(lua, direct):
+    """Only a render named after the clip under it stands for that clip."""
+    for top in ("/media/camera_smooth123.mov", "/media/camera_smooth.mp4",
+                "/media/camera_smooth_02/frame_000000.png"):
+        H = _stacked(lua, direct, top, "/media/background.mov")
+        H.click("AnalyseBtn")
+        assert top.split("/")[2] in H.last_command(), top
+        assert "background.mov" not in H.last_command(), top
+
+
+def test_a_render_with_nothing_under_it_is_used(lua, direct):
+    """Dragged somewhere else, or on its own timeline: it is all there is."""
+    H = load(lua, ui_script(direct), clip="/r/shot_smooth/frame_[000000-000047].png")
+    H.click("AnalyseBtn")
+    assert "shot_smooth" in H.last_command()
+
+
+def test_compare_switches_the_smoothed_clip_off_and_on(lua, direct):
+    H = load(lua, ui_script(direct))
+    assert not H.enabled("CompareBtn"), "Compare works before there is anything to compare"
+    finish_render(H, direct)
+    assert H.enabled("CompareBtn")
+
+    H.click("CompareBtn")
+    assert H.last_placed.enabled is False
+    assert H.widgets["CompareBtn"].Text == "Show Eternal2x"
+    assert "original" in H.status()
+    H.click("CompareBtn")
+    assert H.last_placed.enabled is True
+    assert H.widgets["CompareBtn"].Text == "Show Original"
+
+
+def test_compare_turns_off_when_a_new_run_starts(lua, direct):
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct)
+    H.click("SmoothBtn")
+    assert not H.enabled("CompareBtn")
+
+
+def test_show_in_folder_points_at_the_render(lua, direct):
+    H = load(lua, ui_script(direct))
+    assert not H.enabled("FolderBtn")
+    finish_render(H, direct, import_path="/tmp/renders/out.mp4")
+    H.click("FolderBtn")
+    cmd = H.last_command()
+    assert "/tmp/renders/out.mp4" in cmd.replace("\\", "/")
+    assert "explorer /select," in cmd or "open -R" in cmd
+
+
+def test_show_in_folder_opens_a_sequence_by_its_folder(lua, direct):
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, import_path="/tmp/renders/shot_smooth/frame_000000.png",
+                  sequence_pattern="/tmp/renders/shot_smooth/frame_%06d.png",
+                  sequence_frames=24, fps=24.0)
+    H.click("FolderBtn")
+    cmd = H.last_command().replace("\\", "/")
+    assert "/tmp/renders/shot_smooth" in cmd and "frame_000000" not in cmd
+
+
+def test_show_in_folder_works_after_a_refused_import(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.import_works = False
+    finish_render(H, direct, import_path="/tmp/renders/out.mp4")
+    assert H.enabled("FolderBtn")
+
+
+def test_a_timeline_too_small_for_the_upscale_says_so(lua, direct):
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct)
+    assert "3840x2160" in H.widgets["Meta"].Text
+
+
+def test_a_big_enough_timeline_gets_no_upscale_tip(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.timeline_width = "3840"
+    finish_render(H, direct)
+    assert "3840x2160" not in H.widgets["Meta"].Text
+
+
+def test_no_upscale_tip_when_upscale_is_off(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.set_checkbox("UpscaleCB", False)
+    finish_render(H, direct)
+    assert "3840x2160" not in H.widgets["Meta"].Text
+
+
+def test_the_time_left_is_estimated_from_the_pace(lua, direct):
+    H = load(lua, ui_script(direct))
+    lua.execute("CLOCK = 1000; os.time = function() return CLOCK end")
+    write_status(direct, stage="Rendering", fraction=0.1)
+    H.click("RefreshStatusBtn")
+    assert "left" not in H.widgets["Progress"].Text, "an estimate from one reading"
+    lua.execute("CLOCK = 1010")
+    write_status(direct, stage="Rendering", fraction=0.3)
+    H.click("RefreshStatusBtn")
+    # 0.2 of the work in 10 s leaves 0.7 for 35 s.
+    assert "about 35 s left" in H.widgets["Progress"].Text
+
+
+def test_a_new_stage_restarts_the_estimate(lua, direct):
+    H = load(lua, ui_script(direct))
+    lua.execute("CLOCK = 1000; os.time = function() return CLOCK end")
+    write_status(direct, stage="Seeking", fraction=0.1)
+    H.click("RefreshStatusBtn")
+    lua.execute("CLOCK = 1010")
+    write_status(direct, stage="Rendering", fraction=0.3)
+    H.click("RefreshStatusBtn")
+    assert "left" not in H.widgets["Progress"].Text
 
 
 def test_super_scale_is_applied_with_a_value_resolve_accepts(lua, direct):
@@ -565,13 +1011,28 @@ def test_a_refused_import_still_tells_the_user_where_the_render_is(lua, direct):
     H.import_works = False
     H.click("SmoothBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
-                 import_path="/tmp/out.mp4")
+                 import_path="/tmp/renders/out.mp4")
     H.click("RefreshStatusBtn")
 
     status = H.status()
+    # The status box fits two lines, so the path goes on the line below it.
     assert "would not import" in status
+    assert H.widgets["Meta"].Text == "/tmp/renders/out.mp4"
     assert "drag it in" in status.lower()
     assert H.enabled("SmoothBtn"), "the panel stayed busy after a failed import"
+
+
+def test_a_refused_sequence_is_pointed_at_by_its_folder(lua, direct):
+    """The first frame's name alone, frame_000000.png, says nothing."""
+    H = load(lua, ui_script(direct))
+    H.import_works = False
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/renders/shot_smooth/frame_000000.png",
+                 sequence_pattern="/tmp/renders/shot_smooth/frame_%06d.png",
+                 sequence_frames=24, fps=24.0)
+    H.click("RefreshStatusBtn")
+    assert H.widgets["Meta"].Text == "/tmp/renders/shot_smooth"
 
 
 def test_the_import_happens_once_not_on_every_poll(lua, direct):
@@ -604,7 +1065,7 @@ def test_odd_clip_names_reach_python_unchanged(lua, direct, tmp_path, name):
     H = load(lua, ui_script(direct), clip=clip)
     H.click("AnalyseBtn")
     cmd = H.last_command()
-    quoted = cmd.split("--video ")[1].split(" --quality")[0]
+    quoted = cmd.split("--video ")[1].split(" --format")[0]
     seen = subprocess.run(["sh", "-c", f"printf %s {quoted}"],
                           capture_output=True, text=True).stdout
     assert seen == clip
@@ -645,8 +1106,9 @@ def test_the_windows_background_run_goes_through_a_script(lua, direct):
     H.click("SmoothBtn")
     cmd = H.last_command()
     outer = cmd.split("\n")[0]
-    assert outer.startswith('start "Eternal2x" /B cmd /c "'), outer
-    assert outer.endswith('.eternal2x_run.cmd"') and "/" not in outer.split('cmd /c')[1], outer
+    assert outer.startswith('start "Eternal2x" /D "'), outer
+    assert outer.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd"), outer
+    assert "/" not in outer.split("/D ")[1].split(" /MIN")[0], outer
     assert "Tom & Jerry" not in outer, "the clip path must not be on the outer command line"
 
     script = (direct / ".eternal2x_run.cmd").read_bytes()
@@ -663,3 +1125,498 @@ def test_a_saved_on_1s_setting_falls_back_to_auto_detect(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("AnalyseBtn")
     assert "--base-hold" not in H.last_command()
+
+
+# --------------------------------------------------------------------------
+# reaching Resolve the way a real Scripts-menu run does
+# --------------------------------------------------------------------------
+
+def test_the_panel_reaches_resolve_without_a_lua_module(lua, direct):
+    """Resolve gives Lua a Resolve() global. There is no DaVinciResolveScript.lua."""
+    H = load(lua, ui_script(direct), clip="/media/shot.mov")
+    assert lua.eval('package.preload["DaVinciResolveScript"]') is None
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+
+
+def test_the_panel_uses_a_resolve_global_when_there_is_one(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    lua.execute('resolve = nil')
+    H.load(str(ui_script(direct)), "/media/first.mov")
+    lua.execute('resolve = Resolve(); Resolve = nil')
+    H.click("RefreshBtn")
+    assert "first.mov" in H.widgets["SourceLabel"].Text
+
+
+def test_no_clip_under_the_playhead_is_explained(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    assert "playhead" in H.widgets["SourceLabel"].Text
+
+
+def test_a_throwing_api_does_not_stop_the_panel_opening(lua, direct):
+    """The clip is read while the panel opens, where an error would kill it."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.make_resolve = lua.eval(
+        'function() return { GetProjectManager = function() error("no access") end } end')
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    assert H.window.__shown
+    assert "no access" in H.widgets["SourceLabel"].Text
+
+
+# --------------------------------------------------------------------------
+# a run that dies is reported, not waited on forever
+# --------------------------------------------------------------------------
+
+def test_a_run_that_died_without_a_status_is_reported(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    (direct / ".eternal2x_last_run.log").write_text(
+        "Traceback (most recent call last):\nModuleNotFoundError: No module named 'cv2'\n")
+    (direct / ".eternal2x_exit").write_text("1\n")
+    H.click("RefreshStatusBtn")
+    assert "No module named 'cv2'" in H.status()
+    assert H.enabled("SmoothBtn"), "the panel stayed busy after the run died"
+
+
+def test_a_run_still_going_is_not_reported_as_dead(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.4)
+    H.click("RefreshStatusBtn")
+    assert not H.enabled("SmoothBtn")
+    assert "40%" in H.widgets["Progress"].Text
+
+
+def test_a_finished_run_that_exited_is_not_taken_for_a_crash(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    (direct / ".eternal2x_exit").write_text("0\n")
+    H.click("RefreshStatusBtn")
+    assert "Stopped without finishing" not in H.status()
+    assert "above the original" in H.status()
+
+
+def test_starting_a_run_clears_the_last_exit_code(lua, direct):
+    (direct / ".eternal2x_exit").write_text("1\n")
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not (direct / ".eternal2x_exit").exists()
+
+
+def test_the_background_command_records_how_python_exited(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    cmd = H.last_command()
+    if sys.platform.startswith("win"):
+        return  # the POSIX form; the Windows script is checked below
+    assert cmd.startswith("(") and cmd.endswith(") &"), cmd
+    assert "echo $? > " in cmd and ".eternal2x_exit" in cmd
+
+
+def test_the_windows_script_records_how_python_exited(lua, direct):
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    text = (direct / ".eternal2x_run.cmd").read_bytes().decode("utf-8")
+    last = text.rstrip("\r\n").split("\r\n")[-1]
+    # Redirect first: `echo 2> file` would redirect stderr instead of writing 2.
+    assert last.startswith(">") and last.endswith(" echo %ERRORLEVEL%"), last
+    assert ".eternal2x_exit" in last
+
+
+# --------------------------------------------------------------------------
+# image sequences are imported as sequences
+# --------------------------------------------------------------------------
+
+def test_a_sequence_is_imported_with_the_documented_clipinfo(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out/frame_000000.png",
+                 sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24)
+    H.click("RefreshStatusBtn")
+    assert H.sequence_import_count() == 1
+    assert H.last_sequence_field("FilePath") == "/tmp/out/frame_%06d.png"
+    assert H.last_sequence_field("StartIndex") == 0
+    assert H.last_sequence_field("EndIndex") == 23
+    assert H.imported_count() == 1, "the first frame was imported as well"
+    assert "above the original" in H.status()
+
+
+def test_a_refused_sequence_import_is_not_swapped_for_a_still(lua, direct):
+    """Handed its first frame instead, Resolve imports one still image, which
+    the panel would append and call done."""
+    H = load(lua, ui_script(direct))
+    H.sequence_import_works = False
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out/frame_000000.png",
+                 sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24)
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 0 and H.appended == 0
+    assert "would not import" in H.status() and H.widgets["Meta"].Text == "/tmp/out"
+
+
+# --------------------------------------------------------------------------
+# the clip is read when the button is pressed
+# --------------------------------------------------------------------------
+
+def test_smooth_uses_the_clip_under_the_playhead_now(lua, direct):
+    H = load(lua, ui_script(direct), clip="/media/first.mov")
+    lua.execute('Resolve = (function(make) return function() return make("/media/second.mov") end end)(...)',
+                lua.eval('function(H) return H.make_resolve end')(H))
+    H.click("SmoothBtn")
+    assert "/media/second.mov" in H.last_command()
+
+
+def test_smooth_keeps_the_last_clip_when_the_playhead_is_in_a_gap(lua, direct):
+    H = load(lua, ui_script(direct), clip="/media/first.mov")
+    H.under_playhead = False
+    H.click("SmoothBtn")
+    assert "/media/first.mov" in H.last_command()
+
+
+# --------------------------------------------------------------------------
+# update checks report their verdict
+# --------------------------------------------------------------------------
+
+def updater_writes(direct, text):
+    """Play the updater: write its log when the panel runs it."""
+    def run(cmd):
+        if "Stages.resolve_update" in cmd:
+            (direct / ".eternal2x_update.log").write_text(text)
+    return run
+
+
+def test_a_failed_update_is_not_reported_as_updating(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.exit_code = 1
+    H.on_execute = updater_writes(
+        direct, "Updating Eternal2x: 0.3.0 -> 0.3.2\nUpdate package checksum mismatch.\n")
+    H.click("UpdateBtn")
+    assert H.status() == "Update package checksum mismatch."
+
+
+def test_opening_the_panel_keeps_the_render_log(lua, direct):
+    """The update check runs on open. The render log is the one users send in."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text().replace("auto_update=false", "auto_update=true"))
+    H = load(lua, ui_script(direct))
+    cmd = H.last_command()
+    assert "Stages.resolve_update" in cmd
+    assert ".eternal2x_update.log" in cmd and ".eternal2x_last_run.log" not in cmd
+
+
+def test_an_update_check_that_never_ran_does_not_repeat_the_last_verdict(lua, direct):
+    (direct / ".eternal2x_update.log").write_text(
+        "Update applied. Restart Resolve to use the new version.\n")
+    H = load(lua, ui_script(direct))
+    H.exit_code = 1
+    H.click("UpdateBtn")
+    assert "Update applied" not in H.status()
+    assert "failed" in H.status()
+
+
+def test_a_reopened_panel_follows_the_run_it_left_behind(lua, direct):
+    """Closed mid-render and reopened, the panel must not start a second run
+    over the first one's files, and should still import the first."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time())
+    H = load(lua, ui_script(direct))
+    assert not H.enabled("SmoothBtn") and not H.enabled("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
+                 import_path=str(direct / "shot_smooth.mp4"), updated=time.time())
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 1
+    assert H.enabled("SmoothBtn")
+
+
+def test_reset_does_not_drop_a_run_that_is_still_reporting(lua, direct):
+    """Reset is for a run that stopped. A live one would carry on underneath
+    the next run, sharing its files."""
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.4, updated=time.time())
+    H.click("CancelBtn")
+    assert (direct / ".eternal2x_status.json").exists()
+    assert not H.enabled("SmoothBtn")
+    assert "still running" in H.status()
+
+
+def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
+    """Python takes a moment to start. Reset in that gap, then Smooth, used to
+    launch a second run over the first."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    H.click("CancelBtn")
+    assert not H.enabled("SmoothBtn")
+    assert "still running" in H.status()
+
+
+def test_a_heartbeat_from_before_the_clock_moved_back_is_not_a_live_run(lua, direct):
+    """Stamped an hour ahead of now, it would block Reset for that hour."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time() + 3600)
+    H = load(lua, ui_script(direct))
+    assert H.enabled("SmoothBtn")
+    H.click("CancelBtn")
+    assert H.status() == "Ready."
+
+
+def test_the_panel_keeps_its_own_word_while_a_run_reports_progress(lua, direct):
+    """Python's status says Starting until the run is done. Shown on every
+    poll, it hid why Reset did nothing and sat under a bar at 52%."""
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.52, message="Starting", updated=time.time())
+    H.click("CancelBtn")
+    H.click("RefreshStatusBtn")
+    assert "still running" in H.status()
+    assert "52%" in H.widgets["Progress"].Text
+
+
+def test_the_stall_warning_goes_once_progress_resumes(lua, direct):
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.3, updated=time.time() - 10 * 60)
+    H.click("RefreshStatusBtn")
+    assert "No progress" in H.status()
+    write_status(direct, fraction=0.4, updated=time.time())
+    H.click("RefreshStatusBtn")
+    assert "No progress" not in H.status()
+
+
+def test_reset_clears_a_run_that_went_quiet(lua, direct):
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.4, updated=time.time() - 10 * 60)
+    H.click("CancelBtn")
+    assert H.enabled("SmoothBtn")
+    assert H.status() == "Ready."
+
+
+def test_no_update_while_a_render_runs(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not H.enabled("UpdateBtn")
+
+
+def test_no_update_while_a_render_from_an_earlier_panel_runs(lua, direct):
+    """Reopened mid-render, the panel must not replace the files it is using."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time())
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text().replace("auto_update=false", "auto_update=true"))
+    H = load(lua, ui_script(direct))
+    assert H.command_count() == 0, "the auto update ran during a render"
+    H.click("UpdateBtn")
+    assert H.command_count() == 0
+    assert "still running" in H.status()
+
+
+def test_a_sequence_gets_the_source_frame_rate(lua, direct):
+    """Left alone, a 60 fps sequence plays at the project's rate, too slow."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out/frame_000000.png",
+                 sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24, fps=60.0)
+    H.click("RefreshStatusBtn")
+    assert H.property_of("FPS") == "60"
+    assert "at 60 fps" in H.status()
+
+
+def test_a_fractional_frame_rate_is_kept(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out/frame_000000.png",
+                 sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24, fps=23.976)
+    H.click("RefreshStatusBtn")
+    assert H.property_of("FPS") == "23.976"
+
+
+def test_a_frame_rate_resolve_ignored_is_reported(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.fps_sticks = False
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out/frame_000000.png",
+                 sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24, fps=60.0)
+    H.click("RefreshStatusBtn")
+    assert "Clip Attributes" in H.status()
+    assert "at 60 fps" not in H.status()
+
+
+def test_a_single_file_keeps_its_own_frame_rate(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4", fps=60.0)
+    H.click("RefreshStatusBtn")
+    assert H.property_of("FPS") is None
+
+
+
+# --------------------------------------------------------------------------
+# only the part of the file the timeline clip uses is processed
+# --------------------------------------------------------------------------
+
+def test_a_trimmed_clip_sends_only_its_range(lua, direct):
+    """Two seconds of an 84 second file should cost two seconds of work."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(24.5, 26.5)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
+    assert "2.00 s long" in H.widgets["SourceLabel"].Text
+
+
+def test_smooth_sends_the_range_too(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(1.0, 3.0)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("SmoothBtn")
+    assert "--start-time 1.000000 --end-time 3.000000" in H.last_command()
+
+
+def test_a_build_without_trim_info_uses_the_whole_file(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--start-time" not in H.last_command()
+    assert "Whole file" in H.widgets["SourceLabel"].Text
+
+
+def test_trim_frames_are_converted_at_the_media_rate(lua, direct):
+    """Older builds give frames, which count at the clip's own rate. The end
+    frame is the last one the cut uses."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_frames = lua.table(1470, 1589)
+    H.clip_fps = "60"
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
+
+
+def test_media_with_a_start_timecode_still_sends_file_seconds(lua, direct):
+    """Resolve's source times count from the media's start timecode, so on
+    footage that starts at 01:00:00:00 they are an hour past the file."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(24.5, 26.5)
+    H.start_tc = 3600.0
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("SmoothBtn")
+    assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
+
+
+def test_the_end_frame_wins_over_the_end_time(lua, direct):
+    """Measured on Resolve Studio 20.3.1: a 47 frame cut of 60 fps media on a
+    24 fps timeline covers 117.5 source frames from 1200 and reported end
+    frame 1317, the last one used, but an end time at frame 1316. Rendered
+    from the times it came out a timeline frame short of the cut."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.clip_fps = "60"
+    H.start_tc = 3600.0
+    H.source_range = lua.table(20.0, 1316 / 60)
+    H.source_frames = lua.table(1200, 1317)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("SmoothBtn")
+    assert "--start-time 20.000000 --end-time 21.966667" in H.last_command()
+
+
+def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(1.0, 2.0)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.source_range = lua.table(10.0, 12.0)
+    H.click("SmoothBtn")
+    assert "--start-time 10.000000 --end-time 12.000000" in H.last_command()
+
+
+
+# --------------------------------------------------------------------------
+# a run killed from outside is noticed
+# --------------------------------------------------------------------------
+
+def test_a_run_that_went_quiet_is_flagged(lua, direct):
+    """Closing the run's window kills it before it can write anything."""
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.05, updated=time.time() - 30 * 60)
+    H.click("RefreshStatusBtn")
+    assert "No progress for 30 minutes" in H.status()
+    assert "Reset" in H.status()
+
+
+def test_a_run_that_is_still_reporting_is_not_flagged(lua, direct):
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.05, updated=time.time())
+    H.click("RefreshStatusBtn")
+    assert "No progress" not in H.status()
+
+
+def test_the_windows_run_gets_its_own_minimised_window(lua, direct):
+    """Sharing os.execute's console left it open, and closing it killed the run."""
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    outer = H.last_command().split("\n")[0]
+    assert " /MIN " in outer and " /B " not in outer, outer
+
+
+def test_a_percent_in_the_plugin_path_is_refused_on_windows(lua, tmp_path, repo_root):
+    """cmd expands %NAME% in a command line even inside quotes."""
+    root = _plugin_tree(tmp_path / "VFX %TEMP% tools" / "Eternal2x", repo_root)
+    (root / "Installer" / "Eternal2x.conf").write_text(
+        f"repo_root={root}\npython={sys.executable}\n"
+        "update_url=https://example.com/latest.json\nauto_update=false\n")
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    H.load(str(ui_script(root)), "/media/shot.mov")
+    for button in ("AnalyseBtn", "SmoothBtn", "UpdateBtn"):
+        H.click(button)
+        assert H.command_count() == 0, f"{button} ran a command from the % folder"
+        assert "contains %" in H.status()
+    assert H.enabled("SmoothBtn"), "the panel was left busy"
+
+
+def test_show_in_folder_keeps_a_percent_in_the_path_literal(lua, direct):
+    """cmd would expand %TEMP% in a command line and open somewhere else."""
+    H = load(lua, ui_script(direct))
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    finish_render(H, direct, import_path="C:/renders/%TEMP%/out.mp4")
+    H.click("FolderBtn")
+    command, _, script = H.last_command().partition("\n")
+    assert "%TEMP%" not in command, "the path went through cmd's own command line"
+    assert "%%TEMP%%" in script and "explorer /select," in script
+
+
+def test_a_frame_rate_that_cannot_be_read_back_is_not_trusted(lua, direct):
+    """Resolve said yes to 60 fps, but the readback failed, so 60 is unproven."""
+    H = load(lua, ui_script(direct))
+    H.fps_sticks = False
+    H.fps_read_throws = True
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.appended == 0
+    assert "at 60 fps" not in H.status()
+
+
+def test_a_saved_quality_from_an_older_version_is_dropped(lua, direct):
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "quality=better\n")
+    H = load(lua, ui_script(direct))
+    H.set_checkbox("UpscaleCB", False)
+    assert "quality=" not in conf.read_text()
+    H.click("SmoothBtn")
+    assert "--quality" not in H.last_command()

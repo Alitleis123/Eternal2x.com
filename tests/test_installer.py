@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -65,8 +67,141 @@ def test_a_reinstall_removes_the_old_comp_launcher(fake_home, monkeypatch):
     (comp / "SomeoneElse.lua").write_text("-- not ours\n")
     inst.remove_old_install()
     assert not (comp / "Eternal2x.lua").exists()
-    assert not (comp / "Eternal2x.conf").exists()
     assert (comp / "SomeoneElse.lua").exists()
+    assert (comp / "Eternal2x.conf").exists(), "its settings went before they were saved"
+
+
+def _comp_conf(text):
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text(text)
+    return comp / "Eternal2x.conf"
+
+
+def test_moving_from_comp_keeps_the_settings_saved_there(fake_home, monkeypatch):
+    """The panel saved its settings beside the Comp launcher. Deleting that conf
+    unread turned updates back on for everyone moving to Utility."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("repo_root=/old\nauto_update=false\nquality=best\n")
+    inst.remove_old_install()
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    conf = inst.write_config(utility, Path("/new"), "python3").read_text()
+    assert "auto_update=false" in conf and "quality=best" in conf
+    assert f"repo_root={Path('/new')}" in conf
+    assert not legacy.exists()
+
+
+def test_a_failed_install_keeps_the_settings_for_the_next_one(fake_home, monkeypatch):
+    """A failure partway used to leave defaults behind, and the next install
+    deleted the only real copy of the settings."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("auto_update=false\nquality=ai\ngrain=true\n")
+    real_write = Path.write_text
+
+    def refuse(self, *args, **kwargs):
+        if self.name.startswith("Eternal2x.conf"):
+            raise OSError("disk full")
+        return real_write(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", refuse)
+    with pytest.raises(OSError):
+        inst.main()
+    assert legacy.exists()
+
+    monkeypatch.setattr(Path, "write_text", real_write)
+    assert inst.main() == 0
+    conf = (inst._resolve_scripts_dir() / "Eternal2x.conf").read_text()
+    for kept in ("auto_update=false", "quality=ai", "grain=true"):
+        assert kept in conf
+    assert not legacy.exists()
+
+
+def test_a_conf_write_that_stops_halfway_keeps_the_settings(fake_home, monkeypatch):
+    """A write cut off after a few bytes left a partial conf, which the next
+    install trusted over the full one in Comp, and then deleted that."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("auto_update=false\nquality=ai\ngrain=true\n")
+    real_write = Path.write_text
+
+    def partial(self, data, *args, **kwargs):
+        if self.name.startswith("Eternal2x.conf"):
+            real_write(self, data[:7], *args, **kwargs)
+            raise OSError("disk full")
+        return real_write(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", partial)
+    with pytest.raises(OSError):
+        inst.main()
+    monkeypatch.setattr(Path, "write_text", real_write)
+    assert legacy.exists()
+    assert inst.main() == 0
+    conf = (inst._resolve_scripts_dir() / "Eternal2x.conf").read_text()
+    for kept in ("auto_update=false", "quality=ai", "grain=true"):
+        assert kept in conf
+    assert not list(inst._resolve_scripts_dir().glob("*.new")), "a partial file was left"
+
+
+def test_settings_that_cannot_be_read_stop_the_install(fake_home, monkeypatch):
+    """Reading them failed quietly, so defaults were written and the unread
+    settings deleted."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("auto_update=false\n")
+    real_read = Path.read_text
+
+    def refuse(self, *args, **kwargs):
+        if self == legacy:
+            raise PermissionError("locked")
+        return real_read(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", refuse)
+    with pytest.raises(PermissionError):
+        inst.main()
+    monkeypatch.setattr(Path, "read_text", real_read)
+    assert legacy.exists()
+    assert not (inst._resolve_scripts_dir() / "Eternal2x.conf").exists()
+
+
+def test_a_conf_written_into_comp_itself_is_kept(tmp_path):
+    """Comp's own conf is not an older copy of itself to clean up."""
+    comp = tmp_path / "Comp"
+    comp.mkdir()
+    conf = inst.write_config(comp, Path("/plugin"), "python3")
+    assert conf.exists()
+
+
+def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
+                                                                        monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    legacy = _comp_conf("quality=fast\n")
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.conf").write_text("quality=best\n")
+    inst.remove_old_install()
+    conf = inst.write_config(utility, Path("/new"), "python3").read_text()
+    assert "quality=best" in conf
+    assert not legacy.exists()
+
+
+def test_a_reinstall_removes_the_old_python_launcher(fake_home, monkeypatch):
+    """An older installer generated Utility/Eternal2x.py, listed as a second entry."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.py").write_text(
+        '"""Eternal2x launcher — GENERATED by Installer/install_eternal2x.py.\n"""\n',
+        encoding="utf-8")
+    inst.remove_old_install()
+    assert not (utility / "Eternal2x.py").exists()
+
+
+def test_a_reinstall_keeps_a_python_script_it_did_not_write(fake_home, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.py").write_text("# the user's own script\n")
+    inst.remove_old_install()
+    assert (utility / "Eternal2x.py").exists()
 
 
 def test_scripts_dir_requires_appdata_on_windows(monkeypatch):
@@ -88,6 +223,17 @@ def test_falls_back_to_a_system_interpreter(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
     picked = inst._pick_python(tmp_path)
     assert picked and Path(picked).name.startswith("python")
+
+
+@pytest.mark.parametrize("platform", ["win32", "darwin"])
+def test_without_a_venv_the_python_running_the_installer_is_used(tmp_path, monkeypatch,
+                                                                  platform):
+    """`py Installer\\install_eternal2x.py` must not record whatever `python` is
+    on PATH, which on Windows can be the Microsoft Store stub."""
+    monkeypatch.setattr(sys, "platform", platform)
+    monkeypatch.setattr(sys, "executable", "/chosen/python3")
+    monkeypatch.setattr(inst.shutil, "which", lambda name: "/elsewhere/" + name)
+    assert inst._pick_python(tmp_path) == "/chosen/python3"
 
 
 # --------------------------------------------------------------------------
@@ -130,11 +276,10 @@ def test_the_installed_config_actually_runs_a_stage(fake_home, monkeypatch):
     conf = read_conf(inst._resolve_scripts_dir() / "Eternal2x.conf")
 
     result = subprocess.run(
-        [conf["python"], "-m", "Stages.resolve_regroup"],
+        [conf["python"], "-m", "Stages.resolve_smooth", "--help"],
         cwd=conf["repo_root"], capture_output=True, text=True,
     )
-    combined = result.stdout + result.stderr
-    assert "No module named 'Stages'" not in combined, combined
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_installed_update_url_is_https_and_points_at_latest_json(fake_home, monkeypatch):
@@ -152,6 +297,29 @@ def test_reinstall_is_idempotent(fake_home, monkeypatch):
     first = conf_path.read_text()
     inst.main()
     assert conf_path.read_text() == first
+
+
+@pytest.mark.parametrize("module", ["Installer.install_eternal2x",
+                                    "Installer.gui_installer"])
+def test_a_reinstall_keeps_the_users_settings(tmp_path, module):
+    """The panel saves its settings in this file. A reinstall that put back
+    the defaults would turn updates on again for someone who turned them off."""
+    import importlib
+    installer = importlib.import_module(module)
+    conf_path = installer.write_config(tmp_path, Path("/old/plugin"), "/old/python")
+    saved = {"auto_update": "false", "output_dir": "/renders", "quality": "ai",
+             "upscale": "false", "interpolate": "false", "base_hold": "3",
+             "format": "mkv", "added_by_a_later_version": "kept"}
+    old = {**read_conf(conf_path), **saved, "update_url": "https://old.example/latest.json"}
+    conf_path.write_text("".join(f"{k}={v}\n" for k, v in old.items()), encoding="utf-8")
+
+    installer.write_config(tmp_path, Path("/new/plugin"), "/new/python")
+    conf = read_conf(conf_path)
+    for key, value in saved.items():
+        assert conf[key] == value, f"the reinstall reset {key}"
+    assert conf["repo_root"] == str(Path("/new/plugin"))
+    assert conf["python"] == "/new/python"
+    assert conf["update_url"] == inst.DEFAULT_UPDATE_URL
 
 
 def test_install_reports_where_things_went(fake_home, monkeypatch, capsys):
@@ -224,9 +392,11 @@ def test_the_panel_saves_back_every_key_the_installer_writes(repo_root, tmp_path
 
 def test_the_gui_installer_writes_the_same_config(tmp_path, monkeypatch):
     """Two installers, one config format."""
-    monkeypatch.setattr(sys, "platform", "darwin")
+    # Import before faking the platform. On a real Windows box, importing
+    # urllib.request while sys.platform says darwin reaches for _scproxy.
     import importlib
     gui = importlib.import_module("Installer.gui_installer")
+    monkeypatch.setattr(sys, "platform", "darwin")
 
     cli_conf = inst.write_config(tmp_path / "a", Path("/plugin"), "/usr/bin/python3") \
         if (tmp_path / "a").mkdir() or True else None
@@ -247,9 +417,130 @@ def test_panel_defaults_are_values_the_stage_accepts(tmp_path):
 
     conf = read_conf(inst.write_config(tmp_path, Path("/plugin"), "/usr/bin/python3"))
     assert conf["format"] in FORMATS
-
-    quality_choices = None
+    hold_choices = None
     for action in build_parser()._actions:
-        if "--quality" in action.option_strings:
-            quality_choices = set(action.choices)
-    assert conf["quality"] in quality_choices
+        if "--base-hold" in action.option_strings:
+            hold_choices = action.type
+    assert hold_choices(conf["base_hold"]) == 0
+
+
+def test_the_private_python_can_import_the_plugin():
+    """A ._pth replaces sys.path, so the plugin folder has to be listed in it."""
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    stock = "python311.zip\n.\n\n# Uncomment to run site.main() automatically\n#import site\n"
+    patched = gui._patch_pth(stock).splitlines()
+    assert ".." in patched, "python -m Stages.resolve_smooth would not find Stages"
+    assert "import site" in patched and "#import site" not in patched
+    assert gui._patch_pth("\n".join(patched)).splitlines() == patched, "not idempotent"
+
+
+def test_a_reinstall_repairs_the_private_python_it_reuses(tmp_path, monkeypatch):
+    """Older installers left the ._pth without the plugin folder. Reusing that
+    Python as it was would keep the panel failing with No module named Stages."""
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(gui, "_check_python", lambda path: True)
+    python_dir = tmp_path / "python"
+    python_dir.mkdir()
+    (python_dir / "python.exe").write_bytes(b"")
+    pth = python_dir / "python311._pth"
+    pth.write_text("python311.zip\n.\nimport site\n", encoding="utf-8")
+    assert gui._find_embedded_python(tmp_path) == str(python_dir / "python.exe")
+    assert ".." in pth.read_text(encoding="utf-8").splitlines()
+
+
+def test_the_gui_installer_opens_no_console_windows():
+    """On Windows each python and pip run from a windowed app flashes up a
+    console unless asked not to. The flag does not exist anywhere else."""
+    import ast
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    if sys.platform.startswith("win"):
+        assert gui._NO_WINDOW == {"creationflags": subprocess.CREATE_NO_WINDOW}
+    else:
+        assert gui._NO_WINDOW == {}
+
+    tree = ast.parse(Path(gui.__file__).read_text(encoding="utf-8"))
+    calls = [node for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+             and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"]
+    assert calls
+    for call in calls:
+        assert any(kw.arg is None and getattr(kw.value, "id", "") == "_NO_WINDOW"
+                   for kw in call.keywords), f"line {call.lineno} would open a console"
+
+
+def tar_of(*members) -> tarfile.TarFile:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, kind, linkname in members:
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname = kind, linkname
+            # A real archive's folders can be entered. TarInfo's default mode,
+            # 0o644, would stop anything unpacking into one on macOS or Linux.
+            if kind == tarfile.DIRTYPE:
+                info.mode = 0o755
+            data = b"payload" if kind == tarfile.REGTYPE else b""
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+    return tarfile.open(fileobj=io.BytesIO(buf.getvalue()), mode="r:gz")
+
+
+@pytest.fixture(params=["filter", "no filter"])
+def tar_python(request, monkeypatch):
+    """Python 3.12 and 3.13 trust every member unless told otherwise, and
+    Pythons before them have no filter at all. Both are made to happen here."""
+    # Older 3.9 to 3.11 builds, such as the 3.9 CI installs on Windows, have
+    # no filters at all, so they always take the path "no filter" tests.
+    if hasattr(tarfile, "fully_trusted_filter"):
+        monkeypatch.setattr(tarfile.TarFile, "extraction_filter",
+                            staticmethod(tarfile.fully_trusted_filter), raising=False)
+    if request.param == "no filter":
+        monkeypatch.delattr(tarfile, "data_filter", raising=False)
+
+
+@pytest.mark.parametrize("name,kind,linkname", [
+    ("../escaped.txt", tarfile.REGTYPE, ""),
+    ("python/lib", tarfile.SYMTYPE, "../../escaped.txt"),
+    ("python/lib", tarfile.SYMTYPE, "OUTSIDE"),
+    ("python/lib", tarfile.LNKTYPE, "../escaped.txt"),
+    ("python/dev", tarfile.CHRTYPE, ""),
+], ids=["parent path", "relative link", "absolute link", "hard link", "device"])
+def test_a_downloaded_python_cannot_write_outside_its_folder(tmp_path, tar_python,
+                                                             name, kind, linkname):
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    dest = tmp_path / "extract"
+    dest.mkdir()
+    outside = tmp_path / "escaped.txt"
+    linkname = linkname.replace("OUTSIDE", str(outside))
+    with tar_of(("python/bin", tarfile.DIRTYPE, ""), (name, kind, linkname)) as tf:
+        with pytest.raises(tarfile.TarError):
+            gui._safe_extract(tf, dest)
+    assert not outside.exists()
+    assert not (dest / name).is_symlink()
+
+
+def test_a_downloaded_python_unpacks(tmp_path, tar_python):
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    with tar_of(("python/bin", tarfile.DIRTYPE, ""),
+                ("python/bin/python3", tarfile.REGTYPE, "")) as tf:
+        gui._safe_extract(tf, tmp_path)
+    assert (tmp_path / "python" / "bin" / "python3").read_bytes() == b"payload"
+
+
+def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):
+    """Running `py Installer/gui_installer.py` works with no python on PATH."""
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    monkeypatch.setattr(gui.shutil, "which", lambda name: None)
+    assert gui._find_system_python() == sys.executable
+
+
+def test_a_fresh_install_has_no_quality_setting(tmp_path):
+    """The in-betweens are always drawn by the network, so there is no choice."""
+    conf = inst.write_config(tmp_path, Path("/repo"), "python3").read_text()
+    assert "quality=" not in conf

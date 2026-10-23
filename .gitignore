@@ -13,3 +13,9 @@ Thumbs.db
 
 # test artifacts
 .pytest_cache/
+
+# what the panel writes into the plugin folder while it runs
+.eternal2x_*
+
+# the RIFE network's model is downloaded here on first use
+models/
