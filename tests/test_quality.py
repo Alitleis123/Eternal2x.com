@@ -48,14 +48,14 @@ def subject_span(img: np.ndarray):
 # --------------------------------------------------------------------------
 
 def test_interpolation_beats_a_dissolve_on_flat_artwork():
-    a, b, truth = cel(120, 120), cel(140, 112), cel(130, 116)
+    a, b, truth = cel(120, 120), cel(134, 114), cel(127, 117)
     mid = interpolate_pair(a, b, [0.5])[0]
     assert error_against(mid, truth) < error_against(dissolve(a, b), truth) / 5.0
 
 
 def test_the_character_does_not_ghost():
     """A dissolve shows the character in both positions at once."""
-    a, b, truth = cel(120, 120), cel(140, 112), cel(130, 116)
+    a, b, truth = cel(120, 120), cel(136, 112), cel(128, 116)
     mid = interpolate_pair(a, b, [0.5])[0]
 
     lo, hi = subject_span(mid)
@@ -71,7 +71,7 @@ def test_the_character_does_not_ghost():
 
 def test_the_in_between_moves_the_right_way():
     # Slow enough to interpolate. A faster move is held, so both frames are a.
-    a, b = cel(100, 120), cel(140, 120)
+    a, b = cel(100, 120), cel(114, 120)
     quarter, three_quarter = interpolate_pair(a, b, [0.25, 0.75])
     assert subject_span(quarter)[0] < subject_span(three_quarter)[0]
 
@@ -115,7 +115,7 @@ def test_motion_that_is_too_fast_keeps_the_source_timing():
 
 def test_ordinary_motion_is_still_interpolated():
     """The guard must not be so eager that normal animation stops smoothing."""
-    a, b, truth = cel(120, 120), cel(142, 112), cel(131, 116)
+    a, b, truth = cel(120, 120), cel(136, 112), cel(128, 116)
     mid = interpolate_pair(a, b, [0.5])[0]
     assert not np.array_equal(mid, a) and not np.array_equal(mid, b), (
         "a normal on-2s move was held instead of interpolated"
@@ -126,7 +126,8 @@ def test_ordinary_motion_is_still_interpolated():
 def test_the_guard_is_adjustable():
     a, b = cel(100, 120), cel(180, 120)
     held = interpolate_pair(a, b, [0.5])[0]
-    forced = interpolate_pair(a, b, [0.5], max_disagreement=99.0)[0]
+    forced = interpolate_pair(a, b, [0.5], max_disagreement=99.0,
+                              max_local_disagreement=99.0)[0]
     assert np.array_equal(held, a) or np.array_equal(held, b)
     assert not np.array_equal(forced, a) and not np.array_equal(forced, b)
 
@@ -143,6 +144,27 @@ def test_a_held_drawing_is_bit_identical():
     assert np.array_equal(interpolate_pair(a, a.copy(), [0.5])[0], a)
 
 
+def test_a_small_character_moving_far_is_held_not_ghosted():
+    """A small figure crossing a big frame moves far for its size, so its
+    in-between ghosts, while the rest of the frame agrees and the whole-frame
+    figure stays low. Seen as doubled legs on the run in the open movie Hero."""
+    w, h = 960, 540
+    a, b = cel(300, 300, w, h), cel(334, 300, w, h)
+    mid = interpolate_pair(a, b, [0.5])[0]
+    assert np.array_equal(mid, a), "the in-between was made, and it ghosts"
+
+
+def test_a_pan_is_still_smoothed():
+    """What a pan brings in at the edge is in only one frame, so the warps
+    disagree there, but nothing ghosts."""
+    rng = np.random.default_rng(3)
+    wide = cv2.GaussianBlur(rng.integers(0, 255, (240, 380, 3), np.uint8), (0, 0), 4)
+    a, b = wide[:, 30:350], wide[:, 18:338]
+    mid = interpolate_pair(a, b, [0.5])[0]
+    assert not np.array_equal(mid, a) and not np.array_equal(mid, b), "a plain pan was held"
+    assert error_against(mid, wide[:, 24:344]) < error_against(dissolve(a, b), wide[:, 24:344]) / 2
+
+
 def test_flat_background_stays_flat():
     """Invented motion in an empty region is the classic warping artifact."""
     a, b = cel(120, 120), cel(140, 112)
@@ -152,9 +174,14 @@ def test_flat_background_stays_flat():
 
 
 @pytest.mark.parametrize("quality", ["fast", "better", "best"])
-def test_every_quality_preset_beats_a_dissolve(quality):
-    a, b, truth = cel(120, 120), cel(142, 110), cel(131, 115)
+def test_every_quality_preset_beats_a_dissolve_or_holds(quality):
+    """Best's fine tracking finds false motion in flat fills, so on cel art
+    it can hold where Better interpolates. It must never make a worse frame."""
+    a, b, truth = cel(120, 120), cel(136, 112), cel(128, 116)
     mid = interpolate_pair(a, b, [0.5], quality=quality)[0]
-    assert error_against(mid, truth) < error_against(dissolve(a, b), truth), (
+    held = np.array_equal(mid, a)
+    assert held or error_against(mid, truth) < error_against(dissolve(a, b), truth), (
         f"{quality} was no better than a plain dissolve"
     )
+    if quality != "best":
+        assert not held, f"{quality} held a slow move"
