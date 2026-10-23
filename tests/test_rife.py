@@ -129,6 +129,108 @@ def test_a_runtime_that_will_not_install_says_why(monkeypatch):
     assert "pip install onnxruntime" in message
 
 
+def _install(monkeypatch, platform, refused=()):
+    """Run ensure_runtime with pip faked. Returns the packages pip was asked for."""
+    asked, loaded = [], {"done": False}
+
+    def module(name):
+        if not loaded["done"]:
+            raise ImportError(name)
+        return "onnxruntime module"
+
+    def run(cmd, **kwargs):
+        asked.append(cmd[-1])
+        if cmd[-1] in refused:
+            return subprocess.CompletedProcess(cmd, 1, "", f"ERROR: no {cmd[-1]} here\n")
+        loaded["done"] = True
+        return subprocess.CompletedProcess(cmd, 0, "", "")
+
+    monkeypatch.setattr(rife.sys, "platform", platform)
+    monkeypatch.setattr(rife.importlib, "import_module", module)
+    monkeypatch.setattr(rife.subprocess, "run", run)
+    assert rife.ensure_runtime() == "onnxruntime module"
+    return asked
+
+
+def test_windows_gets_the_gpu_runtime(monkeypatch):
+    """DirectML runs the model on any DirectX 12 GPU, about 11 times faster
+    than the CPU on a Radeon."""
+    assert _install(monkeypatch, "win32") == ["onnxruntime-directml"]
+
+
+def test_windows_falls_back_to_the_cpu_runtime(monkeypatch):
+    asked = _install(monkeypatch, "win32", refused=("onnxruntime-directml",))
+    assert asked == ["onnxruntime-directml", "onnxruntime"]
+
+
+def test_macos_gets_the_plain_runtime(monkeypatch):
+    assert _install(monkeypatch, "darwin") == ["onnxruntime"]
+
+
+class _FakeSession:
+    def __init__(self, providers, fail_on_gpu_start=False, fail_on_gpu_run=False):
+        self.providers = providers
+        self.fail_on_gpu_run = fail_on_gpu_run
+        if fail_on_gpu_start and "DmlExecutionProvider" in providers:
+            raise RuntimeError("D3D12 device could not be created")
+
+    def get_inputs(self):
+        return [type("Input", (), {"name": "input"})()]
+
+    def run(self, _names, feed):
+        if self.fail_on_gpu_run and "DmlExecutionProvider" in self.providers:
+            raise RuntimeError("E_OUTOFMEMORY")
+        x = feed["input"]
+        return [x[:, :3]]
+
+
+def _fake_ort(monkeypatch, **fail):
+    made = []
+
+    class Ort:
+        ExecutionMode = type("ExecutionMode", (), {"ORT_SEQUENTIAL": 1})
+
+        class SessionOptions:
+            pass
+
+        @staticmethod
+        def get_available_providers():
+            return ["DmlExecutionProvider", "CPUExecutionProvider"]
+
+        @staticmethod
+        def InferenceSession(_path, _options, providers):
+            session = _FakeSession(providers, **fail)
+            made.append(providers)
+            return session
+
+    monkeypatch.setattr(rife, "ensure_runtime", lambda progress=None: Ort)
+    monkeypatch.setattr(rife, "ensure_model", lambda progress=None: "model.onnx")
+    return made
+
+
+def test_the_gpu_is_used_when_it_starts(monkeypatch):
+    made = _fake_ort(monkeypatch)
+    net = rife.Rife()
+    assert net.on_gpu and made == [["DmlExecutionProvider", "CPUExecutionProvider"]]
+
+
+def test_a_gpu_that_will_not_start_falls_back_to_the_cpu(monkeypatch):
+    made = _fake_ort(monkeypatch, fail_on_gpu_start=True)
+    net = rife.Rife()
+    assert not net.on_gpu and made == [["CPUExecutionProvider"]]
+
+
+def test_a_gpu_that_runs_out_of_memory_finishes_on_the_cpu(monkeypatch):
+    """Resolve holds much of the GPU's memory while a render runs."""
+    _fake_ort(monkeypatch, fail_on_gpu_run=True)
+    net = rife.Rife()
+    a, b = cel(120, 120), cel(150, 116)
+    out = net.interpolate_pair(a, b, [0.5])[0]
+    assert out.shape == a.shape and not net.on_gpu
+    net.interpolate_pair(a, b, [0.5])
+    assert not net.on_gpu
+
+
 def test_the_runtime_is_installed_into_this_python(monkeypatch):
     calls, loaded = [], {"done": False}
 
