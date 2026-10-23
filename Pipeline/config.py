@@ -26,6 +26,11 @@ class Eternal2xConfig:
     # this keeps long clips fast.
     analysis_width: int = 640
 
+    # The clip has film grain: raise the threshold above its own noise floor,
+    # so held frames are not each taken for a new drawing. Off by default,
+    # since on clean animation it can merge fine real changes.
+    grain: bool = False
+
     # Force a hold pattern instead of detecting it. 0 means auto-detect.
     # 2 = "on 2s", 3 = "on 3s".
     force_base_hold: int = 0

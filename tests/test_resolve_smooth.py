@@ -286,6 +286,36 @@ def test_repeat_runs_do_not_overwrite_the_previous_render(make_anime, monkeypatc
 # status file
 # --------------------------------------------------------------------------
 
+def _grainy_twos(tmp_path):
+    """12 flat drawings on 2s with grain of 1 code value on every frame."""
+    import cv2
+    import numpy as np
+    rng = np.random.default_rng(17)
+    src = tmp_path / "grainy.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 180))
+    for i in range(24):
+        frame = np.full((180, 320, 3), 180, np.uint8)
+        cv2.rectangle(frame, (40 + (i // 2) * 4, 40), (80 + (i // 2) * 4, 110), (30, 30, 30), 3)
+        noise = rng.normal(0, 1, (180, 320, 1))
+        writer.write(np.clip(frame + noise, 0, 255).astype(np.uint8))
+    writer.release()
+    return src
+
+
+def test_a_grainy_clip_suggests_grainy_source(monkeypatch, tmp_path):
+    status = tmp_path / "status.json"
+    run(monkeypatch, ["--video", str(_grainy_twos(tmp_path)), "--analyse",
+                      "--status-file", str(status)])
+    assert "Grainy source" in json.loads(status.read_text())["message"]
+
+
+def test_grainy_source_finds_the_drawings(monkeypatch, tmp_path):
+    status = tmp_path / "status.json"
+    run(monkeypatch, ["--video", str(_grainy_twos(tmp_path)), "--analyse", "--grain",
+                      "--status-file", str(status)])
+    assert "12 unique drawings" in json.loads(status.read_text())["message"]
+
+
 def test_status_file_tracks_progress_and_completion(make_anime, monkeypatch, tmp_path):
     src = make_anime(holds=(2,) * 8)
     status = tmp_path / "status.json"

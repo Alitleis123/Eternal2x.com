@@ -101,6 +101,7 @@ PANEL_DEFAULTS = {
     "quality": "better",
     "upscale": "true",
     "interpolate": "true",
+    "grain": "false",
     "base_hold": "0",
     "format": "png",
 }

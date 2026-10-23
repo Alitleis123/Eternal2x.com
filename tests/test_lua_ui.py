@@ -89,7 +89,7 @@ def test_every_control_is_present(lua, direct):
     ids = set(H.widget_ids().split(","))
     for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
                      "CancelBtn", "UpdateBtn", "QualityCombo", "HoldCombo", "FormatCombo",
-                     "UpscaleCB", "InterpCB", "AutoUpdateCB", "Status",
+                     "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
 
@@ -101,7 +101,7 @@ def test_every_control_has_a_handler(lua, direct):
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
                      "UpdateBtn.Clicked", "QualityCombo.CurrentIndexChanged",
                      "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
-                     "InterpCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
+                     "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
                      "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
 
@@ -342,6 +342,24 @@ def test_unchecking_interpolate_reaches_the_command(lua, direct):
     H.set_checkbox("InterpCB", False)
     H.click("AnalyseBtn")
     assert "--no-interpolate" in H.last_command()
+
+
+def test_grainy_source_is_off_unless_ticked(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--grain" not in H.last_command()
+    H.set_checkbox("GrainCB", True)
+    H.click("AnalyseBtn")
+    assert "--grain" in H.last_command()
+
+
+def test_grainy_source_is_remembered(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.set_checkbox("GrainCB", True)
+    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
+    assert "grain=true" in conf
+    H = load(lua, ui_script(direct))
+    assert H.widgets["GrainCB"].Checked is True
 
 
 def test_defaults_send_no_opt_out_flags(lua, direct):

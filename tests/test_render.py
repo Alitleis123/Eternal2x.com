@@ -119,9 +119,61 @@ def test_grain_does_not_hide_the_drawings(tmp_path, sigma):
         noise = rng.normal(0, sigma, frame.shape[:2] + (1,))
         return np.clip(frame + noise, 0, 255).astype(np.uint8)
 
-    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg())
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg(grain=True))
     assert plan.unique_drawings == 12
     assert plan.base_hold == 2
+
+
+def test_correlated_grain_does_not_hide_the_drawings(tmp_path):
+    """Grain blurred across neighbouring pixels, as compression leaves it."""
+    import cv2
+    rng = np.random.default_rng(5)
+
+    def grain(frame, _i):
+        noise = cv2.GaussianBlur(rng.normal(0, 1, frame.shape[:2]), (0, 0), 1.0)
+        noise *= 1.0 / noise.std()
+        return np.clip(frame + noise[..., None], 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg(grain=True))
+    assert plan.unique_drawings == 12
+
+
+def test_grain_is_only_seen_through_when_asked(tmp_path):
+    """Unasked, a grainy clip is all new frames, and says it looks grainy."""
+    rng = np.random.default_rng(17)
+
+    def grain(frame, _i):
+        noise = rng.normal(0, 1, frame.shape[:2] + (1,))
+        return np.clip(frame + noise, 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg())
+    assert plan.unique_drawings == 24
+    assert plan.grain_suspected
+
+
+def test_a_clean_clip_is_not_suspected_of_grain(make_anime):
+    plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg())
+    assert not plan.grain_suspected
+
+
+def test_fine_moving_detail_keeps_every_drawing(tmp_path):
+    """Diagonal shading moving 1 px a frame inside a shape that moves 8 px every
+    fourth frame. Every frame is distinct and over the threshold, and taking
+    the small steps for grain merged half of them."""
+    import cv2
+    src = tmp_path / "detail.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (640, 360))
+    yy, xx = np.mgrid[0:48, 0:48]
+    for i in range(24):
+        frame = np.full((360, 640, 3), 200, np.uint8)
+        x = 200 + 8 * (i // 4)
+        cv2.rectangle(frame, (x, 120), (x + 120, 240), (90, 90, 90), -1)
+        shade = np.where(((xx + yy + i) // 2) % 2 == 0, 96, 160).astype(np.uint8)
+        frame[150:198, x + 30:x + 78] = shade[..., None]
+        writer.write(frame)
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert plan.unique_drawings == 24
 
 
 def test_flicker_is_not_taken_for_grain(tmp_path):

@@ -129,7 +129,7 @@
                 trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
                 start first, shown as Seeking. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
                 Quality setting. <code>AI</code> quality is several times slower, a few minutes for those ten
-                seconds. A grainy clip is read twice while Analyse measures its grain. Resolve stays usable
+                seconds. With Grainy source on, the clip is read twice while Analyse measures its grain. Resolve stays usable
                 throughout, and <strong>Analyse</strong> is much quicker if you only want to see what a clip
                 contains.
             </div>
@@ -143,7 +143,9 @@
             <div class="faq-answer">
                 Analyse found nothing to do. The clip has no duplicated frames, so there is nothing to recover. It is either live action or
                 animation already drawn on 1s. Smoothing it would only invent motion that was never there, so
-                Eternal2x stops instead. Heavy grain on a clip with long holds can also hide its duplicates.
+                Eternal2x stops instead. If the panel adds that the differences look like grain, tick
+                <strong>Grainy source</strong> and analyse again. Leave it off for clean animation, where it can
+                merge fine real changes.
             </div>
         </details>
 
@@ -408,6 +410,8 @@
                    most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
                    timeline bigger than the clip, such as 3840x2160 for 1080p footage. Turning off
                    <strong>Interpolate</strong> skips the in-betweens and keeps every drawing on its original frame.
+                   Tick <strong>Grainy source</strong> for film grain, which otherwise makes every held frame
+                   look new.
                    Settings are remembered between sessions.</p>
             </div>
         </div>

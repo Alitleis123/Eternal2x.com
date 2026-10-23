@@ -85,6 +85,7 @@ local OUTPUT_DIR = conf["output_dir"] or ""
 local QUALITY = conf["quality"] or "better"
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
+local GRAINY = parse_bool(conf["grain"], false)
 local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 local FORMAT = conf["format"] or "png"
 
@@ -113,6 +114,7 @@ local function save_conf()
     f:write("quality=" .. QUALITY .. "\n")
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
+    f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
@@ -539,6 +541,8 @@ local win = disp:AddWindow({
                      ToolTip = "Apply Super Scale 2x. It shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
                      ToolTip = "Off keeps every drawing on its frame and generates nothing, to upscale only." },
+        ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
+                     ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
 
     ui:Label{ ID = "RunSection", Text = "RUN", ObjectName = "Section" },
@@ -668,6 +672,7 @@ local function current_args(extra)
     args = args .. " --format " .. fmt
     if not items.UpscaleCB.Checked then args = args .. " --no-upscale" end
     if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
+    if items.GrainCB.Checked then args = args .. " --grain" end
     if OUTPUT_DIR ~= "" then args = args .. " --output-dir " .. shell_quote(OUTPUT_DIR) end
     args = args .. " --status-file " .. shell_quote(STATUS_PATH)
     return args .. (extra or "")
@@ -1225,6 +1230,11 @@ end
 
 function win.On.InterpCB.Clicked(ev)
     DO_INTERPOLATE = items.InterpCB.Checked
+    save_conf()
+end
+
+function win.On.GrainCB.Clicked(ev)
+    GRAINY = items.GrainCB.Checked
     save_conf()
 end
 
