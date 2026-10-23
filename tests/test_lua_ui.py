@@ -789,6 +789,44 @@ def test_a_placement_that_raises_removes_its_track_and_appends_once(lua, direct)
     assert "end of the timeline" in H.status()
 
 
+def _over_original(lua, direct, render):
+    H = load(lua, ui_script(direct), clip=render)
+    lua.execute("local H = ...; H.tracks = nil; H.src_span = nil; H.item_track = 2; "
+                "H.original_path = '/media/shot.mov'", H)
+    H.click("RefreshBtn")
+    return H
+
+
+def test_a_render_over_its_original_is_not_smoothed_again(lua, direct):
+    """The render placed above is the top clip under the playhead from then
+    on, so smoothing again with other settings smoothed the render. Seen in
+    Resolve 20.3.1."""
+    H = _over_original(lua, direct, "/r/shot_f7-73_smooth_02/frame_[000000-000047].png")
+    assert "shot.mov" in H.text_of("SourceLabel")
+    H.click("AnalyseBtn")
+    assert "/media/shot.mov" in H.last_command()
+    assert "shot_f7-73" not in H.last_command()
+
+
+def test_a_single_file_render_over_its_original_is_skipped_too(lua, direct):
+    H = _over_original(lua, direct, "/r/shot_smooth.mkv")
+    H.click("AnalyseBtn")
+    assert "/media/shot.mov" in H.last_command()
+
+
+def test_a_clip_that_is_not_a_render_is_used_as_it_is(lua, direct):
+    H = _over_original(lua, direct, "/media/smooth_jazz.mov")
+    H.click("AnalyseBtn")
+    assert "/media/smooth_jazz.mov" in H.last_command()
+
+
+def test_a_render_with_nothing_under_it_is_used(lua, direct):
+    """Dragged somewhere else, or on its own timeline: it is all there is."""
+    H = load(lua, ui_script(direct), clip="/r/shot_smooth/frame_[000000-000047].png")
+    H.click("AnalyseBtn")
+    assert "shot_smooth" in H.last_command()
+
+
 def test_compare_switches_the_smoothed_clip_off_and_on(lua, direct):
     H = load(lua, ui_script(direct))
     assert not H.enabled("CompareBtn"), "Compare works before there is anything to compare"

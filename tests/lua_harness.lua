@@ -173,6 +173,28 @@ function H.make_resolve(clip_file_path)
         for n = 1, (H.item_track or 1) do H.tracks[n] = {} end
         table.insert(H.tracks[H.item_track or 1], H.src_span)
     end
+    -- H.original_path puts a clip of that file on track 1, lined up under
+    -- the source clip, as an original is under the render placed above it.
+    local original = nil
+    if H.original_path and not H.no_place_api then
+        if not H.original_span then
+            H.original_span = { H.src_span[1], H.src_span[2] }
+            table.insert(H.tracks[1], H.original_span)
+        end
+        local original_mpi = {
+            GetClipProperty = function(_self)
+                return { ["File Path"] = H.original_path, FPS = H.clip_fps or "24" }
+            end,
+        }
+        original = {}
+        for k, v in pairs(item) do original[k] = v end
+        original.GetMediaPoolItem = function(_self) return original_mpi end
+        original.GetStart = function(_self) return H.original_span[1] end
+        original.GetEnd = function(_self) return H.original_span[2] end
+        original.GetDuration = function(_self) return H.original_span[2] - H.original_span[1] end
+        original.GetUniqueId = function(_self) return "original-item" end
+        original.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", 1 }) end
+    end
     H.track_names = H.track_names or {}
     H.placements = H.placements or {}
     local function span_item(span, n) return {
@@ -189,7 +211,9 @@ function H.make_resolve(clip_file_path)
         GetItemListInTrack = function(_self, kind, n)
             local out = {}
             for i, span in ipairs(H.tracks[n] or {}) do
-                table.insert(out, span == H.src_span and item or span_item(span, n * 100 + i))
+                table.insert(out, span == H.src_span and item
+                                  or span == H.original_span and original
+                                  or span_item(span, n * 100 + i))
             end
             return resolve_list(out)
         end,

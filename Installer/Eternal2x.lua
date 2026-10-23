@@ -195,6 +195,27 @@ local function clip_range(item, props)
     return nil
 end
 
+-- Renders are named <clip>_smooth, with _02 and up for later ones: a folder
+-- of frames, or one file.
+local function is_render(path)
+    return path:find("_smooth[_%d]*[/\\][^/\\]+$") ~= nil
+        or path:find("_smooth[_%d]*%.%w+$") ~= nil
+end
+
+-- The clip a render placed above was lined up with: the highest one under it
+-- that starts on the same frame. nil if there is none.
+local function original_under(timeline, item)
+    local ok, found = pcall(function()
+        local start = item:GetStart()
+        for track = tonumber(item:GetTrackTypeAndIndex()[2]) - 1, 1, -1 do
+            for _, it in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
+                if it:GetStart() == start and it:GetMediaPoolItem() then return it end
+            end
+        end
+    end)
+    return ok and found or nil
+end
+
 local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
@@ -218,6 +239,17 @@ local function find_clip_path()
     local props = mpi:GetClipProperty() or {}
     local path = props["File Path"]
     if not path or path == "" then return nil, "Could not read the clip's file path." end
+
+    -- A render placed above its original is the top clip under the playhead
+    -- from then on, even switched off. Smoothing it would smooth the render
+    -- again, so the clip it was lined up with is used instead.
+    if is_render(path) then
+        local below = original_under(timeline, item)
+        local below_props = below and below:GetMediaPoolItem():GetClipProperty() or {}
+        if below_props["File Path"] and below_props["File Path"] ~= "" then
+            item, props, path = below, below_props, below_props["File Path"]
+        end
+    end
 
     -- Where the clip sits, so the result can go on a track above it, lined up
     -- with it. Without these calls, as before Resolve 18, the result goes at
