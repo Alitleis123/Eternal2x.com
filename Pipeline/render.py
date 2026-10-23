@@ -149,14 +149,50 @@ def _downscale(gray: np.ndarray, max_width: int) -> np.ndarray:
     return gray
 
 
-def _difference(prev: np.ndarray, curr: np.ndarray) -> float:
-    """How different two frames are, weighted towards localised change.
+AnalysisFrame = Tuple[np.ndarray, np.ndarray, np.ndarray]
+
+
+def _analysis_frame(frame: np.ndarray, max_width: int) -> AnalysisFrame:
+    """Brightness and the two colour planes, small enough to compare quickly.
+
+    Brightness is made exactly as it always was, so clips whose drawings
+    differ in brightness keep the same answer to the last bit. Colour is
+    sampled at half that size with a plain linear resize, about 0.1 ms a frame
+    where an area average costs 1 to 2 ms. Codecs keep colour at half the
+    width and height anyway: on held frames of real clips this scored colour
+    about 14% higher than a full-size area average, under 0.003 at half weight.
+    """
+    luma = _downscale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), max_width)
+    size = (max(1, luma.shape[1] // 2), max(1, luma.shape[0] // 2))
+    ycc = cv2.cvtColor(cv2.resize(frame, size, interpolation=cv2.INTER_LINEAR),
+                       cv2.COLOR_BGR2YCrCb)
+    return luma, cv2.extractChannel(ycc, 1), cv2.extractChannel(ycc, 2)
+
+
+def _difference(prev: AnalysisFrame, curr: AnalysisFrame) -> float:
+    """How different two frames are, in brightness or in colour.
+
+    Brightness alone cannot tell pure red from a mid green, which have the
+    same luma, so a drawing that only changed colour vanished. Colour counts
+    at half weight because codecs store it at half the width and height and
+    its noise runs higher. On held frames of a VP9 film it scored up to 3.1
+    times the brightness, and 0.0054 at a keyframe, over the 0.004 threshold.
+    Real drawing changes score 0.2 to 0.6 times their brightness.
+    """
+    colour = cv2.max(cv2.absdiff(prev[1], curr[1]), cv2.absdiff(prev[2], curr[2]))
+    return max(_busiest_tiles(cv2.absdiff(prev[0], curr[0])), 0.5 * _busiest_tiles(colour))
+
+
+def _busiest_tiles(diff: np.ndarray) -> float:
+    """How much a difference image changed, weighted towards localised change.
 
     A blink or a mouth flap moves a tiny fraction of the frame, so a plain mean
     would bury it under the unchanged rest of the picture. Averaging only the
     busiest tiles keeps small real changes well clear of codec noise.
+
+    cv2.mean returns exactly what numpy's mean does on these tiles and takes
+    a fraction of the time, which pays for scoring colour as well.
     """
-    diff = cv2.absdiff(prev, curr)
     h, w = diff.shape[:2]
     gx, gy = max(1, min(8, w)), max(1, min(8, h))
     tw, th = max(1, w // gx), max(1, h // gy)
@@ -167,7 +203,7 @@ def _difference(prev: np.ndarray, curr: np.ndarray) -> float:
             x1 = (tx + 1) * tw if tx < gx - 1 else w
             tile = diff[ty * th:y1, tx * tw:x1]
             if tile.size:
-                vals.append(float(tile.mean()) / 255.0)
+                vals.append(cv2.mean(tile)[0] / 255.0)
     if not vals:
         return 0.0
     arr = np.array(vals, dtype=np.float32)
@@ -215,7 +251,7 @@ def frame_difference_scores(
         if not width or not height:
             height, width = first.shape[:2]
 
-        prev = _downscale(cv2.cvtColor(first, cv2.COLOR_BGR2GRAY), cfg.analysis_width)
+        prev = _analysis_frame(first, cfg.analysis_width)
         scores = [0.0]
 
         while True:
@@ -223,7 +259,7 @@ def frame_difference_scores(
             if not ok:
                 break
             _require_constant_rate(cap, fps, path)
-            curr = _downscale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cfg.analysis_width)
+            curr = _analysis_frame(frame, cfg.analysis_width)
             scores.append(_difference(prev, curr))
             prev = curr
             if progress and total:

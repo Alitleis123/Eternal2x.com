@@ -56,6 +56,19 @@ def test_analyse_handles_mixed_holds(make_anime):
     assert plan.unique_drawings == 8
 
 
+def test_a_colour_change_at_equal_brightness_is_a_new_drawing(tmp_path):
+    """Pure red and this green have the same luma, so comparing brightness
+    alone saw no change and the green drawing vanished from the result."""
+    import cv2
+    src = tmp_path / "colour.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    for bgr in [(0, 0, 255)] * 2 + [(0, 130, 0)] * 2 + [(220, 220, 220)] * 2:
+        writer.write(np.full((120, 160, 3), bgr, np.uint8))
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert [(h.index, h.length) for h in plan.holds] == [(0, 2), (2, 2), (4, 2)]
+
+
 def test_analyse_rejects_a_missing_file(tmp_path):
     with pytest.raises(SourceError, match="Could not open"):
         analyse_video(tmp_path / "nope.avi", cfg())
