@@ -5,10 +5,12 @@ Served over a real local HTTP server so the network path is genuinely exercised.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import http.server
 import json
 import functools
+import shutil
 import socketserver
 import threading
 import zipfile
@@ -213,6 +215,88 @@ def test_apply_payload_only_touches_allowed_paths(tmp_path):
     assert not (dest / "secrets.env").exists(), "payload escaped the allow-list"
 
 
+def _plugin(root: Path, tag: str) -> Path:
+    for folder in ("Installer", "Pipeline", "Stages"):
+        (root / folder).mkdir(parents=True)
+        (root / folder / "code.py").write_text(tag)
+    return root
+
+
+def _locked(monkeypatch, path: Path):
+    """Make every copy onto `path` fail, like a file another program holds."""
+    real = shutil.copy2
+
+    def copy2(src, dst, *args, **kwargs):
+        if Path(dst) == path:
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+
+
+def test_a_failed_update_puts_every_file_back(tmp_path, monkeypatch):
+    """A write refused halfway used to leave Installer new and Pipeline old."""
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    (payload / "Installer" / "added.py").write_text("new")
+    _locked(monkeypatch, live / "Pipeline" / "code.py")
+
+    with pytest.raises(PermissionError):
+        ru._apply_payload(payload, live)
+
+    for folder in ("Installer", "Pipeline", "Stages"):
+        assert (live / folder / "code.py").read_text() == "old", f"{folder} kept the new code"
+    assert not (live / "Installer" / "added.py").exists(), "a file the update added stayed"
+    assert sorted(p.name for p in live.iterdir()) == ["Installer", "Pipeline", "Stages"]
+
+
+def test_a_disk_that_fills_while_staging_changes_nothing(tmp_path, monkeypatch):
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    real = shutil.copy2
+
+    def copy2(src, dst, *args, **kwargs):
+        dst = Path(dst)
+        if dst.parts[-3].startswith(".eternal2x_update_") and dst.parent.name == "Stages":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+    with pytest.raises(OSError):
+        ru._apply_payload(payload, live)
+
+    for folder in ("Installer", "Pipeline", "Stages"):
+        assert (live / folder / "code.py").read_text() == "old"
+    assert sorted(p.name for p in live.iterdir()) == ["Installer", "Pipeline", "Stages"]
+
+
+def test_an_update_that_cannot_be_undone_keeps_the_old_copies(tmp_path, monkeypatch):
+    """If putting a file back fails too, say which, and keep its old copy."""
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    real = shutil.copy2
+    failed = []
+
+    def copy2(src, dst, *args, **kwargs):
+        dst = Path(dst)
+        if dst == live / "Pipeline" / "code.py":
+            failed.append(dst)
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        if failed and dst == live / "Installer" / "code.py":
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+    with pytest.raises(ru.RollbackError) as info:
+        ru._apply_payload(payload, live)
+
+    message = str(info.value)
+    assert "Installer/code.py" in message
+    kept = [p for p in live.glob(".*/**/Installer/code.py") if p.read_text() == "old"]
+    assert len(kept) == 1, "the old copy of the file that could not be put back is gone"
+    assert str(kept[0].parents[1]) in message
+
+
 # --------------------------------------------------------------------------
 # end to end
 # --------------------------------------------------------------------------
@@ -260,6 +344,21 @@ def test_checksum_mismatch_aborts_without_touching_the_install(http_server, repo
     assert "checksum mismatch" in capsys.readouterr().out
     assert repo.joinpath("VERSION").read_text().strip() == "0.2.0", "install was modified"
     assert repo.joinpath("Stages/motion_score.py").read_text() == "# old stage\n"
+
+
+def test_an_update_that_fails_partway_says_nothing_changed(http_server, repo, monkeypatch, capsys):
+    """The panel shows the last line, so it has to say the old version is intact."""
+    base, www = http_server
+    sha = make_payload_zip(www, "pkg.zip", "0.3.0")
+    url = publish_meta(www, base, write_meta(www, "0.3.0", sha, "pkg.zip"))
+    _locked(monkeypatch, repo.resolve() / "Pipeline" / "config.py")
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    assert "nothing was changed" in capsys.readouterr().out.strip().splitlines()[-1]
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+    assert repo.joinpath("README.md").read_text() == "# old\n"
+    assert not repo.joinpath("Installer/install_eternal2x.py").exists()
 
 
 def test_missing_platform_package_is_reported(http_server, repo, capsys):
