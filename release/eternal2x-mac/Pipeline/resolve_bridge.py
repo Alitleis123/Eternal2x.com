@@ -68,7 +68,7 @@ def current_timeline(resolve: Any) -> Tuple[Any, Any]:
 def is_studio(resolve: Any) -> Optional[bool]:
     """True on Studio, False on the free edition, None if it cannot be told.
 
-    Super Scale and Optical Flow retiming are Studio features, so this decides
+    Super Scale is a Studio feature, so this decides
     whether the plugin can hand the upscale to Resolve or has to do it itself.
     The product name is asked first, because the version string is only a
     number on current builds, "20.3.1.6" on Studio, so it never says Studio.
