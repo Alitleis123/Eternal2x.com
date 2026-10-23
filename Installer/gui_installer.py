@@ -80,6 +80,12 @@ BORDER = "#1e1e26"
 # Helpers
 # ---------------------------------------------------------------------------
 
+# On Windows a windowed app that runs python or pip gets a console window
+# flashing up for each run unless it asks for none. The flag is Windows only.
+_NO_WINDOW = ({"creationflags": subprocess.CREATE_NO_WINDOW}
+              if sys.platform.startswith("win") else {})
+
+
 def _find_repo_root() -> Path:
     if getattr(sys, "frozen", False):
         here = Path(sys.executable).resolve().parent
@@ -103,7 +109,7 @@ def _check_python(path: str) -> bool:
     try:
         result = subprocess.run(
             [path, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, **_NO_WINDOW,
         )
         return result.returncode == 0
     except Exception:
@@ -168,7 +174,7 @@ def _python_version_str(python_path: str) -> str:
     try:
         r = subprocess.run(
             [python_path, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, **_NO_WINDOW,
         )
         return (r.stdout + r.stderr).strip()
     except Exception:
@@ -425,7 +431,7 @@ class InstallerApp:
             result = subprocess.run(
                 [python_exe, str(get_pip_path), "--no-warn-script-location"],
                 capture_output=True, text=True, timeout=120,
-                cwd=str(python_dir),
+                cwd=str(python_dir), **_NO_WINDOW,
             )
             if result.returncode != 0:
                 self.root.after(0, self._log,
@@ -533,7 +539,8 @@ class InstallerApp:
                        "numpy", "opencv-python", "--no-warn-script-location", "--quiet"]
 
         try:
-            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600,
+                                    **_NO_WINDOW)
             if result.returncode != 0:
                 stderr = result.stderr.strip()
                 self.root.after(0, self._log, f"  Failed: {stderr[:200]}", "err")

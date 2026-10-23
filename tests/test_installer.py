@@ -338,6 +338,27 @@ def test_a_reinstall_repairs_the_private_python_it_reuses(tmp_path, monkeypatch)
     assert ".." in pth.read_text(encoding="utf-8").splitlines()
 
 
+def test_the_gui_installer_opens_no_console_windows():
+    """On Windows each python and pip run from a windowed app flashes up a
+    console unless asked not to. The flag does not exist anywhere else."""
+    import ast
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    if sys.platform.startswith("win"):
+        assert gui._NO_WINDOW == {"creationflags": subprocess.CREATE_NO_WINDOW}
+    else:
+        assert gui._NO_WINDOW == {}
+
+    tree = ast.parse(Path(gui.__file__).read_text(encoding="utf-8"))
+    calls = [node for node in ast.walk(tree)
+             if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+             and isinstance(node.func.value, ast.Name) and node.func.value.id == "subprocess"]
+    assert calls
+    for call in calls:
+        assert any(kw.arg is None and getattr(kw.value, "id", "") == "_NO_WINDOW"
+                   for kw in call.keywords), f"line {call.lineno} would open a console"
+
+
 def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):
     """Running `py Installer/gui_installer.py` works with no python on PATH."""
     import importlib
