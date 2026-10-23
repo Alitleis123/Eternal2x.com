@@ -90,6 +90,9 @@ local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
 local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
+-- The update check runs each time the panel opens, so it logs apart from
+-- renders. Sharing a log wiped the render's, the one worth sending in.
+local UPDATE_LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_update.log")
 local RUN_SCRIPT = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_run.cmd")
 -- Written by the shell once Python exits, however it exits. A Python that
 -- cannot start never writes a status file, so this is how the panel tells a
@@ -216,10 +219,10 @@ end
 -- running stages
 -- ---------------------------------------------------------------------------
 
-local function build_command(module_name, args, background)
+local function build_command(module_name, args, background, log)
     local cd = (is_windows() and "cd /d " or "cd ") .. shell_quote(REPO_ROOT)
     local run = shell_quote(PYTHON) .. " -m " .. module_name .. (args or "")
-    local redirect = " > " .. shell_quote(LOG_PATH) .. " 2>&1"
+    local redirect = " > " .. shell_quote(log or LOG_PATH) .. " 2>&1"
     if not background then
         return cd .. " && " .. run .. redirect
     end
@@ -251,8 +254,8 @@ local function build_command(module_name, args, background)
         .. shell_quote(EXIT_PATH) .. ") &"
 end
 
-local function run_blocking(module_name, args)
-    local cmd = build_command(module_name, args, false)
+local function run_blocking(module_name, args, log)
+    local cmd = build_command(module_name, args, false, log)
     print("[Eternal2x] " .. cmd)
     local ok = os.execute(cmd)
     return (ok == true or ok == 0)
@@ -264,8 +267,8 @@ local function run_background(module_name, args)
     os.execute(cmd)
 end
 
-local function read_log()
-    local f = io.open(LOG_PATH, "r")
+local function read_log(path)
+    local f = io.open(path or LOG_PATH, "r")
     if not f then return "" end
     local s = f:read("*a") or ""
     f:close()
@@ -273,9 +276,9 @@ local function read_log()
 end
 
 -- The last line of the run log worth showing, such as Python's final error.
-local function last_log_line()
+local function last_log_line(path)
     local last = nil
-    for line in read_log():gmatch("[^\r\n]+") do
+    for line in read_log(path):gmatch("[^\r\n]+") do
         if line:match("%S") then last = line end
     end
     return last and (last:match("^%s*(.-)%s*$")) or nil
@@ -540,6 +543,7 @@ local function set_busy(busy)
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
     items.RefreshBtn.Enabled = not busy
+    items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or "\xE2\x96\xB2  Smooth Clip"
 end
 
@@ -644,7 +648,10 @@ local function import_result(st)
     end
     mpi = mpi or try_import(path)
     if not mpi then
-        return false, "Resolve would not import " .. basename(path)
+        -- The whole path, so the render can be found and dragged in by hand.
+        -- A sequence is its folder, not its first frame.
+        local where = st.sequence_pattern ~= "" and path:match("^(.+)[/\\]") or path
+        return false, "Resolve would not import " .. where .. "."
     end
 
     local notes = "Imported " .. basename(path)
@@ -677,6 +684,9 @@ local function apply_status(st)
     set_progress(st.fraction, st.stage)
     if st.message ~= "" then set_status(st.message) end
     if st.done then
+        -- Handled now. Left in place, Refresh Progress in a reopened panel
+        -- would import the same render again.
+        os.remove(STATUS_PATH)
         set_busy(false)
         if not st.ok then
             set_progress(0, nil)
@@ -841,7 +851,9 @@ function win.On.SmoothBtn.Clicked(ev)
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)
-    if not read_status() and not read_exit_code() then
+    -- A finished run's status is gone once handled, but the shell can still
+    -- write the exit code after it, so that alone is not a run to report on.
+    if not read_status() and not (RUNNING and read_exit_code()) then
         set_status("No run in progress.")
         return
     end
@@ -888,6 +900,15 @@ function win.On.AutoUpdateCB.Clicked(ev)
     set_status(AUTO_UPDATE and "Auto-update enabled." or "Auto-update disabled.")
 end
 
+-- A render started from an earlier panel may still be going. Python writes
+-- its status at least once a frame, so a recent unfinished one means it is.
+local function run_in_progress()
+    if read_exit_code() then return false end
+    local st = read_status()
+    return st ~= nil and not st.done and st.updated ~= nil
+        and os.time() - st.updated < STALLED_AFTER
+end
+
 local function run_update(auto_mode)
     if REPO_ROOT == "" then
         set_status("Plugin folder not configured. Re-run the installer.")
@@ -897,14 +918,24 @@ local function run_update(auto_mode)
         set_status("No update URL configured.")
         return
     end
+    -- An update replaces the files a running render is using.
+    if run_in_progress() then
+        if not auto_mode then
+            set_status("A render is still running. Check for updates once it finishes.")
+        end
+        return
+    end
     local args = " --meta-url " .. shell_quote(UPDATE_URL)
     if auto_mode then args = args .. " --auto" end
     if not auto_mode then set_status("Checking for updates...") end
-    local ok = run_blocking("Stages.resolve_update", args)
+    -- A check that never starts, say because cd failed, must not report the
+    -- verdict of the one before.
+    os.remove(UPDATE_LOG_PATH)
+    local ok = run_blocking("Stages.resolve_update", args, UPDATE_LOG_PATH)
     if auto_mode then return end
     -- The updater's last line is its verdict. An earlier "Updating..." line is
     -- followed by whether it was applied, or why not.
-    local line = last_log_line()
+    local line = last_log_line(UPDATE_LOG_PATH)
     if line and line ~= "" then
         set_status(line)
     elseif ok then

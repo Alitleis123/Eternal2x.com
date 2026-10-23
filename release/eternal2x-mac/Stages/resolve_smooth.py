@@ -382,6 +382,14 @@ def _run_reporting(args, summary: dict) -> int:
 
 
 def main() -> int:
+    # The panel sends this output to a log file, which Python on Windows would
+    # encode in the ANSI code page, and a clip named in Japanese would then
+    # fail on its first print. The panel reads the log as UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
     args = build_parser().parse_args()
     summary: dict = {"ok": False}
     if not args.json:
