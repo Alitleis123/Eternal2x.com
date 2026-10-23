@@ -71,6 +71,32 @@ def test_a_reinstall_removes_the_old_comp_launcher(fake_home, monkeypatch):
     assert (comp / "SomeoneElse.lua").exists()
 
 
+def test_moving_from_comp_keeps_the_settings_saved_there(fake_home, monkeypatch):
+    """The panel saved its settings beside the Comp launcher. Deleting that conf
+    unread turned updates back on for everyone moving to Utility."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text("repo_root=/old\nauto_update=false\nquality=best\n")
+    inst.remove_old_install()
+    conf = inst.write_config(inst._resolve_scripts_dir(), Path("/new"), "python3").read_text()
+    assert "auto_update=false" in conf and "quality=best" in conf
+    assert f"repo_root={Path('/new')}" in conf
+
+
+def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
+                                                                        monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text("quality=fast\n")
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.conf").write_text("quality=best\n")
+    inst.remove_old_install()
+    assert "quality=best" in (utility / "Eternal2x.conf").read_text()
+
+
 def test_a_reinstall_removes_the_old_python_launcher(fake_home, monkeypatch):
     """An older installer generated Utility/Eternal2x.py, listed as a second entry."""
     monkeypatch.setattr(sys, "platform", "darwin")

@@ -48,6 +48,15 @@ def remove_old_install() -> None:
         root = _resolve_scripts_root()
     except RuntimeError:
         return
+    # The panel saved its settings beside the old launcher. Carried over, they
+    # survive the move, so an update opt-out is not turned back on.
+    old_conf, new_conf = root / "Comp" / "Eternal2x.conf", root / "Utility" / "Eternal2x.conf"
+    if old_conf.exists() and not new_conf.exists():
+        try:
+            new_conf.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(old_conf, new_conf)
+        except OSError:
+            pass
     for name in ("Eternal2x.lua", "Eternal2x.conf"):
         try:
             (root / "Comp" / name).unlink()
