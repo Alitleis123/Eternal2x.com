@@ -681,6 +681,75 @@ def test_a_refused_placement_removes_its_track_and_appends(lua, direct):
     assert "end of the timeline" in H.status()
 
 
+def test_a_source_moved_during_the_render_is_followed(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; H.src_span[1] = 86500; H.src_span[2] = 86548", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert H.placements[1].recordFrame == 86500
+
+
+def test_a_source_retrimmed_during_the_render_gets_the_render_at_the_end(lua, direct):
+    """Lined up with a different cut of the clip, it would not match it."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; H.src_span[2] = 86430", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert len(H.placements) == 0
+    assert "end of the timeline" in H.status()
+
+
+def test_a_source_deleted_during_the_render_gets_the_render_at_the_end(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    lua.execute("local H = ...; table.remove(H.tracks[1], 1)", H)
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/out.mp4")
+    H.click("RefreshStatusBtn")
+    assert len(H.placements) == 0
+    assert H.appended == 1
+
+
+def test_a_render_longer_than_the_source_checks_its_whole_span(lua, direct):
+    """120 frames at 24 fps cover 120 timeline frames, not the source's 48."""
+    H = load(lua, ui_script(direct))
+    H.media_frames = "120"
+    lua.execute("local H = ...; H.tracks[2] = { { 86460, 86480 } }", H)
+    finish_render(H, direct)
+    assert H.placements[1].trackIndex == 3
+
+
+def test_a_sequence_at_an_unconfirmed_rate_stays_in_the_media_pool(lua, direct):
+    """At the wrong rate it plays at the wrong speed and covers more timeline."""
+    H = load(lua, ui_script(direct))
+    H.fps_sticks = False
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.appended == 0
+    assert "Clip Attributes" in H.status() and "media pool" in H.status()
+
+
+def test_a_failed_track_rename_does_not_add_a_second_copy(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.rename_throws = True
+    finish_render(H, direct)
+    assert H.appended == 1
+    assert "above the original" in H.status()
+
+
+def test_a_placement_that_raises_removes_its_track_and_appends_once(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.place_throws = True
+    finish_render(H, direct)
+    assert len(H.tracks) == 1, "the empty track it added was left behind"
+    assert H.appended == 1
+    assert "end of the timeline" in H.status()
+
+
 def test_compare_switches_the_smoothed_clip_off_and_on(lua, direct):
     H = load(lua, ui_script(direct))
     assert not H.enabled("CompareBtn"), "Compare works before there is anything to compare"

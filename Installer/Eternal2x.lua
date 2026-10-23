@@ -221,9 +221,12 @@ local function find_clip_path()
     pcall(function()
         local kind = item:GetTrackTypeAndIndex()
         place = { track = tonumber(kind[2]), start = tonumber(item:GetStart()),
-                  duration = tonumber(item:GetDuration()), timeline = timeline:GetUniqueId() }
+                  duration = tonumber(item:GetDuration()), timeline = timeline:GetUniqueId(),
+                  item = item:GetUniqueId() }
+        place.source_start = tonumber(item:GetSourceStartFrame())
     end)
-    if place and not (place.track and place.start and place.duration and place.timeline) then
+    if place and not (place.track and place.start and place.duration and place.timeline
+                      and place.item) then
         place = nil
     end
     return path, nil, clip_range(item, props), place
@@ -675,7 +678,7 @@ end
 -- because a refusal is not always reported. Done before the clip is appended,
 -- since its length on the timeline depends on it.
 local function set_sequence_fps(mpi, fps)
-    if not mpi.SetClipProperty then return "" end
+    if not mpi.SetClipProperty then return "", false end
     local text = (math.abs(fps - math.floor(fps + 0.5)) < 0.001)
         and tostring(math.floor(fps + 0.5)) or string.format("%.3f", fps)
     local called, set = pcall(function() return mpi:SetClipProperty("FPS", text) end)
@@ -684,8 +687,9 @@ local function set_sequence_fps(mpi, fps)
         if read and type(got) == "table" then got = got["FPS"] end
         if read and math.abs((tonumber(got) or 0) - fps) > 0.01 then set = false end
     end
-    if called and set then return " at " .. text .. " fps" end
-    return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)"
+    if called and set then return " at " .. text .. " fps", true end
+    return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)",
+        false
 end
 
 -- One clip property. Asked for a single key, Resolve can hand back the value or
@@ -706,15 +710,15 @@ local function first_of(list)
     return nil
 end
 
--- The lowest video track above the source clip with nothing in its span, so
--- no clip of the edit is covered or cut. Adds a track when every one has
--- something there.
-local function free_track(timeline, place)
-    local finish = place.start + place.duration
-    for track = place.track + 1, tonumber(timeline:GetTrackCount("video")) or 0 do
+-- The lowest video track above the source clip with nothing over `length`
+-- frames from its start, so no clip of the edit is covered or cut. Adds a
+-- track when every one has something there.
+local function free_track(timeline, at, length)
+    local finish = at.start + length
+    for track = at.track + 1, tonumber(timeline:GetTrackCount("video")) or 0 do
         local clear = true
         for _, other in pairs(timeline:GetItemListInTrack("video", track) or {}) do
-            if other:GetStart() < finish and other:GetEnd() > place.start then
+            if other:GetStart() < finish and other:GetEnd() > at.start then
                 clear = false
                 break
             end
@@ -725,30 +729,66 @@ local function free_track(timeline, place)
     return tonumber(timeline:GetTrackCount("video")), true
 end
 
+-- Where the source clip is now. It can be moved while the render runs, so it
+-- is found again by its id. nil if it is gone, or now uses another part of
+-- its media, since the render would then not match it.
+local function find_source(timeline, place)
+    for track = 1, tonumber(timeline:GetTrackCount("video")) or 0 do
+        for _, it in pairs(timeline:GetItemListInTrack("video", track) or {}) do
+            if it:GetUniqueId() == place.item then
+                local source_start = nil
+                pcall(function() source_start = tonumber(it:GetSourceStartFrame()) end)
+                if tonumber(it:GetDuration()) ~= place.duration
+                    or source_start ~= place.source_start then
+                    return nil
+                end
+                return { track = track, start = tonumber(it:GetStart()) }
+            end
+        end
+    end
+    return nil
+end
+
+-- How many timeline frames the clip covers: its frames at its own rate,
+-- counted at the timeline's. nil when either rate is unknown.
+local function timeline_length(timeline, mpi, frames)
+    local function rate(text) return tonumber(tostring(text or ""):match("^%s*([%d%.]+)")) end
+    local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
+    if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
+    return math.ceil(frames * ours / theirs - 0.001)
+end
+
 -- Put the render on a track above the clip it came from, starting on the same
 -- frame, so it lines up with the edit and the audio. nil when that cannot be
--- done, as when the timeline has changed since the run started.
+-- done: another timeline is open, the source clip is gone or was re-trimmed,
+-- or a call failed. Each step is guarded on its own, so a failure after the
+-- clip went in cannot lead to a second copy at the end of the timeline.
 local function place_above(pool, project, mpi, frames)
     local place = RUN_PLACE
     if not (place and frames and frames > 0) then return nil end
-    local ok, track, item = pcall(function()
+    local ok, timeline, at, length = pcall(function()
         local timeline = project:GetCurrentTimeline()
         if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
-        local track, added = free_track(timeline, place)
-        if not track then return nil end
-        local got = first_of(pool:AppendToTimeline({ {
-            mediaPoolItem = mpi, startFrame = 0, endFrame = frames - 1,
-            trackIndex = track, recordFrame = place.start, mediaType = 1,
-        } }))
-        if not got then
-            if added then timeline:DeleteTrack("video", track) end
-            return nil
-        end
-        if added then timeline:SetTrackName("video", track, "Eternal2x") end
-        return track, got
+        local at = find_source(timeline, place)
+        if not at then return nil end
+        return timeline, at, timeline_length(timeline, mpi, frames)
     end)
-    if ok and track then return track, item end
-    return nil
+    if not (ok and timeline and at and length) then return nil end
+
+    local made, track, added = pcall(free_track, timeline, at, math.max(length, place.duration))
+    if not (made and track) then return nil end
+    local appended, item = pcall(function()
+        return first_of(pool:AppendToTimeline({ {
+            mediaPoolItem = mpi, startFrame = 0, endFrame = frames - 1,
+            trackIndex = track, recordFrame = at.start, mediaType = 1,
+        } }))
+    end)
+    if not (appended and item) then
+        if added then pcall(function() timeline:DeleteTrack("video", track) end) end
+        return nil
+    end
+    if added then pcall(function() timeline:SetTrackName("video", track, "Eternal2x") end) end
+    return track, item
 end
 
 -- Super Scale makes the clip bigger than its file, which only shows on a
@@ -802,8 +842,11 @@ local function import_result(st)
 
     local notes = "Imported " .. basename(path)
     local hint = nil
+    local rate_ok = true
     if st.sequence_pattern ~= "" and st.fps > 0 then
-        notes = notes .. set_sequence_fps(mpi, st.fps)
+        local said
+        said, rate_ok = set_sequence_fps(mpi, st.fps)
+        notes = notes .. said
     end
     if DO_UPSCALE and mpi.SetClipProperty then
         -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected. The
@@ -817,6 +860,11 @@ local function import_result(st)
         notes = notes .. ((called and scaled) and ", upscaled 2x"
                           or ", upscale not applied (Super Scale needs Resolve Studio)")
         if called and scaled then hint = upscale_hint(project, mpi) end
+    end
+    -- At the wrong rate it would play at the wrong speed and cover more of
+    -- the timeline than the original, so it stays in the media pool.
+    if not rate_ok then
+        return true, notes .. " It is in the media pool, not on the timeline.", nil, hint
     end
     if pool.AppendToTimeline then
         local frames = st.sequence_frames > 0 and st.sequence_frames

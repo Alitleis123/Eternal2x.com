@@ -144,10 +144,17 @@ function H.make_resolve(clip_file_path)
     end
     -- Where the clip sits on the timeline. H.no_place_api models a build
     -- without these calls.
-    local start, duration = H.item_start or 86400, H.item_duration or 48
+    -- H.src_span is where the source clip sits, { start, end }. A test can
+    -- change it to move or re-trim the clip, or take it off its track.
+    if not H.src_span then
+        local start = H.item_start or 86400
+        H.src_span = { start, start + (H.item_duration or 48) }
+    end
     if not H.no_place_api then
-        item.GetStart = function(_self) return start end
-        item.GetDuration = function(_self) return duration end
+        item.GetStart = function(_self) return H.src_span[1] end
+        item.GetEnd = function(_self) return H.src_span[2] end
+        item.GetDuration = function(_self) return H.src_span[2] - H.src_span[1] end
+        item.GetUniqueId = function(_self) return "source-item" end
         item.GetTrackTypeAndIndex = function(_self) return { "video", H.item_track or 1 } end
     end
     -- H.tracks[n] lists the spans already on video track n. By default only
@@ -155,13 +162,15 @@ function H.make_resolve(clip_file_path)
     if not H.tracks then
         H.tracks = {}
         for n = 1, (H.item_track or 1) do H.tracks[n] = {} end
-        table.insert(H.tracks[H.item_track or 1], { start, start + duration })
+        table.insert(H.tracks[H.item_track or 1], H.src_span)
     end
     H.track_names = H.track_names or {}
     H.placements = H.placements or {}
-    local function span_item(s, e) return {
-        GetStart = function(_self) return s end,
-        GetEnd = function(_self) return e end,
+    local function span_item(span, n) return {
+        GetStart = function(_self) return span[1] end,
+        GetEnd = function(_self) return span[2] end,
+        GetDuration = function(_self) return span[2] - span[1] end,
+        GetUniqueId = function(_self) return "item-" .. n end,
     } end
     -- No GetSelectedItems: Resolve's API has no timeline selection.
     local timeline = {
@@ -170,7 +179,9 @@ function H.make_resolve(clip_file_path)
         GetTrackCount = function(_self, kind) return kind == "video" and #H.tracks or 0 end,
         GetItemListInTrack = function(_self, kind, n)
             local out = {}
-            for _, s in ipairs(H.tracks[n] or {}) do table.insert(out, span_item(s[1], s[2])) end
+            for i, span in ipairs(H.tracks[n] or {}) do
+                table.insert(out, span == H.src_span and item or span_item(span, n * 100 + i))
+            end
             return out
         end,
         AddTrack = function(_self, kind)
@@ -179,9 +190,14 @@ function H.make_resolve(clip_file_path)
             return true
         end,
         DeleteTrack = function(_self, kind, n) table.remove(H.tracks, n) return true end,
-        SetTrackName = function(_self, kind, n, name) H.track_names[n] = name return true end,
+        SetTrackName = function(_self, kind, n, name)
+            if H.rename_throws then error("SetTrackName failed") end
+            H.track_names[n] = name
+            return true
+        end,
         GetSetting = function(_self, key)
             if key == "timelineResolutionWidth" then return H.timeline_width or "1920" end
+            if key == "timelineFrameRate" then return H.timeline_fps or "24" end
             return nil
         end,
     }
@@ -221,6 +237,7 @@ function H.make_resolve(clip_file_path)
             for _, clip in ipairs(clips) do
                 -- A clipInfo says where on the timeline it goes.
                 if clip.mediaPoolItem then
+                    if H.place_throws then error("AppendToTimeline failed") end
                     if H.place_works == false then return {} end
                     table.insert(H.placements, clip)
                     local track = H.tracks[clip.trackIndex]
