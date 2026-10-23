@@ -166,10 +166,12 @@ end
 -- the start of the file, so only that part is rebuilt. Seconds mean the same
 -- whatever the timeline's rate. nil means use the whole file.
 --
--- Resolve counts the source frame from the start of the file, at the media's
+-- Resolve counts source frames from the start of the file, at the media's
 -- own rate, but the source time from the media's start timecode, so on
--- footage that starts at 01:00:00:00 the times are an hour out. Only their
--- difference is used, anchored on the start frame.
+-- footage that starts at 01:00:00:00 the times are an hour out. The frames
+-- are used, and without an end frame the times' difference, anchored on the
+-- start frame. On Resolve Studio 20.3.1 the end time also fell a frame short
+-- of the end frame, and a render from it came out a frame short of the cut.
 local function clip_range(item, props)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
@@ -179,10 +181,10 @@ local function clip_range(item, props)
     local f0 = call("GetSourceStartFrame")
     if not (fps and fps > 0 and f0) then return nil end
     local start = f0 / fps
-    local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
-    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
     local f1 = call("GetSourceEndFrame")
     if f1 and f1 > f0 then return { start = start, finish = f1 / fps } end
+    local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
+    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
     return nil
 end
 
@@ -697,7 +699,9 @@ end
 local function apply_status(st)
     if not st then return false end
     set_progress(st.fraction, st.stage)
-    if st.message ~= "" then set_status(st.message) end
+    -- Until the run is done its message only ever says Starting, and shown on
+    -- every poll it would hide what the panel itself has to say.
+    if st.done and st.message ~= "" then set_status(st.message) end
     if st.done then
         -- Handled now. Left in place, Refresh Progress in a reopened panel
         -- would import the same render again.
@@ -751,6 +755,9 @@ local function poll()
             set_status(string.format("No progress for %d minutes. If the Eternal2x window "
                 .. "was closed, the render stopped: press Reset and run it again.",
                 math.floor(quiet / 60 + 0.5)))
+        elseif (items.Status.Text or ""):match("^No progress for") then
+            -- It is reporting again, so the warning no longer holds.
+            set_status("Working. Resolve stays usable while this runs.")
         end
         return false
     end
