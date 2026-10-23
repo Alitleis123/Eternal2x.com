@@ -14,10 +14,12 @@ class Eternal2xConfig:
     """
 
     # --- duplicate detection ---------------------------------------------
-    # A frame counts as a new drawing when its difference from the previous
-    # frame exceeds this. It has to sit above codec noise but below the
+    # A frame counts as a new drawing when its difference from the last new
+    # drawing reaches this. It has to sit above codec noise but below the
     # smallest real change (a blink, a mouth flap), hence the small value and
-    # the tile-based scorer, which is sensitive to localised change.
+    # the tile-based scorer, which is sensitive to localised change. A grainy
+    # clip raises it to clear its own noise (Pipeline.dedupe.noise_threshold),
+    # so this is the lowest it goes.
     duplicate_threshold: float = 0.004
 
     # Width the analysis runs at. Detection does not need full resolution and

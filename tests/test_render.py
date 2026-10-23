@@ -94,6 +94,46 @@ def test_a_slow_pan_is_not_one_long_hold(make_anime):
     assert max(h.length for h in plan.holds) <= 4
 
 
+def _drawings_on_twos(tmp_path, change=None):
+    """12 flat drawings, each held two frames, with `change(frame, i)` applied."""
+    import cv2
+    src = tmp_path / "twos.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 180))
+    for i in range(24):
+        d = i // 2
+        frame = np.full((180, 320, 3), 180, np.uint8)
+        cv2.rectangle(frame, (40 + d * 4, 40), (80 + d * 4, 110), (30, 30, 30), 3)
+        cv2.circle(frame, (60 + d * 4, 70), 12, (75, 110, 180), -1)
+        writer.write(change(frame, i) if change else frame)
+    writer.release()
+    return src
+
+
+@pytest.mark.parametrize("sigma", [1, 2, 4])
+def test_grain_does_not_hide_the_drawings(tmp_path, sigma):
+    """Grain of 1 code value put every held frame over the threshold, so 12
+    drawings on 2s came out as 24 unique frames and nothing was rebuilt."""
+    rng = np.random.default_rng(17)
+
+    def grain(frame, _i):
+        noise = rng.normal(0, sigma, frame.shape[:2] + (1,))
+        return np.clip(frame + noise, 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, grain), cfg())
+    assert plan.unique_drawings == 12
+    assert plan.base_hold == 2
+
+
+def test_flicker_does_not_hide_the_drawings(tmp_path):
+    """Exposure that rises two levels on every other frame is not a drawing."""
+    def flicker(frame, i):
+        return np.clip(frame.astype(int) + 2 * (i % 2), 0, 255).astype(np.uint8)
+
+    plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, flicker), cfg())
+    assert plan.unique_drawings == 12
+    assert plan.base_hold == 2
+
+
 def test_analyse_rejects_a_missing_file(tmp_path):
     with pytest.raises(SourceError, match="Could not open"):
         analyse_video(tmp_path / "nope.avi", cfg())

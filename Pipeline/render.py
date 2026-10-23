@@ -4,7 +4,7 @@ Two passes over the source:
 
   analyse_video()  decodes once to measure how different each frame is from the
                    last new drawing, which is all `Pipeline.dedupe` needs to
-                   build a plan.
+                   build a plan. A grainy clip is measured a second time.
   render_plan()    decodes again and writes the output, holding only the two
                    drawings currently being interpolated between.
 
@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 from Pipeline.config import Eternal2xConfig
-from Pipeline.dedupe import DedupePlan, plan_from_scores, output_time_map
+from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
 from Pipeline.interpolate import interpolate_pair, upscale
 
 ProgressFn = Callable[[str, float], None]
@@ -235,6 +235,7 @@ def frame_difference_scores(
     *,
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
+    threshold: Optional[float] = None,
 ) -> Tuple[List[float], float, int, int]:
     """Per-frame difference from the last new drawing, plus fps and dimensions.
 
@@ -242,7 +243,12 @@ def frame_difference_scores(
     up slowly: a fade of one level a frame never crossed the threshold, and
     22 frames froze on the first. Against the last drawing the change adds up
     until it counts as a new one, so fades and slow pans keep moving.
+
+    `threshold` decides where each drawing starts, so the plan has to be made
+    with the same one. It defaults to `cfg.duplicate_threshold`.
     """
+    if threshold is None:
+        threshold = cfg.duplicate_threshold
     cap = _open(path, frames, progress)
     try:
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
@@ -267,7 +273,7 @@ def frame_difference_scores(
             _require_constant_rate(cap, fps, path)
             curr = _analysis_frame(frame, cfg.analysis_width)
             scores.append(_difference(drawing, curr))
-            if scores[-1] >= cfg.duplicate_threshold:
+            if scores[-1] >= threshold:
                 drawing = curr
             if progress and total:
                 progress("Analysing", min(1.0, len(scores) / float(total)))
@@ -284,16 +290,24 @@ def analyse_video(
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
 ) -> Tuple[DedupePlan, int, int]:
-    """Decode the clip once and return a rebuild plan plus its dimensions.
+    """Decode the clip and return a rebuild plan plus its dimensions.
 
     With `frames`, only that range of the source is read, and the plan's frame
     numbers count from its first frame.
+
+    A clip whose grain raises the threshold is decoded a second time, because
+    where each drawing starts depends on the threshold. Clean clips take one
+    pass.
     """
     scores, fps, width, height = frame_difference_scores(path, cfg, progress=progress,
                                                          frames=frames)
+    threshold = noise_threshold(scores, cfg.duplicate_threshold)
+    if threshold > cfg.duplicate_threshold:
+        scores, fps, width, height = frame_difference_scores(
+            path, cfg, progress=progress, frames=frames, threshold=threshold)
     plan = plan_from_scores(
         scores, fps,
-        threshold=cfg.duplicate_threshold,
+        threshold=threshold,
         force_base_hold=cfg.force_base_hold,
     )
     return plan, width, height
