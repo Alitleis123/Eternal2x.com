@@ -501,3 +501,19 @@ def test_a_clip_named_outside_the_system_code_page_runs(make_anime, repo_root, t
     text = log.read_bytes().decode("utf-8")
     assert code == 0, text
     assert "ヴァイオレット" in text
+
+
+@pytest.mark.parametrize("fmt,ext", [("mp4", ".mp4"), ("avi", ".avi")])
+def test_a_single_file_render_keeps_a_name_outside_ascii(make_anime, monkeypatch, tmp_path,
+                                                         fmt, ext):
+    """On Windows, OpenCV falls back to its Media Foundation writer for H.264,
+    and that writer garbled a name like this one, so the panel could not find
+    the render to import it."""
+    import os
+
+    src = make_anime(holds=(2,) * 6)
+    clip = src.with_name("ヴァイオレット 湖" + src.suffix)
+    src.rename(clip)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(clip), "--format", fmt, "--output-dir", str(out)]) == 0
+    assert os.listdir(out) == ["ヴァイオレット 湖_smooth" + ext]
