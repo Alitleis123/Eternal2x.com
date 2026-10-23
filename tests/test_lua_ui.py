@@ -629,7 +629,9 @@ def test_a_refused_import_still_tells_the_user_where_the_render_is(lua, direct):
     H.click("RefreshStatusBtn")
 
     status = H.status()
-    assert "would not import /tmp/renders/out.mp4" in status
+    # The status box fits two lines, so the path goes on the line below it.
+    assert "would not import" in status
+    assert H.widgets["Meta"].Text == "/tmp/renders/out.mp4"
     assert "drag it in" in status.lower()
     assert H.enabled("SmoothBtn"), "the panel stayed busy after a failed import"
 
@@ -644,7 +646,7 @@ def test_a_refused_sequence_is_pointed_at_by_its_folder(lua, direct):
                  sequence_pattern="/tmp/renders/shot_smooth/frame_%06d.png",
                  sequence_frames=24, fps=24.0)
     H.click("RefreshStatusBtn")
-    assert "would not import /tmp/renders/shot_smooth." in H.status()
+    assert H.widgets["Meta"].Text == "/tmp/renders/shot_smooth"
 
 
 def test_the_import_happens_once_not_on_every_poll(lua, direct):
@@ -869,7 +871,7 @@ def test_a_refused_sequence_import_is_not_swapped_for_a_still(lua, direct):
                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24)
     H.click("RefreshStatusBtn")
     assert H.imported_count() == 0 and H.appended == 0
-    assert "would not import /tmp/out." in H.status()
+    assert "would not import" in H.status() and H.widgets["Meta"].Text == "/tmp/out"
 
 
 # --------------------------------------------------------------------------

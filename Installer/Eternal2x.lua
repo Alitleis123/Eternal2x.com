@@ -669,10 +669,10 @@ local function import_result(st)
         mpi = try_import(path)
     end
     if not mpi then
-        -- The whole path, so the render can be found and dragged in by hand.
-        -- A sequence is its folder, not its first frame.
+        -- Where it is, so it can be dragged in by hand. A sequence is its
+        -- folder, not its first frame.
         local where = st.sequence_pattern ~= "" and path:match("^(.+)[/\\]") or path
-        return false, "Resolve would not import " .. where .. "."
+        return false, "Resolve would not import it.", where
     end
 
     local notes = "Imported " .. basename(path)
@@ -729,9 +729,14 @@ local function apply_status(st)
         end
         if st.import_path ~= "" and not IMPORTED then
             IMPORTED = true
-            local ok, notes = import_result(st)
+            local ok, notes, where = import_result(st)
             if ok then
                 set_status(st.message .. " " .. notes)
+            elseif where then
+                -- The status box fits two lines, too few for a path as well.
+                items.Meta.Text = short_path(where, 68)
+                print("[Eternal2x] The render is at " .. where)
+                set_status(st.message .. " " .. notes .. " Drag it in from the path below.")
             else
                 set_status(st.message .. " " .. notes ..
                            " The render is finished, so you can drag it in.")
