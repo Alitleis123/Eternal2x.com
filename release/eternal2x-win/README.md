@@ -33,8 +33,8 @@ it drops straight back into your edit.
 ## What it does
 
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
-  It sees through light grain, and counts a change of colour, a
-  slow fade or a slow pan as motion rather than a hold.
+  It counts a change of colour, a slow fade or a slow pan as motion rather
+  than a hold. With **Grainy source** ticked, it sees through film grain.
 - Rebuilds the motion with optical flow, generating the in-between frames that
   were never drawn.
 - Has an AI setting, the RIFE network, that draws fast-moving characters
@@ -138,6 +138,7 @@ Whole file when Resolve does not report one.
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
 | **Interpolate** | Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
+| **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
 
 Settings are remembered between sessions.
 
@@ -161,6 +162,7 @@ Every button is a thin wrapper around one module, so you can script it:
 python -m Stages.resolve_smooth --video shot.mov --analyse
 python -m Stages.resolve_smooth --video shot.mov --quality best --format mp4
 python -m Stages.resolve_smooth --video shot.mov --base-hold 3 --no-interpolate
+python -m Stages.resolve_smooth --video grainy.mov --grain --quality ai
 ```
 
 `--video` skips Resolve entirely and writes the result to an `Eternal2x` folder
@@ -187,7 +189,8 @@ afterwards.
 | Clicking Eternal2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
 | "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
-| "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. Heavy grain on a clip with long holds can also hide them. |
+| "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
+| "Every frame differs, but the differences look like grain" | Tick **Grainy source** and analyse again. Heavy grain on a clip with long holds can still hide the duplicates. |
 | "...has a variable frame rate" | Render the clip to a constant frame rate first, from Resolve or with ffmpeg, as the message says. |
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` usually avoids this. |

@@ -183,28 +183,6 @@ def _difference(prev: AnalysisFrame, curr: AnalysisFrame) -> float:
     return max(_busiest_tiles(cv2.absdiff(prev[0], curr[0])), 0.5 * _busiest_tiles(colour))
 
 
-def _looks_like_grain(prev: np.ndarray, curr: np.ndarray) -> bool:
-    """Whether two luma frames differ the way grain makes them differ.
-
-    Grain moves every pixel a little, at random, so its changes cancel out on
-    average and a slight blur removes most of them. A real change survives the
-    blur, even a one pixel move. Grain of 0.6 to 4 code values kept 0.19 to
-    0.21 of its difference through it, a 1 px step on clean cel art 0.91, and
-    on the open movie Hero both codec noise between held frames and real
-    drawing changes kept 0.61 to 0.70. The blur is done in floating point,
-    since rounding back to whole levels left grain of 1 at 0.44. A fade or a
-    flicker moves every pixel the same way, so it does not cancel out.
-    """
-    total = cv2.mean(cv2.absdiff(prev, curr))[0]
-    if total <= 0:
-        return False
-    if abs(cv2.mean(cv2.subtract(curr, prev, dtype=cv2.CV_16S))[0]) > 0.25 * total:
-        return False
-    a, b = prev.astype(np.float32), curr.astype(np.float32)
-    blurred = cv2.absdiff(cv2.GaussianBlur(a, (0, 0), 1.5), cv2.GaussianBlur(b, (0, 0), 1.5))
-    return cv2.mean(blurred)[0] < 0.4 * total
-
-
 def _busiest_tiles(diff: np.ndarray) -> float:
     """How much a difference image changed, weighted towards localised change.
 
@@ -258,7 +236,6 @@ def frame_difference_scores(
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
     threshold: Optional[float] = None,
-    grain: Optional[List[bool]] = None,
 ) -> Tuple[List[float], float, int, int]:
     """Per-frame difference from the last new drawing, plus fps and dimensions.
 
@@ -269,9 +246,6 @@ def frame_difference_scores(
 
     `threshold` decides where each drawing starts, so the plan has to be made
     with the same one. It defaults to `cfg.duplicate_threshold`.
-
-    Given a list as `grain`, it gets whether each frame's difference looks like
-    grain, for noise_threshold to check before it trusts a noise floor.
     """
     if threshold is None:
         threshold = cfg.duplicate_threshold
@@ -299,8 +273,6 @@ def frame_difference_scores(
             _require_constant_rate(cap, fps, path)
             curr = _analysis_frame(frame, cfg.analysis_width)
             scores.append(_difference(drawing, curr))
-            if grain is not None:
-                grain.append(_looks_like_grain(drawing[0], curr[0]))
             if scores[-1] >= threshold:
                 drawing = curr
             if progress and total:
@@ -323,14 +295,17 @@ def analyse_video(
     With `frames`, only that range of the source is read, and the plan's frame
     numbers count from its first frame.
 
-    A clip whose grain raises the threshold is decoded a second time, because
-    where each drawing starts depends on the threshold. Clean clips take one
-    pass.
+    Grain makes every held frame differ a little, so they all look new. With
+    `cfg.grain` the threshold rises above the clip's own noise floor, and a
+    grainy clip is decoded a second time with it. Without, the floor is only
+    measured, so a clip that came out as all new frames can say it looks
+    grainy. Raising it unasked merged real drawings: no test on the scores or
+    the pixels told grain apart from fine real change on every clip.
     """
-    grain: List[bool] = []
     scores, fps, width, height = frame_difference_scores(path, cfg, progress=progress,
-                                                         frames=frames, grain=grain)
-    threshold = noise_threshold(scores, cfg.duplicate_threshold, grain=[False] + grain)
+                                                         frames=frames)
+    floor = noise_threshold(scores, cfg.duplicate_threshold)
+    threshold = floor if cfg.grain else cfg.duplicate_threshold
     if threshold > cfg.duplicate_threshold:
         scores, fps, width, height = frame_difference_scores(
             path, cfg, progress=progress, frames=frames, threshold=threshold)
@@ -339,6 +314,8 @@ def analyse_video(
         threshold=threshold,
         force_base_hold=cfg.force_base_hold,
     )
+    plan.grain_suspected = (not cfg.grain and floor > cfg.duplicate_threshold
+                            and plan.is_noop)
     return plan, width, height
 
 

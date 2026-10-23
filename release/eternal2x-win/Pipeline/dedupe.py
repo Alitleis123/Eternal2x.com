@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import List, Optional, Sequence
+from typing import List, Sequence
 
 
 @dataclass
@@ -48,6 +48,9 @@ class DedupePlan:
     base_hold: int = 1
     # One source frame index per intermediate frame, in order.
     output_indices: List[int] = field(default_factory=list)
+    # Every frame came out new, but the scores look like grain on held
+    # frames: worth turning on Grainy source and analysing again.
+    grain_suspected: bool = False
 
     @property
     def unique_drawings(self) -> int:
@@ -128,8 +131,7 @@ def flag_new_drawings(scores: Sequence[float], threshold: float) -> List[bool]:
     return flags
 
 
-def noise_threshold(scores: Sequence[float], minimum: float,
-                    grain: Optional[Sequence[bool]] = None) -> float:
+def noise_threshold(scores: Sequence[float], minimum: float) -> float:
     """The threshold this clip's own noise calls for, never below `minimum`.
 
     Grain or flicker makes every held frame differ a little. With grain of 1
@@ -150,10 +152,8 @@ def noise_threshold(scores: Sequence[float], minimum: float,
     has no jump at all, and keeps `minimum`.
 
     Two clusters of scores are not proof of grain on their own: real motion
-    that alternates small and large steps clusters the same way, and reading
-    its small steps as grain merged real drawings away. So when `grain` says,
-    frame by frame, whether a difference looks like grain, most of the quiet
-    side has to. Missing a grainy clip's holds only means nothing is rebuilt.
+    that alternates small and large steps clusters the same way. So this is
+    only applied when the user says the clip is grainy (`cfg.grain`).
     """
     s = sorted(scores[1:])  # frame 0 has nothing before it to differ from
     n = len(s)
@@ -163,10 +163,6 @@ def noise_threshold(scores: Sequence[float], minimum: float,
                       for k in range(n // 4, n - n // 5 + 1))
     if jump < 2.5:
         return minimum
-    if grain is not None:
-        quiet = [g for score, g in zip(scores[1:], grain[1:]) if score < s[split]]
-        if sum(quiet) < 0.8 * len(quiet):
-            return minimum
     return max(minimum, 2.0 * s[split // 2])
 
 

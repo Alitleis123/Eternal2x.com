@@ -167,8 +167,12 @@ def build_parser() -> argparse.ArgumentParser:
                              "mp4: compact H.264 file. "
                              "mkv: lossless FFV1 file.")
     parser.add_argument("--threshold", type=float, default=None,
-                        help="Duplicate-detection threshold override. A grainy clip "
-                             "can still raise it to clear its own noise.")
+                        help="Duplicate-detection threshold override. With --grain, "
+                             "the clip's own noise can still raise it.")
+    parser.add_argument("--grain", action="store_true",
+                        help="The clip has film grain: raise the threshold above its "
+                             "noise, so held frames are not each taken for a drawing. "
+                             "Leave off for clean animation.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
     parser.add_argument("--quality", default=None, choices=["fast", "better", "best", "ai"],
@@ -192,6 +196,7 @@ def config_from_args(args) -> Eternal2xConfig:
         cfg.duplicate_threshold = args.threshold
     if args.base_hold:
         cfg.force_base_hold = args.base_hold
+    cfg.grain = bool(getattr(args, "grain", False))
     if args.quality:
         cfg.quality = args.quality
     cfg.interpolate_enabled = not args.no_interpolate
@@ -287,6 +292,12 @@ def _run(args, summary: dict) -> int:
             why = "This clip has no duplicated frames. It is live action or already animated on 1s."
             short = "No duplicate frames. This clip is already on 1s."
             summary["skipped"] = "no duplicate frames"
+            if plan.grain_suspected:
+                why = ("Every frame differs, but by about the same small amount, as grain "
+                       "makes held frames differ. If the clip is grainy, turn on Grainy "
+                       "source (--grain) and try again.")
+                short = ("Every frame differs, but the differences look like grain. If the "
+                         "clip is grainy, turn on Grainy source and analyse again.")
         print(f"Nothing to do. {why}")
         summary["ok"] = True
         status.write(done=True, ok=True, message=short)

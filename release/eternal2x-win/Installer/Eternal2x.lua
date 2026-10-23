@@ -85,6 +85,7 @@ local OUTPUT_DIR = conf["output_dir"] or ""
 local QUALITY = conf["quality"] or "better"
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
+local GRAINY = parse_bool(conf["grain"], false)
 local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 local FORMAT = conf["format"] or "png"
 
@@ -113,6 +114,7 @@ local function save_conf()
     f:write("quality=" .. QUALITY .. "\n")
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
+    f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
@@ -539,6 +541,8 @@ local win = disp:AddWindow({
                      ToolTip = "Apply Super Scale 2x. It shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
                      ToolTip = "Off keeps every drawing on its frame and generates nothing, to upscale only." },
+        ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
+                     ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
 
     ui:Label{ ID = "RunSection", Text = "RUN", ObjectName = "Section" },
@@ -668,9 +672,20 @@ local function current_args(extra)
     args = args .. " --format " .. fmt
     if not items.UpscaleCB.Checked then args = args .. " --no-upscale" end
     if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
+    if items.GrainCB.Checked then args = args .. " --grain" end
     if OUTPUT_DIR ~= "" then args = args .. " --output-dir " .. shell_quote(OUTPUT_DIR) end
     args = args .. " --status-file " .. shell_quote(STATUS_PATH)
     return args .. (extra or "")
+end
+
+-- One clip property. Asked for a single key, Resolve can hand back the value or
+-- a table holding it, depending on the build.
+local function clip_property(mpi, key)
+    if not mpi.GetClipProperty then return nil end
+    local ok, got = pcall(function() return mpi:GetClipProperty(key) end)
+    if not ok then return nil end
+    if type(got) == "table" then got = got[key] end
+    return got
 end
 
 -- The render is finished on disk; bring it in from here rather than from the
@@ -685,24 +700,17 @@ local function set_sequence_fps(mpi, fps)
     local text = (math.abs(fps - math.floor(fps + 0.5)) < 0.001)
         and tostring(math.floor(fps + 0.5)) or string.format("%.3f", fps)
     local called, set = pcall(function() return mpi:SetClipProperty("FPS", text) end)
-    if called and set and mpi.GetClipProperty then
-        local read, got = pcall(function() return mpi:GetClipProperty("FPS") end)
-        if read and type(got) == "table" then got = got["FPS"] end
-        if read and math.abs((tonumber(got) or 0) - fps) > 0.01 then set = false end
+    -- Only a rate read back as set counts. A yes from SetClipProperty alone
+    -- is not enough, and a clip placed at the wrong rate plays at the wrong
+    -- speed and covers more of the timeline.
+    local confirmed = false
+    if called and set then
+        local got = tonumber(tostring(clip_property(mpi, "FPS") or ""):match("^%s*([%d%.]+)"))
+        confirmed = got ~= nil and math.abs(got - fps) <= 0.01
     end
-    if called and set then return " at " .. text .. " fps", true end
+    if confirmed then return " at " .. text .. " fps", true end
     return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)",
         false
-end
-
--- One clip property. Asked for a single key, Resolve can hand back the value or
--- a table holding it, depending on the build.
-local function clip_property(mpi, key)
-    if not mpi.GetClipProperty then return nil end
-    local ok, got = pcall(function() return mpi:GetClipProperty(key) end)
-    if not ok then return nil end
-    if type(got) == "table" then got = got[key] end
-    return got
 end
 
 -- The first entry of a list from Resolve, whatever its keys.
@@ -1222,6 +1230,11 @@ end
 
 function win.On.InterpCB.Clicked(ev)
     DO_INTERPOLATE = items.InterpCB.Checked
+    save_conf()
+end
+
+function win.On.GrainCB.Clicked(ev)
+    GRAINY = items.GrainCB.Checked
     save_conf()
 end
 
