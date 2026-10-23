@@ -484,7 +484,11 @@ a:hover { color: var(--accent-hover); }
     font-weight: 600;
     transition: background .15s;
     user-select: none;
+    list-style: none;
 }
+
+/* The chevron is the marker, so hide the browser's own. */
+.faq-question::-webkit-details-marker { display: none; }
 
 .faq-question:hover { background: rgba(255, 255, 255, 0.02); }
 
@@ -494,7 +498,7 @@ a:hover { color: var(--accent-hover); }
     font-size: 12px;
 }
 
-.faq-item.open .faq-chevron { transform: rotate(180deg); }
+.faq-item[open] .faq-chevron { transform: rotate(180deg); }
 
 .faq-answer {
     padding: 0 24px 20px;
@@ -504,7 +508,7 @@ a:hover { color: var(--accent-hover); }
     display: none;
 }
 
-.faq-item.open .faq-answer { display: block; }
+.faq-item[open] .faq-answer { display: block; }
 
 /* ===== Guide Steps ===== */
 .guide-step {
