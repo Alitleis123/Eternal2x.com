@@ -785,6 +785,16 @@ def test_a_long_ntsc_render_fills_the_original(lua, direct):
     assert H.tracks[2][1][2] == 86400 + 999
 
 
+def test_a_rate_near_ntsc_is_taken_as_it_is(lua, direct):
+    """23.98 is not 24000/1001. Taken for it, 1000 frames were cut to 999
+    over a 1000 frame original, a frame short."""
+    H = _with_source(lua, direct, item_duration=1000)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=1000, fps=23.98)
+    assert H.placements[1].endFrame == 1000
+    assert H.tracks[2][1][2] == 86400 + 1000
+
+
 def test_a_placement_that_runs_past_the_original_says_so(lua, direct):
     """A Resolve that rounds lengths to nearest, not down, places 47.6
     timeline frames as 48 over a 47 frame original."""
