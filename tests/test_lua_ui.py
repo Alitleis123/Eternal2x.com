@@ -915,6 +915,43 @@ def test_an_update_check_that_never_ran_does_not_repeat_the_last_verdict(lua, di
     assert "failed" in H.status()
 
 
+def test_a_reopened_panel_follows_the_run_it_left_behind(lua, direct):
+    """Closed mid-render and reopened, the panel must not start a second run
+    over the first one's files, and should still import the first."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time())
+    H = load(lua, ui_script(direct))
+    assert not H.enabled("SmoothBtn") and not H.enabled("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
+                 import_path=str(direct / "shot_smooth.mp4"), updated=time.time())
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 1
+    assert H.enabled("SmoothBtn")
+
+
+def test_reset_does_not_drop_a_run_that_is_still_reporting(lua, direct):
+    """Reset is for a run that stopped. A live one would carry on underneath
+    the next run, sharing its files."""
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.4, updated=time.time())
+    H.click("CancelBtn")
+    assert (direct / ".eternal2x_status.json").exists()
+    assert not H.enabled("SmoothBtn")
+    assert "still running" in H.status()
+
+
+def test_reset_clears_a_run_that_went_quiet(lua, direct):
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.4, updated=time.time() - 10 * 60)
+    H.click("CancelBtn")
+    assert H.enabled("SmoothBtn")
+    assert H.status() == "Ready."
+
+
 def test_no_update_while_a_render_runs(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")

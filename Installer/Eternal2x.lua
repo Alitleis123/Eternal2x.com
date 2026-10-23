@@ -759,6 +759,17 @@ local function poll()
     return true
 end
 
+-- A run may still be going, even one started from an earlier panel. Python
+-- writes its status at least once a frame, so a recent unfinished one means
+-- it is. Only one run at a time, since runs share the script, status and
+-- exit files.
+local function run_in_progress()
+    if read_exit_code() then return false end
+    local st = read_status()
+    return st ~= nil and not st.done and st.updated ~= nil
+        and os.time() - st.updated < STALLED_AFTER
+end
+
 -- ---------------------------------------------------------------------------
 -- polling
 -- ---------------------------------------------------------------------------
@@ -868,6 +879,13 @@ function win.On.RefreshStatusBtn.Clicked(ev)
 end
 
 function win.On.CancelBtn.Clicked(ev)
+    if run_in_progress() then
+        set_busy(true)
+        start_polling()
+        set_status("It is still running, so Reset leaves it alone. If its window was closed, "
+            .. "Reset works once it has been quiet for 3 minutes.")
+        return
+    end
     clear_status()
     ANALYSING = false
     IMPORTED = false
@@ -905,15 +923,6 @@ function win.On.AutoUpdateCB.Clicked(ev)
     AUTO_UPDATE = items.AutoUpdateCB.Checked
     save_conf()
     set_status(AUTO_UPDATE and "Auto-update enabled." or "Auto-update disabled.")
-end
-
--- A render started from an earlier panel may still be going. Python writes
--- its status at least once a frame, so a recent unfinished one means it is.
-local function run_in_progress()
-    if read_exit_code() then return false end
-    local st = read_status()
-    return st ~= nil and not st.done and st.updated ~= nil
-        and os.time() - st.updated < STALLED_AFTER
 end
 
 local function run_update(auto_mode)
@@ -969,7 +978,14 @@ else
     items.Meta.Text = short_path(REPO_ROOT, 68)
     refresh_source()
     set_status(SOURCE_PATH and "Ready." or items.SourceLabel.Text)
-    if AUTO_UPDATE then run_update(true) end
+    if run_in_progress() then
+        -- Closed mid-run and reopened: follow that run, and import it when done.
+        set_busy(true)
+        start_polling()
+        set_status("A run started earlier is still going. Its progress shows here.")
+    elseif AUTO_UPDATE then
+        run_update(true)
+    end
 end
 
 disp:RunLoop()
