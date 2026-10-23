@@ -648,7 +648,10 @@ local function import_result(st)
     end
     mpi = mpi or try_import(path)
     if not mpi then
-        return false, "Resolve would not import " .. basename(path)
+        -- The whole path, so the render can be found and dragged in by hand.
+        -- A sequence is its folder, not its first frame.
+        local where = st.sequence_pattern ~= "" and path:match("^(.+)[/\\]") or path
+        return false, "Resolve would not import " .. where .. "."
     end
 
     local notes = "Imported " .. basename(path)

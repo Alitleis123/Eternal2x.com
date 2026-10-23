@@ -612,13 +612,26 @@ def test_a_refused_import_still_tells_the_user_where_the_render_is(lua, direct):
     H.import_works = False
     H.click("SmoothBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
-                 import_path="/tmp/out.mp4")
+                 import_path="/tmp/renders/out.mp4")
     H.click("RefreshStatusBtn")
 
     status = H.status()
-    assert "would not import" in status
+    assert "would not import /tmp/renders/out.mp4" in status
     assert "drag it in" in status.lower()
     assert H.enabled("SmoothBtn"), "the panel stayed busy after a failed import"
+
+
+def test_a_refused_sequence_is_pointed_at_by_its_folder(lua, direct):
+    """The first frame's name alone, frame_000000.png, says nothing."""
+    H = load(lua, ui_script(direct))
+    H.import_works = False
+    H.click("SmoothBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Rendered.",
+                 import_path="/tmp/renders/shot_smooth/frame_000000.png",
+                 sequence_pattern="/tmp/renders/shot_smooth/frame_%06d.png",
+                 sequence_frames=24, fps=24.0)
+    H.click("RefreshStatusBtn")
+    assert "would not import /tmp/renders/shot_smooth." in H.status()
 
 
 def test_the_import_happens_once_not_on_every_poll(lua, direct):
