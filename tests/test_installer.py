@@ -84,6 +84,21 @@ def test_moving_from_comp_keeps_the_settings_saved_there(fake_home, monkeypatch)
     assert f"repo_root={Path('/new')}" in conf
 
 
+def test_a_failed_settings_move_keeps_the_old_settings(fake_home, monkeypatch):
+    """Deleting the Comp conf after the copy failed lost the update opt-out."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text("auto_update=false\n")
+
+    def refuse(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(inst.shutil, "copy2", refuse)
+    inst.remove_old_install()
+    assert (comp / "Eternal2x.conf").exists(), "the only copy of the settings was deleted"
+
+
 def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
                                                                         monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
