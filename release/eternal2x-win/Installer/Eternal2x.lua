@@ -811,16 +811,19 @@ local function find_source(timeline, place)
     return nil
 end
 
+-- The rates Resolve shows for 24000/1001 and its kin. It counts with the
+-- exact rate, which over a long clip comes out a frame different. Any other
+-- rate, 23.98 say, is what it says.
+local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
+               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
+
 -- The timeline's frame rate and the clip's. nil when either is unknown.
--- Resolve shows 23.976 for 24000/1001 but counts with the exact rate, which
--- over a long clip comes out a frame different, so these are made exact too.
 local function rates(timeline, mpi)
     local function rate(text)
         local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
         if not r then return nil end
-        local n = math.floor(r * 1.001 + 0.5)
-        if math.abs(r - n) > 0.005 and math.abs(r - n * 1000 / 1001) < 0.005 then
-            return n * 1000 / 1001
+        for _, pair in ipairs(NTSC) do
+            if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
         end
         return r
     end
