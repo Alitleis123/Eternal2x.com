@@ -50,6 +50,7 @@ def remove_old_install() -> None:
         return
     # The panel saved its settings beside the old launcher. Carried over, they
     # survive the move, so an update opt-out is not turned back on.
+    # If the copy fails, the old conf stays, so the settings are not lost.
     old_conf, new_conf = root / "Comp" / "Eternal2x.conf", root / "Utility" / "Eternal2x.conf"
     if old_conf.exists() and not new_conf.exists():
         try:
@@ -57,7 +58,8 @@ def remove_old_install() -> None:
             shutil.copy2(old_conf, new_conf)
         except OSError:
             pass
-    for name in ("Eternal2x.lua", "Eternal2x.conf"):
+    leftovers = ["Eternal2x.lua"] + (["Eternal2x.conf"] if new_conf.exists() else [])
+    for name in leftovers:
         try:
             (root / "Comp" / name).unlink()
         except OSError:
