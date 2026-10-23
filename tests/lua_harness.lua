@@ -121,6 +121,16 @@ local function resolve_list(t)
     return t
 end
 
+-- A frame rate as Resolve counts with it: 23.976 is 24000/1001.
+local function exact_rate(text)
+    local r = tonumber(tostring(text or "24"):match("[%d%.]+"))
+    local n = math.floor(r * 1.001 + 0.5)
+    if math.abs(r - n) > 0.005 and math.abs(r - n * 1000 / 1001) < 0.005 then
+        return n * 1000 / 1001
+    end
+    return r
+end
+
 function H.make_resolve(clip_file_path)
     local mpi = {
         GetClipProperty = function(_self)
@@ -274,18 +284,25 @@ function H.make_resolve(clip_file_path)
         AppendToTimeline = function(_self, clips)
             local out = {}
             for _, clip in ipairs(clips) do
+                local placed = { enabled = true }
                 -- A clipInfo says where on the timeline it goes.
                 if clip.mediaPoolItem then
                     if H.place_throws then error("AppendToTimeline failed") end
                     if H.place_works == false then return resolve_list({}) end
                     table.insert(H.placements, clip)
                     local track = H.tracks[clip.trackIndex]
-                    -- Resolve 20.3 places frames startFrame to endFrame - 1.
-                    local length = clip.endFrame - clip.startFrame
-                    table.insert(track, { clip.recordFrame, clip.recordFrame + length })
+                    -- Resolve 20.3 places frames startFrame to endFrame - 1, at
+                    -- the timeline's rate, and rounds the length down.
+                    -- H.place_rounds models a build that rounds to nearest.
+                    local raw = (clip.endFrame - clip.startFrame) * exact_rate(H.timeline_fps or "24")
+                        / exact_rate(clip.mediaPoolItem:GetClipProperty("FPS"))
+                    local length = H.place_rounds and math.floor(raw + 0.5) or math.floor(raw + 1e-9)
+                    local span = { clip.recordFrame, clip.recordFrame + length }
+                    table.insert(track, span)
+                    function placed:GetStart() return span[1] end
+                    function placed:GetEnd() return span[2] end
                 end
                 H.appended = H.appended + 1
-                local placed = { enabled = true }
                 function placed:GetClipEnabled() return self.enabled end
                 function placed:SetClipEnabled(on) self.enabled = on return true end
                 H.last_placed = placed

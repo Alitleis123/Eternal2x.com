@@ -755,6 +755,46 @@ def test_a_render_a_frame_longer_than_the_source_ends_with_it(lua, direct):
     assert H.tracks[2][1][2] == 86448, "it runs past the original"
 
 
+def _with_source(lua, direct, **fields):
+    H = load(lua, ui_script(direct))
+    sets = "; ".join(f"H.{k} = {str(v).lower() if isinstance(v, bool) else repr(v)}"
+                     for k, v in fields.items())
+    lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; {sets}", H)
+    H.click("RefreshBtn")
+    return H
+
+
+def test_a_slower_render_on_a_faster_timeline_ends_inside_the_original(lua, direct):
+    """20 frames at 24 fps last 50 frames of a 60 fps timeline, two past a
+    48 frame original, so 19 are placed."""
+    H = _with_source(lua, direct, timeline_fps="60")
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=20, fps=24.0)
+    assert H.placements[1].endFrame == 19
+    assert H.tracks[2][1][2] <= 86448, "it runs into the next shot"
+    assert "past it" not in H.status()
+
+
+def test_a_long_ntsc_render_fills_the_original(lua, direct):
+    """23.976 is 24000/1001. Counted with 23.976, 999 frames came out one
+    short of a 999 frame original on a 24 fps timeline."""
+    H = _with_source(lua, direct, item_duration=999)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=999, fps=23.976)
+    assert H.placements[1].endFrame == 999
+    assert H.tracks[2][1][2] == 86400 + 999
+
+
+def test_a_placement_that_runs_past_the_original_says_so(lua, direct):
+    """A Resolve that rounds lengths to nearest, not down, places 47.6
+    timeline frames as 48 over a 47 frame original."""
+    H = _with_source(lua, direct, item_duration=47, place_rounds=True)
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.placements[1].endFrame == 119
+    assert "runs 1 frame past it" in H.status()
+
+
 def test_a_render_a_frame_short_is_placed_whole(lua, direct):
     H = load(lua, ui_script(direct))
     H.media_frames = "47"

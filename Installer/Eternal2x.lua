@@ -812,20 +812,34 @@ local function find_source(timeline, place)
 end
 
 -- The timeline's frame rate and the clip's. nil when either is unknown.
+-- Resolve shows 23.976 for 24000/1001 but counts with the exact rate, which
+-- over a long clip comes out a frame different, so these are made exact too.
 local function rates(timeline, mpi)
-    local function rate(text) return tonumber(tostring(text or ""):match("^%s*([%d%.]+)")) end
+    local function rate(text)
+        local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
+        if not r then return nil end
+        local n = math.floor(r * 1.001 + 0.5)
+        if math.abs(r - n) > 0.005 and math.abs(r - n * 1000 / 1001) < 0.005 then
+            return n * 1000 / 1001
+        end
+        return r
+    end
     local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
     if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
     return ours, theirs
 end
 
--- How many of the render's frames cover the source clip's `duration`
--- timeline frames. The render can have a frame more: Resolve reports where a
--- clip ends inconsistently, so the range it was made from can run one past.
+-- How many of the render's frames to place over the source clip's
+-- `duration` timeline frames: as many as fit without running past it.
+-- Resolve rounds a clip's length on the timeline down, so that is the most
+-- whose length at the timeline's rate is under duration + 1. The render can
+-- have a frame more than that, as Resolve reports where a clip ends
+-- inconsistently. On a timeline faster than the clip it can fall a frame
+-- short, since no whole number of the clip's frames fits exactly.
 local function frames_covering(timeline, mpi, duration, frames)
     local ours, theirs = rates(timeline, mpi)
     if not ours then return nil end
-    return math.min(frames, math.ceil(duration * theirs / ours - 0.001))
+    return math.min(frames, math.ceil((duration + 1) * theirs / ours - 1e-6) - 1)
 end
 
 -- How many timeline frames the clip covers: its frames at its own rate,
@@ -852,7 +866,7 @@ local function place_above(pool, project, mpi, frames)
         local count = frames_covering(timeline, mpi, place.duration, frames)
         return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
-    if not (ok and timeline and at and count and length) then return nil end
+    if not (ok and timeline and at and count and count > 0 and length) then return nil end
 
     local made, track, added = pcall(free_track, timeline, at, math.max(length, place.duration))
     if not (made and track) then return nil end
@@ -869,7 +883,10 @@ local function place_above(pool, project, mpi, frames)
         return nil
     end
     if added then pcall(function() timeline:SetTrackName("video", track, "Eternal2x") end) end
-    return track, item
+    -- Where it really ends, in case this Resolve counts frames differently.
+    local over = 0
+    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    return track, item, over
 end
 
 -- Super Scale makes the clip bigger than its file, which only shows on a
@@ -951,10 +968,16 @@ local function import_result(st)
     if pool.AppendToTimeline then
         local frames = st.sequence_frames > 0 and st.sequence_frames
             or tonumber(clip_property(mpi, "Frames"))
-        local track, item = place_above(pool, project, mpi, frames)
+        local track, item, over = place_above(pool, project, mpi, frames)
         if track then
             LAST_ITEM = item
-            notes = notes .. ", placed on V" .. track .. " above the original."
+            notes = notes .. ", placed on V" .. track .. " above the original"
+            if over > 0 then
+                notes = notes .. string.format(", but it runs %d frame%s past it. Trim its end.",
+                                               over, over == 1 and "" or "s")
+            else
+                notes = notes .. "."
+            end
         else
             local called, appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
             local added = called and appended and (type(appended) ~= "table" or #appended > 0)
