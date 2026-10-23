@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import io
 import subprocess
 import sys
+import tarfile
 from pathlib import Path
 
 import pytest
@@ -357,6 +359,59 @@ def test_the_gui_installer_opens_no_console_windows():
     for call in calls:
         assert any(kw.arg is None and getattr(kw.value, "id", "") == "_NO_WINDOW"
                    for kw in call.keywords), f"line {call.lineno} would open a console"
+
+
+def tar_of(*members) -> tarfile.TarFile:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for name, kind, linkname in members:
+            info = tarfile.TarInfo(name)
+            info.type, info.linkname = kind, linkname
+            data = b"payload" if kind == tarfile.REGTYPE else b""
+            info.size = len(data)
+            tf.addfile(info, io.BytesIO(data))
+    return tarfile.open(fileobj=io.BytesIO(buf.getvalue()), mode="r:gz")
+
+
+@pytest.fixture(params=["filter", "no filter"])
+def tar_python(request, monkeypatch):
+    """Python 3.12 and 3.13 trust every member unless told otherwise, and
+    Pythons before them have no filter at all. Both are made to happen here."""
+    monkeypatch.setattr(tarfile.TarFile, "extraction_filter",
+                        staticmethod(tarfile.fully_trusted_filter), raising=False)
+    if request.param == "no filter":
+        monkeypatch.delattr(tarfile, "data_filter", raising=False)
+
+
+@pytest.mark.parametrize("name,kind,linkname", [
+    ("../escaped.txt", tarfile.REGTYPE, ""),
+    ("python/lib", tarfile.SYMTYPE, "../../escaped.txt"),
+    ("python/lib", tarfile.SYMTYPE, "OUTSIDE"),
+    ("python/lib", tarfile.LNKTYPE, "../escaped.txt"),
+    ("python/dev", tarfile.CHRTYPE, ""),
+], ids=["parent path", "relative link", "absolute link", "hard link", "device"])
+def test_a_downloaded_python_cannot_write_outside_its_folder(tmp_path, tar_python,
+                                                             name, kind, linkname):
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    dest = tmp_path / "extract"
+    dest.mkdir()
+    outside = tmp_path / "escaped.txt"
+    linkname = linkname.replace("OUTSIDE", str(outside))
+    with tar_of(("python/bin", tarfile.DIRTYPE, ""), (name, kind, linkname)) as tf:
+        with pytest.raises(tarfile.TarError):
+            gui._safe_extract(tf, dest)
+    assert not outside.exists()
+    assert not (dest / name).is_symlink()
+
+
+def test_a_downloaded_python_unpacks(tmp_path, tar_python):
+    import importlib
+    gui = importlib.import_module("Installer.gui_installer")
+    with tar_of(("python/bin", tarfile.DIRTYPE, ""),
+                ("python/bin/python3", tarfile.REGTYPE, "")) as tf:
+        gui._safe_extract(tf, tmp_path)
+    assert (tmp_path / "python" / "bin" / "python3").read_bytes() == b"payload"
 
 
 def test_the_gui_installer_prefers_the_python_running_it(monkeypatch):

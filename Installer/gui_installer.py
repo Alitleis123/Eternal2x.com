@@ -211,6 +211,40 @@ def _download_with_progress(url: str, callback=None) -> bytes:
     return data.getvalue()
 
 
+def _safe_extract(tf: tarfile.TarFile, dest: Path) -> None:
+    """Unpack a downloaded archive so no member can land outside dest.
+
+    filter="data" refuses paths and links that lead out of dest, and device
+    files. A Python too old to have it gets the same checks here, made one
+    member at a time, so a link unpacked earlier is followed when checking
+    the members after it.
+    """
+    if hasattr(tarfile, "data_filter"):
+        tf.extractall(dest, filter="data")
+        return
+    root = os.path.realpath(dest)
+
+    def inside(path: str) -> bool:
+        try:
+            return os.path.commonpath([root, os.path.realpath(path)]) == root
+        except ValueError:  # on another drive
+            return False
+
+    for member in tf.getmembers():
+        target = os.path.join(root, member.name)
+        if member.issym():
+            points_to = os.path.join(os.path.dirname(target), member.linkname)
+        elif member.islnk():
+            points_to = os.path.join(root, member.linkname)
+        elif member.isfile() or member.isdir():
+            points_to = target
+        else:
+            raise tarfile.TarError(f"{member.name} is not a file or folder.")
+        if not (inside(target) and inside(points_to)):
+            raise tarfile.TarError(f"{member.name} would land outside {dest}.")
+        tf.extract(member, dest)
+
+
 # ---------------------------------------------------------------------------
 # Installer app
 # ---------------------------------------------------------------------------
@@ -485,7 +519,7 @@ class InstallerApp:
 
         try:
             with tarfile.open(fileobj=io.BytesIO(tar_data), mode="r:gz") as tf:
-                tf.extractall(temp_extract)
+                _safe_extract(tf, temp_extract)
         except Exception as exc:
             self.root.after(0, self._log, f"  Extraction failed: {exc}", "err")
             shutil.rmtree(temp_extract, ignore_errors=True)
