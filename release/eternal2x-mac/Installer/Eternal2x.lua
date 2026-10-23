@@ -195,21 +195,38 @@ local function clip_range(item, props)
     return nil
 end
 
--- Renders are named <clip>_smooth, with _02 and up for later ones: a folder
--- of frames, or one file.
-local function is_render(path)
-    return path:find("_smooth[_%d]*[/\\][^/\\]+$") ~= nil
-        or path:find("_smooth[_%d]*%.%w+$") ~= nil
+-- A file's name without its folder or extension.
+local function stem_of(path)
+    return ((path:match("([^/\\]+)$") or path):gsub("%.[^.]*$", ""))
 end
 
--- The clip a render placed above was lined up with: the highest one under it
--- that starts on the same frame. nil if there is none.
-local function original_under(timeline, item)
+-- What a render is called: its folder for a sequence of frames, its file
+-- name for one file. nil for a path Eternal2x does not write.
+local function render_name(path)
+    return path:match("([^/\\]+)[/\\]frame_[%d%[%]%-]+%.png$")
+        or path:match("([^/\\]+)%.mkv$") or path:match("([^/\\]+)%.mp4$")
+end
+
+-- Whether `name` is what Stages/resolve_smooth.py calls a render of a file
+-- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, then
+-- _smooth, then _<nn> for the second render and on.
+local function rendered_from(name, stem)
+    if stem == "" or name:sub(1, #stem) ~= stem then return false end
+    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1)
+    return rest == "_smooth" or rest:match("^_smooth_%d%d+$") ~= nil
+end
+
+-- The clip a render under the playhead was made from: on a track below it,
+-- starting on the same frame, its file the one the render is named after.
+-- Earlier renders stacked in between are passed over. nil if there is none.
+local function original_under(timeline, item, name)
     local ok, found = pcall(function()
         local start = item:GetStart()
         for track = tonumber(item:GetTrackTypeAndIndex()[2]) - 1, 1, -1 do
             for _, it in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
-                if it:GetStart() == start and it:GetMediaPoolItem() then return it end
+                local mpi = it:GetStart() == start and it:GetMediaPoolItem()
+                local file = mpi and (mpi:GetClipProperty() or {})["File Path"]
+                if file and rendered_from(name, stem_of(file)) then return it end
             end
         end
     end)
@@ -242,13 +259,13 @@ local function find_clip_path()
 
     -- A render placed above its original is the top clip under the playhead
     -- from then on, even switched off. Smoothing it would smooth the render
-    -- again, so the clip it was lined up with is used instead.
-    if is_render(path) then
-        local below = original_under(timeline, item)
-        local below_props = below and below:GetMediaPoolItem():GetClipProperty() or {}
-        if below_props["File Path"] and below_props["File Path"] ~= "" then
-            item, props, path = below, below_props, below_props["File Path"]
-        end
+    -- again, so the clip it was made from is used instead.
+    local name = render_name(path)
+    local below = name and original_under(timeline, item, name)
+    if below then
+        item = below
+        props = below:GetMediaPoolItem():GetClipProperty() or {}
+        path = props["File Path"]
     end
 
     -- Where the clip sits, so the result can go on a track above it, lined up
@@ -795,20 +812,34 @@ local function find_source(timeline, place)
 end
 
 -- The timeline's frame rate and the clip's. nil when either is unknown.
+-- Resolve shows 23.976 for 24000/1001 but counts with the exact rate, which
+-- over a long clip comes out a frame different, so these are made exact too.
 local function rates(timeline, mpi)
-    local function rate(text) return tonumber(tostring(text or ""):match("^%s*([%d%.]+)")) end
+    local function rate(text)
+        local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
+        if not r then return nil end
+        local n = math.floor(r * 1.001 + 0.5)
+        if math.abs(r - n) > 0.005 and math.abs(r - n * 1000 / 1001) < 0.005 then
+            return n * 1000 / 1001
+        end
+        return r
+    end
     local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
     if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
     return ours, theirs
 end
 
--- How many of the render's frames cover the source clip's `duration`
--- timeline frames. The render can have a frame more: Resolve reports where a
--- clip ends inconsistently, so the range it was made from can run one past.
+-- How many of the render's frames to place over the source clip's
+-- `duration` timeline frames: as many as fit without running past it.
+-- Resolve rounds a clip's length on the timeline down, so that is the most
+-- whose length at the timeline's rate is under duration + 1. The render can
+-- have a frame more than that, as Resolve reports where a clip ends
+-- inconsistently. On a timeline faster than the clip it can fall a frame
+-- short, since no whole number of the clip's frames fits exactly.
 local function frames_covering(timeline, mpi, duration, frames)
     local ours, theirs = rates(timeline, mpi)
     if not ours then return nil end
-    return math.min(frames, math.ceil(duration * theirs / ours - 0.001))
+    return math.min(frames, math.ceil((duration + 1) * theirs / ours - 1e-6) - 1)
 end
 
 -- How many timeline frames the clip covers: its frames at its own rate,
@@ -835,7 +866,7 @@ local function place_above(pool, project, mpi, frames)
         local count = frames_covering(timeline, mpi, place.duration, frames)
         return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
-    if not (ok and timeline and at and count and length) then return nil end
+    if not (ok and timeline and at and count and count > 0 and length) then return nil end
 
     local made, track, added = pcall(free_track, timeline, at, math.max(length, place.duration))
     if not (made and track) then return nil end
@@ -852,7 +883,10 @@ local function place_above(pool, project, mpi, frames)
         return nil
     end
     if added then pcall(function() timeline:SetTrackName("video", track, "Eternal2x") end) end
-    return track, item
+    -- Where it really ends, in case this Resolve counts frames differently.
+    local over = 0
+    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    return track, item, over
 end
 
 -- Super Scale makes the clip bigger than its file, which only shows on a
@@ -934,10 +968,16 @@ local function import_result(st)
     if pool.AppendToTimeline then
         local frames = st.sequence_frames > 0 and st.sequence_frames
             or tonumber(clip_property(mpi, "Frames"))
-        local track, item = place_above(pool, project, mpi, frames)
+        local track, item, over = place_above(pool, project, mpi, frames)
         if track then
             LAST_ITEM = item
-            notes = notes .. ", placed on V" .. track .. " above the original."
+            notes = notes .. ", placed on V" .. track .. " above the original"
+            if over > 0 then
+                notes = notes .. string.format(", but it runs %d frame%s past it. Trim its end.",
+                                               over, over == 1 and "" or "s")
+            else
+                notes = notes .. "."
+            end
         else
             local called, appended = pcall(function() return pool:AppendToTimeline({ mpi }) end)
             local added = called and appended and (type(appended) ~= "table" or #appended > 0)
