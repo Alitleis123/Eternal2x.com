@@ -713,11 +713,14 @@ local function set_sequence_fps(mpi, fps)
         false
 end
 
--- The first entry of a list from Resolve, whatever its keys.
+-- The first entry of a list from Resolve, whatever its keys. Resolve 20.3
+-- adds a number under __flags to every list, which is not an entry.
 local function first_of(list)
     if type(list) ~= "table" then return nil end
     if list[1] ~= nil then return list[1] end
-    for _, v in pairs(list) do return v end
+    for k, v in pairs(list) do
+        if k ~= "__flags" then return v end
+    end
     return nil
 end
 
@@ -728,7 +731,7 @@ local function free_track(timeline, at, length)
     local finish = at.start + length
     for track = at.track + 1, tonumber(timeline:GetTrackCount("video")) or 0 do
         local clear = true
-        for _, other in pairs(timeline:GetItemListInTrack("video", track) or {}) do
+        for _, other in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
             if other:GetStart() < finish and other:GetEnd() > at.start then
                 clear = false
                 break
@@ -745,7 +748,7 @@ end
 -- its media, since the render would then not match it.
 local function find_source(timeline, place)
     for track = 1, tonumber(timeline:GetTrackCount("video")) or 0 do
-        for _, it in pairs(timeline:GetItemListInTrack("video", track) or {}) do
+        for _, it in ipairs(timeline:GetItemListInTrack("video", track) or {}) do
             if it:GetUniqueId() == place.item then
                 local source_start = nil
                 pcall(function() source_start = tonumber(it:GetSourceStartFrame()) end)
@@ -760,12 +763,28 @@ local function find_source(timeline, place)
     return nil
 end
 
--- How many timeline frames the clip covers: its frames at its own rate,
--- counted at the timeline's. nil when either rate is unknown.
-local function timeline_length(timeline, mpi, frames)
+-- The timeline's frame rate and the clip's. nil when either is unknown.
+local function rates(timeline, mpi)
     local function rate(text) return tonumber(tostring(text or ""):match("^%s*([%d%.]+)")) end
     local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
     if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
+    return ours, theirs
+end
+
+-- How many of the render's frames cover the source clip's `duration`
+-- timeline frames. The render can have a frame more: Resolve reports where a
+-- clip ends inconsistently, so the range it was made from can run one past.
+local function frames_covering(timeline, mpi, duration, frames)
+    local ours, theirs = rates(timeline, mpi)
+    if not ours then return nil end
+    return math.min(frames, math.ceil(duration * theirs / ours - 0.001))
+end
+
+-- How many timeline frames the clip covers: its frames at its own rate,
+-- counted at the timeline's. nil when either rate is unknown.
+local function timeline_length(timeline, mpi, frames)
+    local ours, theirs = rates(timeline, mpi)
+    if not ours then return nil end
     return math.ceil(frames * ours / theirs - 0.001)
 end
 
@@ -777,20 +796,23 @@ end
 local function place_above(pool, project, mpi, frames)
     local place = RUN_PLACE
     if not (place and frames and frames > 0) then return nil end
-    local ok, timeline, at, length = pcall(function()
+    local ok, timeline, at, count, length = pcall(function()
         local timeline = project:GetCurrentTimeline()
         if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
         local at = find_source(timeline, place)
         if not at then return nil end
-        return timeline, at, timeline_length(timeline, mpi, frames)
+        local count = frames_covering(timeline, mpi, place.duration, frames)
+        return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
-    if not (ok and timeline and at and length) then return nil end
+    if not (ok and timeline and at and count and length) then return nil end
 
     local made, track, added = pcall(free_track, timeline, at, math.max(length, place.duration))
     if not (made and track) then return nil end
+    -- Resolve 20.3 places frames startFrame to endFrame - 1: asked for 10 to
+    -- 20, it puts 10 frames on the timeline.
     local appended, item = pcall(function()
         return first_of(pool:AppendToTimeline({ {
-            mediaPoolItem = mpi, startFrame = 0, endFrame = frames - 1,
+            mediaPoolItem = mpi, startFrame = 0, endFrame = count,
             trackIndex = track, recordFrame = at.start, mediaType = 1,
         } }))
     end)
