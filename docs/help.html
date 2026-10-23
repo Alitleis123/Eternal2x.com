@@ -125,8 +125,9 @@
             </summary>
             <div class="faq-answer">
                 Every frame has to be read and every missing in-between generated, so the time scales with the
-                length of the clip on your timeline. Only the part of the file the clip uses is processed, so
-                trimming it short makes it quicker. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
+                length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so
+                trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
+                start first, shown as Seeking. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
                 Quality setting. Resolve stays usable throughout, and <strong>Analyse</strong> is much quicker if
                 you only want to see what a clip contains.
             </div>
@@ -400,7 +401,7 @@
                 <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar,
                    so Resolve stays usable. When it finishes, the rebuilt clip is imported with 2x Super Scale
                    applied and added to the end of your timeline, at the same length and frame rate as the
-                   clip you trimmed. Only that part of the file is processed.</p>
+                   clip you trimmed. Only that part of the file is rebuilt.</p>
             </div>
         </div>
 
