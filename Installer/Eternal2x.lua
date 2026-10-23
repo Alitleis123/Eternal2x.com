@@ -252,9 +252,12 @@ local function build_command(module_name, args, background, log)
         -- /MIN gives the run its own minimised window. With /B it shared the
         -- console os.execute opens, which stayed on screen for the whole
         -- render, and closing it killed the render without a word.
-        -- `call` keeps the quotes: given a quoted path holding &, `cmd /c`
-        -- strips them and splits the command there.
-        return "start \"Eternal2x\" /MIN cmd /c call " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
+        -- It starts in the plugin folder and runs the script by name. Given
+        -- the full path, `cmd /c` strips its quotes when it holds & and
+        -- splits there, and `call` would double a ^ in it.
+        local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
+        return "start \"Eternal2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
+            .. basename(RUN_SCRIPT)
     end
     -- The subshell backgrounds the whole run, and records how it ended.
     return "(" .. cd .. " && " .. run .. redirect .. "; echo $? > "

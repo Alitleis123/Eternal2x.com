@@ -274,10 +274,11 @@ def test_a_trimmed_timeline_clip_is_rebuilt_from_just_its_range(installation, re
     assert H.last_sequence_field("EndIndex") == 11
 
 
-def test_a_plugin_folder_with_an_ampersand_still_runs(tmp_path, repo_root, make_anime,
+def test_a_plugin_folder_with_shell_characters_still_runs(tmp_path, repo_root, make_anime,
                                                        read_frames):
-    """cmd strips the quotes around a script path holding &, and splits there."""
-    H, src = install(tmp_path, repo_root, make_anime, "VFX & Tools/Eternal2x")(
+    """cmd strips the quotes around a script path holding &, and splits there.
+    `call` would fix that but doubles a ^ in the path."""
+    H, src = install(tmp_path, repo_root, make_anime, "VFX & Tools ^1/Eternal2x")(
         holds=(2,) * 6)
     H.click("SmoothBtn")
     finish(H)
