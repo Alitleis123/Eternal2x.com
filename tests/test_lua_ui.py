@@ -1116,6 +1116,20 @@ def test_media_with_a_start_timecode_still_sends_file_seconds(lua, direct):
     assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
 
 
+def test_the_end_frame_wins_over_the_end_time(lua, direct):
+    """Measured on Resolve Studio 20.3.1: a 47 frame cut of 60 fps media on a
+    24 fps timeline reported end frame 1317 but an end time one frame earlier,
+    so a render from the times came out a timeline frame short of the cut."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.clip_fps = "60"
+    H.start_tc = 3600.0
+    H.source_range = lua.table(20.0, 1316 / 60)
+    H.source_frames = lua.table(1200, 1317)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("SmoothBtn")
+    assert "--start-time 20.000000 --end-time 21.950000" in H.last_command()
+
+
 def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
     H.source_range = lua.table(1.0, 2.0)

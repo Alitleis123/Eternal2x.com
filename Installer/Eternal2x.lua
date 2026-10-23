@@ -166,10 +166,12 @@ end
 -- the start of the file, so only that part is rebuilt. Seconds mean the same
 -- whatever the timeline's rate. nil means use the whole file.
 --
--- Resolve counts the source frame from the start of the file, at the media's
+-- Resolve counts source frames from the start of the file, at the media's
 -- own rate, but the source time from the media's start timecode, so on
--- footage that starts at 01:00:00:00 the times are an hour out. Only their
--- difference is used, anchored on the start frame.
+-- footage that starts at 01:00:00:00 the times are an hour out. The frames
+-- are used, and without an end frame the times' difference, anchored on the
+-- start frame. On Resolve Studio 20.3.1 the end time also fell a frame short
+-- of the end frame, and a render from it came out a frame short of the cut.
 local function clip_range(item, props)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
@@ -179,10 +181,10 @@ local function clip_range(item, props)
     local f0 = call("GetSourceStartFrame")
     if not (fps and fps > 0 and f0) then return nil end
     local start = f0 / fps
-    local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
-    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
     local f1 = call("GetSourceEndFrame")
     if f1 and f1 > f0 then return { start = start, finish = f1 / fps } end
+    local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
+    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
     return nil
 end
 
