@@ -35,22 +35,22 @@ it drops straight back into your edit.
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
   It counts a change of colour, a slow fade or a slow pan as motion rather
   than a hold. With **Grainy source** ticked, it sees through film grain.
-- Rebuilds the motion with optical flow, generating the in-between frames that
-  were never drawn.
-- Has an AI setting, the RIFE network, that draws fast-moving characters
-  cleanly where optical flow shows a faint double image. It is about six
-  times slower.
+- Draws the in-between frames that were never drawn with the RIFE network,
+  run on your own machine, on the GPU on Windows. Moving characters stay in
+  one piece.
+- Never shows a doubled or smeared in-between. The optical flow settings hold
+  the real drawing wherever one would ghost.
 - Keeps deliberate held poses still, instead of smearing them into drift.
 - Cuts stay hard. Blending across a scene change would show both shots at once,
   so it snaps instead.
 - Upscales 2x using Resolve's Super Scale.
 
 It does a job like Twixtor's, but finds the held drawings first, so it only
-generates the frames that were never drawn. Where forward and backward motion
-disagree, which is where optical flow normally tears, it fades to a soft
-dissolve rather than inventing a broken frame. On a small character moving a
-long way that dissolve can show as a faint double image for a frame. The AI
-setting avoids it.
+generates the frames that were never drawn. With the optical flow settings,
+wherever forward and backward motion disagree, which is where optical flow
+normally tears or doubles a line, it keeps the real drawing instead of
+inventing a broken frame, so fast motion is smoothed less. The AI setting,
+the default, draws those frames too.
 
 ## Requirements
 
@@ -133,7 +133,7 @@ Whole file when Resolve does not report one.
 
 | Setting | What it does |
 |---|---|
-| **Quality** | `Fast` for a quick look, `Better` for normal work, `Best` tracks fine detail like eyes and fingers at the cost of speed. `AI` uses the RIFE network, the cleanest on fast motion and about six times slower than `Better`. Its first run installs ONNX Runtime and downloads the model, about 40 MB, so it needs a connection once. |
+| **Quality** | `AI`, the default, draws every in-between with the RIFE network, so moving characters stay solid. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, the render uses `Best` and says so. `Fast`, `Better` and `Best` track pixels instead. They never show a doubled or smeared in-between: wherever one would ghost they keep the drawing as it is, so on fast motion they smooth much less. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |

@@ -124,6 +124,18 @@ FORMATS = {"png": "", "mp4": ".mp4", "mkv": ".mkv"}
 SEQUENCE_PATTERN = "frame_%06d.png"
 
 
+def _finished(plan, result) -> str:
+    """The panel's message for a finished render."""
+    text = (f"Rendered {plan.unique_drawings} drawings into "
+            f"{result.frames_written} smooth frames.")
+    if result.note:
+        text += " " + result.note
+    elif result.held:
+        text += (f" Kept {result.held} of {result.pairs} drawings as drawn, where an "
+                 f"in-between would ghost. AI quality smooths those too.")
+    return text
+
+
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,
                  frames: Optional[tuple] = None) -> Path:
     base = Path(output_dir) if output_dir else source.parent / "Eternal2x"
@@ -176,9 +188,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
     parser.add_argument("--quality", default=None, choices=["fast", "better", "best", "ai"],
-                        help="Interpolation quality. ai uses the RIFE network: cleanest on "
-                             "fast motion, about 6x slower, and its first run downloads "
-                             "about 40 MB.")
+                        help="Interpolation quality (default better; the panel defaults to "
+                             "ai). ai draws every in-between with the RIFE network, on the "
+                             "GPU on Windows, and its first run downloads about 50 MB. The "
+                             "others track pixels and hold a drawing wherever that would "
+                             "ghost.")
     parser.add_argument("--no-interpolate", action="store_true",
                         help="De-duplicate only, without generating in-betweens.")
     parser.add_argument("--no-upscale", action="store_true",
@@ -321,6 +335,8 @@ def _run(args, summary: dict) -> int:
         return 2
 
     print(f"Wrote {result.frames_written} frames at {result.fps:.3f} fps.")
+    if result.note:
+        print(result.note)
     summary["render"] = result.to_dict()
 
     # Resolve imports an image sequence from its first frame, not its folder.
@@ -340,9 +356,7 @@ def _run(args, summary: dict) -> int:
         print(f"Rendered to: {result.output}")
         summary["ok"] = True
         summary["import_path"] = status.import_path
-        status.write(done=True, ok=True,
-                     message=f"Rendered {plan.unique_drawings} drawings into "
-                             f"{result.frames_written} smooth frames.")
+        status.write(done=True, ok=True, message=_finished(plan, result))
         return 0
 
     media_item, imported = bridge.import_media(project, result.output,
@@ -376,9 +390,7 @@ def _run(args, summary: dict) -> int:
 
     summary["ok"] = True
     print("Done.")
-    status.write(done=True, ok=True,
-                 message=f"Done. {plan.unique_drawings} drawings rebuilt into "
-                         f"{result.frames_written} smooth frames.")
+    status.write(done=True, ok=True, message=_finished(plan, result))
     return 0
 
 
