@@ -16,9 +16,9 @@
 <!-- Mobile Header -->
 <div class="mobile-header">
     <img src="assets/logo.png" alt="Eternal2x" class="mobile-logo-img">
-    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <button class="hamburger" id="menu-button" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
 </div>
-<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="overlay"></div>
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
@@ -115,20 +115,8 @@
 
 </main>
 
+<script src="js/site.js"></script>
 <script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('overlay').classList.toggle('open');
-}
-
-// On a phone the sidebar covers the page, so close it once a link is chosen.
-document.querySelectorAll('.sidebar a').forEach(function(link) {
-    link.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('overlay').classList.remove('open');
-    });
-});
-
 var DOWNLOAD_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
 var REPO = 'Alitleis123/Eternal2x.com';
 

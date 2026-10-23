@@ -9,7 +9,9 @@
     --border: #1a1a1a;
     --border-accent: #7c6fef;
     --text: #e0e0e0;
-    --text-dim: #666;
+    /* About 6:1 on --bg and 5.7:1 on cards, above the 4.5:1 WCAG asks of body
+       text. #666 was 3.5:1. */
+    --text-dim: #8c8c8c;
     --text-section: #999;
     --accent: #7c6fef;
     --accent-hover: #9b90f5;
@@ -89,7 +91,9 @@ a:hover { color: var(--accent-hover); }
     color: var(--text-dim);
     font-size: 14px;
     font-weight: 500;
-    transition: all .15s;
+    /* Not `all`: that would also animate the visibility the closed phone
+       drawer hands down, leaving the links unfocusable as it opens. */
+    transition: color .15s, background .15s;
 }
 
 .sidebar-nav a:hover {
@@ -270,6 +274,81 @@ a:hover { color: var(--accent-hover); }
 
 .video-placeholder svg {
     opacity: 0.3;
+}
+
+/* ===== Demo ===== */
+.demo { margin: 0 0 48px; }
+
+/* Without script the video shows both halves stacked, with its own controls. */
+.compare {
+    position: relative;
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+}
+
+.compare-video { display: block; width: 100%; height: auto; }
+.compare-canvas, .compare-pause { display: none; }
+
+/* Off screen but focusable, so the keyboard can move the divider. */
+.compare-slider {
+    position: absolute;
+    top: 0; left: 0;
+    width: 1px; height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* With script, one half shows at a time and a divider wipes between them.
+   The video stays in place under the canvas: iOS pauses one it cannot see. */
+.compare.js {
+    aspect-ratio: 960 / 402;
+    cursor: ew-resize;
+    touch-action: pan-y;
+}
+
+.compare.js .compare-canvas {
+    display: block;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.compare.js:focus-within { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.compare.js .compare-pause {
+    display: block;
+    position: absolute;
+    left: 12px; bottom: 12px;
+    padding: 5px 12px;
+    font: 600 12px var(--font);
+    color: var(--text);
+    background: rgba(8, 8, 12, .75);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.compare.js .compare-pause:hover { border-color: var(--accent); }
+
+.demo figcaption,
+.frames figcaption {
+    margin-top: 12px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--text-dim);
+}
+
+.frames { margin: 0 0 32px; }
+
+.frames img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
 }
 
 /* ===== Section ===== */
@@ -532,7 +611,9 @@ a:hover { color: var(--accent-hover); }
     margin-top: 2px;
 }
 
-.step-content { flex: 1; }
+/* min-width: 0 lets a long code line scroll inside its block instead of
+   widening the page on a phone. */
+.step-content { flex: 1; min-width: 0; }
 
 .step-content h3 {
     font-size: 16px;
@@ -689,12 +770,19 @@ a:hover { color: var(--accent-hover); }
 }
 
 @media (max-width: 768px) {
+    /* Hidden as well as moved off screen when closed, so it leaves the tab
+       order. visibility waits for the slide to finish before it hides. */
     .sidebar {
         transform: translateX(-100%);
-        transition: transform .25s ease;
+        visibility: hidden;
+        transition: transform .25s ease, visibility 0s linear .25s;
     }
 
-    .sidebar.open { transform: translateX(0); }
+    .sidebar.open {
+        transform: translateX(0);
+        visibility: visible;
+        transition: transform .25s ease;
+    }
     .sidebar-overlay.open { display: block; }
     .mobile-header { display: flex; }
 
@@ -710,6 +798,11 @@ a:hover { color: var(--accent-hover); }
 
     /* Keep anchored headings clear of the fixed mobile header. */
     [id] { scroll-margin-top: 72px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    .sidebar, .sidebar.open { transition: none; }
 }
 
 /* ===== Utilities ===== */

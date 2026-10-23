@@ -17,9 +17,9 @@
 <!-- Mobile Header -->
 <div class="mobile-header">
     <img src="assets/logo.png" alt="Eternal2x" class="mobile-logo-img">
-    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <button class="hamburger" id="menu-button" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
 </div>
-<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="overlay"></div>
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
@@ -163,8 +163,8 @@
             </summary>
             <div class="faq-answer">
                 The render still finished. The panel prints where it is, so you can drag it into your media
-                pool. Setting <strong>Output</strong> to <code>Image sequence</code> avoids this, since Resolve
-                always imports those.
+                pool. Setting <strong>Output</strong> to <code>Image sequence</code> usually avoids this, since Resolve
+                imports those most reliably.
             </div>
         </details>
 
@@ -389,8 +389,8 @@
                    <code>AI</code> uses the RIFE network, which draws fast-moving characters cleanly, at about a
                    sixth of the speed. Its first run downloads about 40 MB.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
-                   timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve always
-                   imports. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
+                   timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve imports
+                   most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
                    timeline bigger than the clip, such as 3840x2160 for 1080p footage. Turning off
                    <strong>Interpolate</strong> skips the in-betweens and keeps every drawing on its original frame.
                    Settings are remembered between sessions.</p>
@@ -483,20 +483,8 @@
 
 </main>
 
+<script src="js/site.js"></script>
 <script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('overlay').classList.toggle('open');
-}
-
-// On a phone the sidebar covers the page, so close it once a link is chosen.
-document.querySelectorAll('.sidebar a').forEach(function(link) {
-    link.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('overlay').classList.remove('open');
-    });
-});
-
 function copyCode(btn) {
     const block = btn.parentElement;
     // The button's own label is part of the block's text, as Copy or Copied!.
