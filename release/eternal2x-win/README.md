@@ -33,7 +33,7 @@ it drops straight back into your edit.
 ## What it does
 
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
-  It sees through light grain and flicker, and counts a change of colour, a
+  It sees through light grain, and counts a change of colour, a
   slow fade or a slow pan as motion rather than a hold.
 - Rebuilds the motion with optical flow, generating the in-between frames that
   were never drawn.

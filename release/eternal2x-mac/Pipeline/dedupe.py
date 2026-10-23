@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 
 
 @dataclass
@@ -128,7 +128,8 @@ def flag_new_drawings(scores: Sequence[float], threshold: float) -> List[bool]:
     return flags
 
 
-def noise_threshold(scores: Sequence[float], minimum: float) -> float:
+def noise_threshold(scores: Sequence[float], minimum: float,
+                    grain: Optional[Sequence[bool]] = None) -> float:
     """The threshold this clip's own noise calls for, never below `minimum`.
 
     Grain or flicker makes every held frame differ a little. With grain of 1
@@ -147,6 +148,12 @@ def noise_threshold(scores: Sequence[float], minimum: float) -> float:
     most 2x apart, while grain of 4 code values still leaves a 3x jump.
     Steady motion such as scrolling credits scores the same on every frame,
     has no jump at all, and keeps `minimum`.
+
+    Two clusters of scores are not proof of grain on their own: real motion
+    that alternates small and large steps clusters the same way, and reading
+    its small steps as grain merged real drawings away. So when `grain` says,
+    frame by frame, whether a difference looks like grain, most of the quiet
+    side has to. Missing a grainy clip's holds only means nothing is rebuilt.
     """
     s = sorted(scores[1:])  # frame 0 has nothing before it to differ from
     n = len(s)
@@ -156,6 +163,10 @@ def noise_threshold(scores: Sequence[float], minimum: float) -> float:
                       for k in range(n // 4, n - n // 5 + 1))
     if jump < 2.5:
         return minimum
+    if grain is not None:
+        quiet = [g for score, g in zip(scores[1:], grain[1:]) if score < s[split]]
+        if sum(quiet) < 0.8 * len(quiet):
+            return minimum
     return max(minimum, 2.0 * s[split // 2])
 
 
