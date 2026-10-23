@@ -673,6 +673,16 @@ local function current_args(extra)
     return args .. (extra or "")
 end
 
+-- One clip property. Asked for a single key, Resolve can hand back the value or
+-- a table holding it, depending on the build.
+local function clip_property(mpi, key)
+    if not mpi.GetClipProperty then return nil end
+    local ok, got = pcall(function() return mpi:GetClipProperty(key) end)
+    if not ok then return nil end
+    if type(got) == "table" then got = got[key] end
+    return got
+end
+
 -- The render is finished on disk; bring it in from here rather than from the
 -- Python process, which would need Resolve's external scripting enabled.
 -- An image sequence has no frame rate of its own, so Resolve gives it the
@@ -685,24 +695,17 @@ local function set_sequence_fps(mpi, fps)
     local text = (math.abs(fps - math.floor(fps + 0.5)) < 0.001)
         and tostring(math.floor(fps + 0.5)) or string.format("%.3f", fps)
     local called, set = pcall(function() return mpi:SetClipProperty("FPS", text) end)
-    if called and set and mpi.GetClipProperty then
-        local read, got = pcall(function() return mpi:GetClipProperty("FPS") end)
-        if read and type(got) == "table" then got = got["FPS"] end
-        if read and math.abs((tonumber(got) or 0) - fps) > 0.01 then set = false end
+    -- Only a rate read back as set counts. A yes from SetClipProperty alone
+    -- is not enough, and a clip placed at the wrong rate plays at the wrong
+    -- speed and covers more of the timeline.
+    local confirmed = false
+    if called and set then
+        local got = tonumber(tostring(clip_property(mpi, "FPS") or ""):match("^%s*([%d%.]+)"))
+        confirmed = got ~= nil and math.abs(got - fps) <= 0.01
     end
-    if called and set then return " at " .. text .. " fps", true end
+    if confirmed then return " at " .. text .. " fps", true end
     return " (set its frame rate to " .. text .. " in Clip Attributes, or it plays at the project's)",
         false
-end
-
--- One clip property. Asked for a single key, Resolve can hand back the value or
--- a table holding it, depending on the build.
-local function clip_property(mpi, key)
-    if not mpi.GetClipProperty then return nil end
-    local ok, got = pcall(function() return mpi:GetClipProperty(key) end)
-    if not ok then return nil end
-    if type(got) == "table" then got = got[key] end
-    return got
 end
 
 -- The first entry of a list from Resolve, whatever its keys.

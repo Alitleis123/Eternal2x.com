@@ -1455,3 +1455,14 @@ def test_show_in_folder_keeps_a_percent_in_the_path_literal(lua, direct):
     command, _, script = H.last_command().partition("\n")
     assert "%TEMP%" not in command, "the path went through cmd's own command line"
     assert "%%TEMP%%" in script and "explorer /select," in script
+
+
+def test_a_frame_rate_that_cannot_be_read_back_is_not_trusted(lua, direct):
+    """Resolve said yes to 60 fps, but the readback failed, so 60 is unproven."""
+    H = load(lua, ui_script(direct))
+    H.fps_sticks = False
+    H.fps_read_throws = True
+    finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=120, fps=60.0)
+    assert H.appended == 0
+    assert "at 60 fps" not in H.status()

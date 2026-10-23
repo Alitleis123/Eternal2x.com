@@ -223,6 +223,7 @@ function H.make_resolve(clip_file_path)
                         return true
                     end,
                     GetClipProperty = function(_s, k)
+                        if k == "FPS" and H.fps_read_throws then error("GetClipProperty failed") end
                         if k == "FPS" then return H.clip_properties.FPS or "24" end
                         if k == "Frames" then return H.media_frames or "48" end
                         if k == "Resolution" then return H.media_resolution or "1920x1080" end
