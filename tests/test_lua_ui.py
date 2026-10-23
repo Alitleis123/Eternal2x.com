@@ -1017,6 +1017,17 @@ def test_trim_frames_are_converted_at_the_media_rate(lua, direct):
     assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
 
 
+def test_media_with_a_start_timecode_still_sends_file_seconds(lua, direct):
+    """Resolve's source times count from the media's start timecode, so on
+    footage that starts at 01:00:00:00 they are an hour past the file."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(24.5, 26.5)
+    H.start_tc = 3600.0
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("SmoothBtn")
+    assert "--start-time 24.500000 --end-time 26.500000" in H.last_command()
+
+
 def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
     H.source_range = lua.table(1.0, 2.0)

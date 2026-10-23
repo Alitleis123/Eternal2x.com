@@ -162,22 +162,27 @@ local function get_resolve()
     return r, nil
 end
 
--- Where the timeline clip starts and ends within its media, in seconds, so a
--- two second cut of a long file costs two seconds of work. Seconds mean the
--- same whatever the timeline's rate. nil means use the whole file.
+-- Where the timeline clip starts and ends within its media, in seconds from
+-- the start of the file, so only that part is rebuilt. Seconds mean the same
+-- whatever the timeline's rate. nil means use the whole file.
+--
+-- Resolve counts the source frame from the start of the file, at the media's
+-- own rate, but the source time from the media's start timecode, so on
+-- footage that starts at 01:00:00:00 the times are an hour out. Only their
+-- difference is used, anchored on the start frame.
 local function clip_range(item, props)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
         return ok and tonumber(value) or nil
     end
+    local fps = tonumber(tostring(props["FPS"] or ""):match("^%s*([%d%.]+)"))
+    local f0 = call("GetSourceStartFrame")
+    if not (fps and fps > 0 and f0) then return nil end
+    local start = f0 / fps
     local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
-    if t0 and t1 and t1 > t0 then return { start = t0, finish = t1 } end
-    -- Frames count at the media's own rate.
-    local fps = tonumber(props["FPS"])
-    local f0, f1 = call("GetSourceStartFrame"), call("GetSourceEndFrame")
-    if fps and fps > 0 and f0 and f1 and f1 > f0 then
-        return { start = f0 / fps, finish = f1 / fps }
-    end
+    if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
+    local f1 = call("GetSourceEndFrame")
+    if f1 and f1 > f0 then return { start = start, finish = f1 / fps } end
     return nil
 end
 
