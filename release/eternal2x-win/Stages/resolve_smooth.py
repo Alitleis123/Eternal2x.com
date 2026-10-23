@@ -167,7 +167,8 @@ def build_parser() -> argparse.ArgumentParser:
                              "mp4: compact H.264 file. "
                              "mkv: lossless FFV1 file.")
     parser.add_argument("--threshold", type=float, default=None,
-                        help="Duplicate-detection threshold override.")
+                        help="Duplicate-detection threshold override. A grainy clip "
+                             "can still raise it to clear its own noise.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
     parser.add_argument("--quality", default=None, choices=["fast", "better", "best", "ai"],

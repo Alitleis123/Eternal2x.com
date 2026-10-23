@@ -3,8 +3,8 @@
 Two passes over the source:
 
   analyse_video()  decodes once to measure how different each frame is from the
-                   one before it, which is all `Pipeline.dedupe` needs to build
-                   a plan.
+                   last new drawing, which is all `Pipeline.dedupe` needs to
+                   build a plan. A grainy clip is measured a second time.
   render_plan()    decodes again and writes the output, holding only the two
                    drawings currently being interpolated between.
 
@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 from Pipeline.config import Eternal2xConfig
-from Pipeline.dedupe import DedupePlan, plan_from_scores, output_time_map
+from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
 from Pipeline.interpolate import interpolate_pair, upscale
 
 ProgressFn = Callable[[str, float], None]
@@ -75,6 +75,8 @@ class _ClipReader:
         if total and (self._end is None or self._end > total):
             self._end = total
         self._read = 0
+        # When the file's first frame is shown, in ms. Some files start late.
+        self._origin: Optional[float] = None
         # grab() decodes without converting, and unlike seeking it lands on
         # exactly the frame asked for, whatever the codec. Deep into a long
         # file that takes a while, so it reports like any other stage.
@@ -83,6 +85,8 @@ class _ClipReader:
                 progress("Seeking", i / float(self._start))
             if not cap.grab():
                 break
+            if i == 0:
+                self._origin = cap.get(cv2.CAP_PROP_POS_MSEC)
 
     def read(self):
         if self._end is not None and self._start + self._read >= self._end:
@@ -90,7 +94,21 @@ class _ClipReader:
         ok, frame = self._cap.read()
         if ok:
             self._read += 1
+            if self._origin is None:
+                self._origin = self._cap.get(cv2.CAP_PROP_POS_MSEC)
         return ok, frame
+
+    def frames_off_schedule(self, fps: float) -> float:
+        """How far, in frames, the last frame read is from where `fps` puts it.
+
+        Counted from the start of the file, so unevenly spaced frames before
+        the range show up too. A file without timestamps reports 0 for every
+        frame and counts as on time.
+        """
+        ms = self._cap.get(cv2.CAP_PROP_POS_MSEC)
+        if ms <= 0 or self._origin is None:
+            return 0.0
+        return abs((ms - self._origin) * fps / 1000.0 - (self._start + self._read - 1))
 
     def get(self, prop: int) -> float:
         if prop == cv2.CAP_PROP_FRAME_COUNT and self._end is not None:
@@ -131,14 +149,50 @@ def _downscale(gray: np.ndarray, max_width: int) -> np.ndarray:
     return gray
 
 
-def _difference(prev: np.ndarray, curr: np.ndarray) -> float:
-    """How different two frames are, weighted towards localised change.
+AnalysisFrame = Tuple[np.ndarray, np.ndarray, np.ndarray]
+
+
+def _analysis_frame(frame: np.ndarray, max_width: int) -> AnalysisFrame:
+    """Brightness and the two colour planes, small enough to compare quickly.
+
+    Brightness is made exactly as it always was, so clips whose drawings
+    differ in brightness keep the same answer to the last bit. Colour is
+    sampled at half that size with a plain linear resize, about 0.1 ms a frame
+    where an area average costs 1 to 2 ms. Codecs keep colour at half the
+    width and height anyway: on held frames of real clips this scored colour
+    about 14% higher than a full-size area average, under 0.003 at half weight.
+    """
+    luma = _downscale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), max_width)
+    size = (max(1, luma.shape[1] // 2), max(1, luma.shape[0] // 2))
+    ycc = cv2.cvtColor(cv2.resize(frame, size, interpolation=cv2.INTER_LINEAR),
+                       cv2.COLOR_BGR2YCrCb)
+    return luma, cv2.extractChannel(ycc, 1), cv2.extractChannel(ycc, 2)
+
+
+def _difference(prev: AnalysisFrame, curr: AnalysisFrame) -> float:
+    """How different two frames are, in brightness or in colour.
+
+    Brightness alone cannot tell pure red from a mid green, which have the
+    same luma, so a drawing that only changed colour vanished. Colour counts
+    at half weight because codecs store it at half the width and height and
+    its noise runs higher. On held frames of a VP9 film it scored up to 3.1
+    times the brightness, and 0.0054 at a keyframe, over the 0.004 threshold.
+    Real drawing changes score 0.2 to 0.6 times their brightness.
+    """
+    colour = cv2.max(cv2.absdiff(prev[1], curr[1]), cv2.absdiff(prev[2], curr[2]))
+    return max(_busiest_tiles(cv2.absdiff(prev[0], curr[0])), 0.5 * _busiest_tiles(colour))
+
+
+def _busiest_tiles(diff: np.ndarray) -> float:
+    """How much a difference image changed, weighted towards localised change.
 
     A blink or a mouth flap moves a tiny fraction of the frame, so a plain mean
     would bury it under the unchanged rest of the picture. Averaging only the
     busiest tiles keeps small real changes well clear of codec noise.
+
+    cv2.mean returns exactly what numpy's mean does on these tiles and takes
+    a fraction of the time, which pays for scoring colour as well.
     """
-    diff = cv2.absdiff(prev, curr)
     h, w = diff.shape[:2]
     gx, gy = max(1, min(8, w)), max(1, min(8, h))
     tw, th = max(1, w // gx), max(1, h // gy)
@@ -149,12 +203,30 @@ def _difference(prev: np.ndarray, curr: np.ndarray) -> float:
             x1 = (tx + 1) * tw if tx < gx - 1 else w
             tile = diff[ty * th:y1, tx * tw:x1]
             if tile.size:
-                vals.append(float(tile.mean()) / 255.0)
+                vals.append(cv2.mean(tile)[0] / 255.0)
     if not vals:
         return 0.0
     arr = np.array(vals, dtype=np.float32)
     k = max(1, int(np.ceil(len(arr) * 0.15)))
     return float(np.partition(arr, -k)[-k:].mean())
+
+
+def _require_constant_rate(cap: _ClipReader, fps: float, path: Path) -> None:
+    """Refuse a variable frame rate rather than quietly retime the clip.
+
+    The render writes every frame at one rate, so a clip whose frames are
+    unevenly spaced would come out a different length and drift against its
+    audio. Past half a frame a frame lands in another frame's slot. Real
+    constant-rate files sit far inside that: Matroska and WebM round times to
+    whole milliseconds, which is at most 0.03 of a frame at 59.94 fps.
+    """
+    if cap.frames_off_schedule(fps) > 0.5:
+        raise SourceError(
+            f"{path.name} has a variable frame rate, and Eternal2x needs every frame "
+            "to last the same time or the result changes length. Convert it to a "
+            "constant frame rate first, for example by rendering it from Resolve, or "
+            f"with ffmpeg -i \"{path.name}\" -r 24 constant.mp4 using your timeline's "
+            "frame rate.")
 
 
 def frame_difference_scores(
@@ -163,8 +235,20 @@ def frame_difference_scores(
     *,
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
+    threshold: Optional[float] = None,
 ) -> Tuple[List[float], float, int, int]:
-    """Per-frame difference from the previous frame, plus fps and dimensions."""
+    """Per-frame difference from the last new drawing, plus fps and dimensions.
+
+    Comparing each frame only with the one before missed change that builds
+    up slowly: a fade of one level a frame never crossed the threshold, and
+    22 frames froze on the first. Against the last drawing the change adds up
+    until it counts as a new one, so fades and slow pans keep moving.
+
+    `threshold` decides where each drawing starts, so the plan has to be made
+    with the same one. It defaults to `cfg.duplicate_threshold`.
+    """
+    if threshold is None:
+        threshold = cfg.duplicate_threshold
     cap = _open(path, frames, progress)
     try:
         fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0) or 24.0
@@ -175,19 +259,22 @@ def frame_difference_scores(
         ok, first = cap.read()
         if not ok:
             raise SourceError(f"Could not read any frames from: {path}")
+        _require_constant_rate(cap, fps, path)
         if not width or not height:
             height, width = first.shape[:2]
 
-        prev = _downscale(cv2.cvtColor(first, cv2.COLOR_BGR2GRAY), cfg.analysis_width)
+        drawing = _analysis_frame(first, cfg.analysis_width)
         scores = [0.0]
 
         while True:
             ok, frame = cap.read()
             if not ok:
                 break
-            curr = _downscale(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), cfg.analysis_width)
-            scores.append(_difference(prev, curr))
-            prev = curr
+            _require_constant_rate(cap, fps, path)
+            curr = _analysis_frame(frame, cfg.analysis_width)
+            scores.append(_difference(drawing, curr))
+            if scores[-1] >= threshold:
+                drawing = curr
             if progress and total:
                 progress("Analysing", min(1.0, len(scores) / float(total)))
 
@@ -203,16 +290,24 @@ def analyse_video(
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
 ) -> Tuple[DedupePlan, int, int]:
-    """Decode the clip once and return a rebuild plan plus its dimensions.
+    """Decode the clip and return a rebuild plan plus its dimensions.
 
     With `frames`, only that range of the source is read, and the plan's frame
     numbers count from its first frame.
+
+    A clip whose grain raises the threshold is decoded a second time, because
+    where each drawing starts depends on the threshold. Clean clips take one
+    pass.
     """
     scores, fps, width, height = frame_difference_scores(path, cfg, progress=progress,
                                                          frames=frames)
+    threshold = noise_threshold(scores, cfg.duplicate_threshold)
+    if threshold > cfg.duplicate_threshold:
+        scores, fps, width, height = frame_difference_scores(
+            path, cfg, progress=progress, frames=frames, threshold=threshold)
     plan = plan_from_scores(
         scores, fps,
-        threshold=cfg.duplicate_threshold,
+        threshold=threshold,
         force_base_hold=cfg.force_base_hold,
     )
     return plan, width, height

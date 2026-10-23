@@ -128,6 +128,37 @@ def flag_new_drawings(scores: Sequence[float], threshold: float) -> List[bool]:
     return flags
 
 
+def noise_threshold(scores: Sequence[float], minimum: float) -> float:
+    """The threshold this clip's own noise calls for, never below `minimum`.
+
+    Grain or flicker makes every held frame differ a little. With grain of 1
+    code value the held frames of a clip on 2s scored 0.0045, over the fixed
+    0.004, so all 24 frames looked new and nothing was rebuilt. Held frames
+    under grain score almost alike, though (0.00450 to 0.00453 there), and
+    well apart from the drawings (0.043), so the noise floor is the quiet side
+    of the biggest jump in the sorted scores. Twice the floor leaves room for
+    grain that varies more than that and still sits under the quietest drawing.
+
+    The floor is trusted only when the clip looks like it holds frames. The
+    quiet side needs a quarter of the frames, as held frames on 2s or 3s are
+    half or more. The loud side needs a fifth, so a couple of cuts in steady
+    motion are not taken for drawings. The jump needs to be 2.5x: frames
+    creeping towards the threshold score s, 2s, 3s and so on, which are at
+    most 2x apart, while grain of 4 code values still leaves a 3x jump.
+    Steady motion such as scrolling credits scores the same on every frame,
+    has no jump at all, and keeps `minimum`.
+    """
+    s = sorted(scores[1:])  # frame 0 has nothing before it to differ from
+    n = len(s)
+    if n < 8:
+        return minimum
+    jump, split = max((s[k] / max(s[k - 1], 1e-6), k)
+                      for k in range(n // 4, n - n // 5 + 1))
+    if jump < 2.5:
+        return minimum
+    return max(minimum, 2.0 * s[split // 2])
+
+
 def holds_from_flags(flags: Sequence[bool]) -> List[Hold]:
     """Collapse per-frame new-drawing flags into runs."""
     holds: List[Hold] = []
