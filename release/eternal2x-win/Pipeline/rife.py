@@ -1,14 +1,14 @@
-"""Learned in-betweens, for the AI quality setting.
+"""The in-between frames, drawn by a learned network.
 
-The optical flow in interpolate.py loses a small character that moves a long
-way between two drawings. Its two warps then disagree, and the in-between
-shows two faded copies of the character. RIFE is a network trained to predict
-the in-between directly, and on the same shots it draws one solid figure.
+Warping pixels along optical flow doubles lines and leaves two faded copies of
+a character that moves a long way between two drawings. RIFE is a network
+trained to predict the in-between directly, and on the same shots it draws
+one solid figure.
 
 This is Practical-RIFE 4.25 by Zhewei Huang (MIT licence,
 https://github.com/hzwer/Practical-RIFE), as exported to ONNX by vs-mlrt, run
-with ONNX Runtime. Neither ships with the plugin. The first time the AI setting
-is used, ONNX Runtime is installed with pip and the model is downloaded, and
+with ONNX Runtime. Neither ships with the plugin. The first time in-betweens
+are drawn, ONNX Runtime is installed with pip and the model is downloaded, and
 the model is only used once it matches its published SHA-256.
 """
 
@@ -45,7 +45,7 @@ ProgressFn = Callable[[str, float], None]
 
 
 class AIUnavailable(SourceError):
-    """The AI setting cannot run here. The message says why and what to do."""
+    """The network cannot run here. The message says why and what to do."""
 
 
 def _sha256(path: Path) -> str:
@@ -204,13 +204,14 @@ class Rife:
         rgb = np.clip(y[0, :, :h, :w].transpose(1, 2, 0) * 255.0 + 0.5, 0, 255)
         return cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
 
-    def interpolate_pair(self, a: np.ndarray, b: np.ndarray, times: List[float],
-                         **_flow_settings) -> List[np.ndarray]:
-        """In-betweens for `times` (each in 0..1), as interpolate.interpolate_pair.
+    def interpolate_pair(self, a: np.ndarray, b: np.ndarray,
+                         times: List[float]) -> List[np.ndarray]:
+        """In-betweens for `times` (each in 0..1) between drawings a and b.
 
-        Real drawings are never resampled, and across a cut the first drawing
-        is held until the next one starts, since the network would otherwise
-        morph one shot into the other.
+        t == 0 returns `a` untouched and t == 1 returns `b` untouched, so real
+        drawings are never resampled. Across a cut the first drawing is held
+        until the next one starts, since the network would otherwise morph one
+        shot into the other.
         """
         if not times:
             return []

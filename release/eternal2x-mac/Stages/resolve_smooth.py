@@ -130,9 +130,6 @@ def _finished(plan, result) -> str:
             f"{result.frames_written} smooth frames.")
     if result.note:
         text += " " + result.note
-    elif result.held:
-        text += (f" Kept {result.held} of {result.pairs} drawings as drawn, where an "
-                 f"in-between would ghost. AI quality smooths those too.")
     return text
 
 
@@ -187,14 +184,13 @@ def build_parser() -> argparse.ArgumentParser:
                              "Leave off for clean animation.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
-    parser.add_argument("--quality", default=None, choices=["fast", "better", "best", "ai"],
-                        help="Interpolation quality (default better; the panel defaults to "
-                             "ai). ai draws every in-between with the RIFE network, on the "
-                             "GPU on Windows, and its first run downloads about 50 MB. The "
-                             "others track pixels and hold a drawing wherever that would "
-                             "ghost.")
+    # A panel still open across an update sends the quality it used to offer.
+    # The in-betweens are always drawn by the network now, so it is ignored.
+    parser.add_argument("--quality", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-interpolate", action="store_true",
-                        help="De-duplicate only, without generating in-betweens.")
+                        help="De-duplicate only, without drawing in-betweens. With it on, "
+                             "the in-betweens are drawn by the RIFE network, on the GPU on "
+                             "Windows, and the first run downloads about 50 MB.")
     parser.add_argument("--no-upscale", action="store_true",
                         help="Skip the 2x upscale.")
     parser.add_argument("--json", action="store_true",
@@ -211,8 +207,6 @@ def config_from_args(args) -> Eternal2xConfig:
     if args.base_hold:
         cfg.force_base_hold = args.base_hold
     cfg.grain = bool(getattr(args, "grain", False))
-    if args.quality:
-        cfg.quality = args.quality
     cfg.interpolate_enabled = not args.no_interpolate
     # The upscale is Resolve's job when it can do it, so the renderer works at
     # source resolution and Super Scale is applied to the imported clip.

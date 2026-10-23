@@ -38,19 +38,18 @@ it drops straight back into your edit.
 - Draws the in-between frames that were never drawn with the RIFE network,
   run on your own machine, on the GPU on Windows. Moving characters stay in
   one piece.
-- Never shows a doubled or smeared in-between. The optical flow settings hold
-  the real drawing wherever one would ghost.
+- Makes no in-between by warping pixels, which doubles lines and smears fast
+  characters on drawn animation. Where the network cannot run, the drawings
+  are kept as drawn.
 - Keeps deliberate held poses still, instead of smearing them into drift.
 - Cuts stay hard. Blending across a scene change would show both shots at once,
   so it snaps instead.
 - Upscales 2x using Resolve's Super Scale.
 
 It does a job like Twixtor's, but finds the held drawings first, so it only
-generates the frames that were never drawn. With the optical flow settings,
-wherever forward and backward motion disagree, which is where optical flow
-normally tears or doubles a line, it keeps the real drawing instead of
-inventing a broken frame, so fast motion is smoothed less. The AI setting,
-the default, draws those frames too.
+generates the frames that were never drawn. It draws them with a network
+trained for in-betweens rather than by warping pixels along optical flow,
+which is where retimers tear, melt and double lines.
 
 ## Requirements
 
@@ -133,11 +132,10 @@ Whole file when Resolve does not report one.
 
 | Setting | What it does |
 |---|---|
-| **Quality** | `AI`, the default, draws every in-between with the RIFE network, so moving characters stay solid. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, the render uses `Best` and says so. `Fast`, `Better` and `Best` track pixels instead. They never show a doubled or smeared in-between: wherever one would ghost they keep the drawing as it is, so on fast motion they smooth much less. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
-| **Interpolate** | Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
+| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
 | **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
 
 Settings are remembered between sessions.
@@ -160,9 +158,9 @@ Every button is a thin wrapper around one module, so you can script it:
 
 ```
 python -m Stages.resolve_smooth --video shot.mov --analyse
-python -m Stages.resolve_smooth --video shot.mov --quality best --format mp4
+python -m Stages.resolve_smooth --video shot.mov --format mp4
 python -m Stages.resolve_smooth --video shot.mov --base-hold 3 --no-interpolate
-python -m Stages.resolve_smooth --video grainy.mov --grain --quality ai
+python -m Stages.resolve_smooth --video grainy.mov --grain
 ```
 
 `--video` skips Resolve entirely and writes the result to an `Eternal2x` folder
