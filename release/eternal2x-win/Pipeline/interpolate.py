@@ -38,8 +38,8 @@ CUT_THRESHOLD = 0.38
 # can reconstruct them and the result smears. Measured against known in-between
 # drawings, interpolation stops beating a plain dissolve at roughly this level
 # of disagreement, on both flat cel artwork and detailed footage. Past it the
-# nearer drawing is held instead, which reads as the original stepped timing
-# rather than as a melted frame.
+# first drawing is held until the next one starts, which is the original
+# stepped timing rather than a melted frame.
 MAX_DISAGREEMENT = 0.02
 
 
@@ -99,8 +99,8 @@ def interpolate_pair(
     t == 0 returns `a` untouched and t == 1 returns `b` untouched, so real
     drawings are never resampled and stay perfectly sharp.
 
-    If the motion is too large to interpolate cleanly, the nearer drawing is
-    held rather than a smeared frame being invented.
+    If the motion is too large to interpolate cleanly, or a and b are a cut,
+    `a` is held until t == 1, so `b` still starts on its own frame.
     """
     if not times:
         return []
@@ -112,7 +112,7 @@ def interpolate_pair(
 
     # A hard cut: blending across it would produce a ghosted double image.
     if frames_are_a_cut(a, b):
-        return [(a.copy() if t < 0.5 else b.copy()) for t in times]
+        return [(a.copy() if t < 1.0 else b.copy()) for t in times]
 
     engine = _flow_engine(quality)
     ga, gb = _to_gray(a), _to_gray(b)
@@ -127,7 +127,7 @@ def interpolate_pair(
     probe_a = _warp(af, flow_ba * 0.5)
     probe_b = _warp(bf, flow_ab * 0.5)
     if _disagreement(probe_a, probe_b) > max_disagreement:
-        return [(a.copy() if t < 0.5 else b.copy()) for t in times]
+        return [(a.copy() if t < 1.0 else b.copy()) for t in times]
 
     out: List[np.ndarray] = []
     for t in times:

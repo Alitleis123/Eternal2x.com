@@ -363,8 +363,8 @@ def render_plan(
                     )
                 else:
                     # De-duplicate only: every output frame is a real drawing,
-                    # nothing is synthesised.
-                    produced = [(prev if t < 0.5 else curr).copy() for t in times]
+                    # nothing is synthesised, and each starts where it did.
+                    produced = [(prev if t < 1.0 else curr).copy() for t in times]
                 for frame in produced:
                     emit(frame)
             prev = curr
