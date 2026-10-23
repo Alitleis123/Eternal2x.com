@@ -158,7 +158,9 @@ progress goes to stderr.
 
 Eternal2x checks for updates at startup, or on demand with the
 **Check for Updates** button. Updates are verified against a SHA-256 checksum
-before being applied. Restart Resolve afterwards.
+and checked for every file the plugin needs before being applied. If an
+update fails partway, the files it replaced are put back. Restart Resolve
+afterwards.
 
 ## Troubleshooting
 
