@@ -48,6 +48,15 @@ def remove_old_install() -> None:
         root = _resolve_scripts_root()
     except RuntimeError:
         return
+    # The panel saved its settings beside the old launcher. Carried over, they
+    # survive the move, so an update opt-out is not turned back on.
+    old_conf, new_conf = root / "Comp" / "Eternal2x.conf", root / "Utility" / "Eternal2x.conf"
+    if old_conf.exists() and not new_conf.exists():
+        try:
+            new_conf.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(old_conf, new_conf)
+        except OSError:
+            pass
     for name in ("Eternal2x.lua", "Eternal2x.conf"):
         try:
             (root / "Comp" / name).unlink()
@@ -88,21 +97,36 @@ PANEL_DEFAULTS = {
 }
 
 
+# Where this copy of the plugin lives and updates from. Every install writes
+# these afresh. Everything else in the file is the user's.
+INSTALL_KEYS = ("repo_root", "python", "update_url")
+
+
 def write_config(dest_dir: Path, repo_root: Path, python_path: str,
                  update_url: str = DEFAULT_UPDATE_URL) -> Path:
     """Write Eternal2x.conf beside the launcher.
 
     Both installers call this so the file they produce cannot drift apart.
-    Plain UTF-8 with no BOM: the panel and the updater both read it.
+    Plain UTF-8 with no BOM: the panel and the updater both read it. The
+    panel saves its settings here, so a reinstall keeps them, and any key a
+    later version added, rather than turning updates back on.
     """
+    conf_path = dest_dir / "Eternal2x.conf"
+    settings = {"auto_update": "true", **PANEL_DEFAULTS}
+    try:
+        saved = conf_path.read_text(encoding="utf-8-sig", errors="replace")
+    except OSError:
+        saved = ""
+    for line in saved.splitlines():
+        key, sep, value = line.partition("=")
+        if sep and key.strip() and key.strip() not in INSTALL_KEYS:
+            settings[key.strip()] = value.strip()
     lines = [
         f"repo_root={repo_root}",
         f"python={python_path}",
         f"update_url={update_url}",
-        "auto_update=true",
     ]
-    lines += [f"{k}={v}" for k, v in PANEL_DEFAULTS.items()]
-    conf_path = dest_dir / "Eternal2x.conf"
+    lines += [f"{k}={v}" for k, v in settings.items()]
     conf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
     return conf_path
 
