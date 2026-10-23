@@ -128,8 +128,10 @@
                 length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so
                 trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
                 start first, shown as Seeking. Ten seconds of 1080p takes roughly ten to twenty seconds depending on the
-                Quality setting. Resolve stays usable throughout, and <strong>Analyse</strong> is much quicker if
-                you only want to see what a clip contains.
+                Quality setting. <code>AI</code> quality is several times slower, a few minutes for those ten
+                seconds. A grainy clip is read twice while Analyse measures its grain. Resolve stays usable
+                throughout, and <strong>Analyse</strong> is much quicker if you only want to see what a clip
+                contains.
             </div>
         </details>
 
@@ -141,7 +143,20 @@
             <div class="faq-answer">
                 Analyse found nothing to do. The clip has no duplicated frames, so there is nothing to recover. It is either live action or
                 animation already drawn on 1s. Smoothing it would only invent motion that was never there, so
-                Eternal2x stops instead.
+                Eternal2x stops instead. Heavy grain on a clip with long holds can also hide its duplicates.
+            </div>
+        </details>
+
+        <details class="faq-item">
+            <summary class="faq-question">
+                "...has a variable frame rate"
+                <span class="faq-chevron" aria-hidden="true">&#9660;</span>
+            </summary>
+            <div class="faq-answer">
+                Phone and screen recordings often space their frames unevenly. Eternal2x writes every frame for
+                the same time, so such a clip would come out a different length and drift against its audio, and
+                it stops instead. Render the clip to a constant frame rate first, from Resolve's Deliver page or
+                with <code>ffmpeg -i clip.mp4 -r 24 clip_cfr.mp4</code> at your timeline's rate, then use that.
             </div>
         </details>
 
