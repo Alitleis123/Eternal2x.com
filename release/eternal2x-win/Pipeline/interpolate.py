@@ -3,10 +3,11 @@
 The approach is the classic one: estimate motion in both directions, pull each
 drawing towards the in-between time, and blend. What matters for hand-drawn
 animation is the failure mode. Where the two flows disagree -- occlusions, a
-limb appearing from behind a body, a cut -- warping produces the tearing and
-melting that optical-flow retimers are notorious for. Those regions are
-detected and softened into a plain cross dissolve instead, which reads as
-motion blur rather than as a glitch.
+limb appearing from behind a body, a cut -- warping produces the tearing,
+melting and doubled lines that optical-flow retimers are notorious for. Such
+an in-between is never made: the earlier drawing is held instead, which is
+the original timing. Only thin seams the flow cannot place are softened into
+a dissolve.
 
 Two drawings that are identical produce zero flow and therefore an identical
 in-between, so deliberate held frames stay perfectly still.
@@ -41,6 +42,12 @@ CUT_THRESHOLD = 0.38
 # first drawing is held until the next one starts, which is the original
 # stepped timing rather than a melted frame.
 MAX_DISAGREEMENT = 0.02
+
+# The same, inside any patch a sixteenth of the frame high. A small character
+# that moves a long way ghosts while the rest of the frame agrees, so the
+# whole-frame figure stays low. On the hand-drawn shots of the open movie
+# Hero, doubled lines and smeared hands show from about 0.04 up.
+MAX_LOCAL_DISAGREEMENT = 0.04
 
 
 def _flow_engine(quality: str):
@@ -112,6 +119,29 @@ def _disagreement(warped_a: np.ndarray, warped_b: np.ndarray) -> float:
     return float(np.abs(warped_a - warped_b).mean()) / 255.0
 
 
+def _inside(flow: np.ndarray) -> np.ndarray:
+    """Where resampling along `flow` stays inside the frame."""
+    h, w = flow.shape[:2]
+    x = np.arange(w, dtype=np.float32)[None, :] + flow[..., 0]
+    y = np.arange(h, dtype=np.float32)[:, None] + flow[..., 1]
+    return (x >= 0) & (x <= w - 1) & (y >= 0) & (y <= h - 1)
+
+
+def _local_disagreement(warped_a: np.ndarray, warped_b: np.ndarray,
+                        inside: np.ndarray) -> float:
+    """The worst disagreement in any patch a sixteenth of the frame high.
+
+    What a pan brings in at the edge is in only one of the two frames, so the
+    warps always disagree there, and nothing ghosts. `inside` leaves it out.
+    """
+    diff = np.abs(warped_a - warped_b)
+    if diff.ndim == 3:
+        diff = diff.mean(axis=2)
+    diff = np.where(inside, diff / 255.0, 0.0).astype(np.float32)
+    k = max(3, diff.shape[0] // 16)
+    return float(cv2.blur(diff, (k, k)).max())
+
+
 def interpolate_pair(
     a: np.ndarray,
     b: np.ndarray,
@@ -120,14 +150,16 @@ def interpolate_pair(
     quality: str = "better",
     occlusion_softness: float = 0.5,
     max_disagreement: float = MAX_DISAGREEMENT,
+    max_local_disagreement: float = MAX_LOCAL_DISAGREEMENT,
 ) -> List[np.ndarray]:
     """Produce in-between frames for `times` (each in 0..1) between a and b.
 
     t == 0 returns `a` untouched and t == 1 returns `b` untouched, so real
     drawings are never resampled and stay perfectly sharp.
 
-    If the motion is too large to interpolate cleanly, or a and b are a cut,
-    `a` is held until t == 1, so `b` still starts on its own frame.
+    If the motion is too large to interpolate cleanly anywhere in the frame,
+    or a and b are a cut, `a` is held until t == 1, so `b` still starts on its
+    own frame.
     """
     if not times:
         return []
@@ -153,7 +185,10 @@ def interpolate_pair(
     # the warps disagree there they will disagree everywhere between.
     probe_a = _warp(af, flow_ba * 0.5)
     probe_b = _warp(bf, flow_ab * 0.5)
-    if _disagreement(probe_a, probe_b) > max_disagreement:
+    if (_disagreement(probe_a, probe_b) > max_disagreement
+            or _local_disagreement(probe_a, probe_b,
+                                   _inside(flow_ba * 0.5) & _inside(flow_ab * 0.5))
+            > max_local_disagreement):
         return [(a.copy() if t < 1.0 else b.copy()) for t in times]
 
     out: List[np.ndarray] = []
