@@ -67,67 +67,67 @@ def test_a_reinstall_removes_the_old_comp_launcher(fake_home, monkeypatch):
     (comp / "SomeoneElse.lua").write_text("-- not ours\n")
     inst.remove_old_install()
     assert not (comp / "Eternal2x.lua").exists()
-    assert not (comp / "Eternal2x.conf").exists()
     assert (comp / "SomeoneElse.lua").exists()
+    assert (comp / "Eternal2x.conf").exists(), "its settings went before they were saved"
+
+
+def _comp_conf(text):
+    comp = inst._resolve_scripts_root() / "Comp"
+    comp.mkdir(parents=True)
+    (comp / "Eternal2x.conf").write_text(text)
+    return comp / "Eternal2x.conf"
 
 
 def test_moving_from_comp_keeps_the_settings_saved_there(fake_home, monkeypatch):
     """The panel saved its settings beside the Comp launcher. Deleting that conf
     unread turned updates back on for everyone moving to Utility."""
     monkeypatch.setattr(sys, "platform", "darwin")
-    comp = inst._resolve_scripts_root() / "Comp"
-    comp.mkdir(parents=True)
-    (comp / "Eternal2x.conf").write_text("repo_root=/old\nauto_update=false\nquality=best\n")
+    legacy = _comp_conf("repo_root=/old\nauto_update=false\nquality=best\n")
     inst.remove_old_install()
-    conf = inst.write_config(inst._resolve_scripts_dir(), Path("/new"), "python3").read_text()
+    utility = inst._resolve_scripts_dir()
+    utility.mkdir(parents=True)
+    conf = inst.write_config(utility, Path("/new"), "python3").read_text()
     assert "auto_update=false" in conf and "quality=best" in conf
     assert f"repo_root={Path('/new')}" in conf
+    assert not legacy.exists()
 
 
-def test_a_failed_settings_move_keeps_the_old_settings(fake_home, monkeypatch):
-    """Deleting the Comp conf after the copy failed lost the update opt-out."""
+def test_a_failed_install_keeps_the_settings_for_the_next_one(fake_home, monkeypatch):
+    """A failure partway used to leave defaults behind, and the next install
+    deleted the only real copy of the settings."""
     monkeypatch.setattr(sys, "platform", "darwin")
-    comp = inst._resolve_scripts_root() / "Comp"
-    comp.mkdir(parents=True)
-    (comp / "Eternal2x.conf").write_text("auto_update=false\n")
+    legacy = _comp_conf("auto_update=false\nquality=ai\ngrain=true\n")
+    real_write = Path.write_text
 
-    def refuse(*_args, **_kwargs):
-        raise OSError("disk full")
+    def refuse(self, *args, **kwargs):
+        if self.name == "Eternal2x.conf":
+            raise OSError("disk full")
+        return real_write(self, *args, **kwargs)
 
-    monkeypatch.setattr(inst.shutil, "copy2", refuse)
-    inst.remove_old_install()
-    assert (comp / "Eternal2x.conf").exists(), "the only copy of the settings was deleted"
+    monkeypatch.setattr(Path, "write_text", refuse)
+    with pytest.raises(OSError):
+        inst.main()
+    assert legacy.exists()
 
-
-def test_a_settings_move_that_fails_halfway_keeps_the_old_settings(fake_home, monkeypatch):
-    """A copy that wrote part of the file and then failed left a destination,
-    which counted as done, so the full original was deleted."""
-    monkeypatch.setattr(sys, "platform", "darwin")
-    comp = inst._resolve_scripts_root() / "Comp"
-    comp.mkdir(parents=True)
-    (comp / "Eternal2x.conf").write_text("auto_update=false" + chr(10) + "quality=ai" + chr(10))
-
-    def half(src, dst, *_args, **_kwargs):
-        Path(dst).write_text("auto_up")
-        raise OSError("disk full")
-
-    monkeypatch.setattr(inst.shutil, "copy2", half)
-    inst.remove_old_install()
-    assert (comp / "Eternal2x.conf").exists()
-    assert not (inst._resolve_scripts_dir() / "Eternal2x.conf").exists(), "a partial copy was left"
+    monkeypatch.setattr(Path, "write_text", real_write)
+    assert inst.main() == 0
+    conf = (inst._resolve_scripts_dir() / "Eternal2x.conf").read_text()
+    for kept in ("auto_update=false", "quality=ai", "grain=true"):
+        assert kept in conf
+    assert not legacy.exists()
 
 
 def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
                                                                         monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
-    comp = inst._resolve_scripts_root() / "Comp"
-    comp.mkdir(parents=True)
-    (comp / "Eternal2x.conf").write_text("quality=fast\n")
+    legacy = _comp_conf("quality=fast\n")
     utility = inst._resolve_scripts_dir()
     utility.mkdir(parents=True)
     (utility / "Eternal2x.conf").write_text("quality=best\n")
     inst.remove_old_install()
-    assert "quality=best" in (utility / "Eternal2x.conf").read_text()
+    conf = inst.write_config(utility, Path("/new"), "python3").read_text()
+    assert "quality=best" in conf
+    assert not legacy.exists()
 
 
 def test_a_reinstall_removes_the_old_python_launcher(fake_home, monkeypatch):
