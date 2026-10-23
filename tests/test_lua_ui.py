@@ -471,8 +471,10 @@ def test_buttons_come_back_when_the_render_finishes(lua, direct):
 
 
 def test_reset_clears_a_stuck_run(lua, direct):
+    """The run ended without saying it was done, and the panel never polled."""
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
+    (direct / ".eternal2x_exit").write_text("1\n")
     H.click("CancelBtn")
     assert H.enabled("SmoothBtn")
     assert H.widgets["Progress"].Text == ""
@@ -944,6 +946,26 @@ def test_reset_does_not_drop_a_run_that_is_still_reporting(lua, direct):
     assert (direct / ".eternal2x_status.json").exists()
     assert not H.enabled("SmoothBtn")
     assert "still running" in H.status()
+
+
+def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
+    """Python takes a moment to start. Reset in that gap, then Smooth, used to
+    launch a second run over the first."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    H.click("CancelBtn")
+    assert not H.enabled("SmoothBtn")
+    assert "still running" in H.status()
+
+
+def test_a_heartbeat_from_before_the_clock_moved_back_is_not_a_live_run(lua, direct):
+    """Stamped an hour ahead of now, it would block Reset for that hour."""
+    import time
+    write_status(direct, fraction=0.4, updated=time.time() + 3600)
+    H = load(lua, ui_script(direct))
+    assert H.enabled("SmoothBtn")
+    H.click("CancelBtn")
+    assert H.status() == "Ready."
 
 
 def test_reset_clears_a_run_that_went_quiet(lua, direct):

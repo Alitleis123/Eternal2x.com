@@ -527,6 +527,9 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
 local RUNNING = false
+-- When this panel started its run, which counts as the first heartbeat until
+-- Python, a second or two later, writes its own.
+local LAUNCHED_AT = nil
 local IMPORTED = false
 local ANALYSING = false
 
@@ -771,8 +774,11 @@ end
 local function run_in_progress()
     if read_exit_code() then return false end
     local st = read_status()
-    return st ~= nil and not st.done and st.updated ~= nil
-        and os.time() - st.updated < STALLED_AFTER
+    if st and st.done then return false end
+    local last = (st and st.updated) or (RUNNING and LAUNCHED_AT)
+    -- Either way of the clock: a heartbeat from before the clock was moved
+    -- back is in the future, and is no more alive than an old one.
+    return last and math.abs(os.time() - last) < STALLED_AFTER or false
 end
 
 -- ---------------------------------------------------------------------------
@@ -853,6 +859,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     set_progress(0.01, "Starting")
     set_status("Analysing. Resolve stays usable while this runs.")
     items.AnalysisLabel.Text = "Analysing..."
+    LAUNCHED_AT = os.time()
     run_background("Stages.resolve_smooth", current_args(" --analyse"))
     start_polling()
 end
@@ -869,6 +876,7 @@ function win.On.SmoothBtn.Clicked(ev)
     set_busy(true)
     set_progress(0.01, "Starting")
     set_status("Working. Resolve stays usable while this runs.")
+    LAUNCHED_AT = os.time()
     run_background("Stages.resolve_smooth", current_args(""))
     start_polling()
 end
