@@ -124,14 +124,52 @@ def test_grain_does_not_hide_the_drawings(tmp_path, sigma):
     assert plan.base_hold == 2
 
 
-def test_flicker_does_not_hide_the_drawings(tmp_path):
-    """Exposure that rises two levels on every other frame is not a drawing."""
+def test_flicker_is_not_taken_for_grain(tmp_path):
+    """Flicker shifts every pixel the same way, as a fade does, and a fade's
+    steps are real. Taking it for grain would merge real frames elsewhere, so
+    a flickering clip reads as all new frames and nothing is merged."""
     def flicker(frame, i):
         return np.clip(frame.astype(int) + 2 * (i % 2), 0, 255).astype(np.uint8)
 
     plan, _w, _h = analyse_video(_drawings_on_twos(tmp_path, flicker), cfg())
-    assert plan.unique_drawings == 12
-    assert plan.base_hold == 2
+    assert plan.unique_drawings == 24
+
+
+def _cel_on_ones(tmp_path, steps):
+    """24 distinct cel drawings on 1s, moving the character `steps` pixels in turn."""
+    import cv2
+    from tests.test_quality import cel
+    src = tmp_path / "ones.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (320, 240))
+    x = 100
+    for i in range(24):
+        writer.write(cel(x, 120))
+        x += steps[i % len(steps)]
+    writer.release()
+    return src
+
+
+@pytest.mark.parametrize("steps", [(1, 1, 1, 4), (2, 10)])
+def test_small_real_moves_are_not_taken_for_grain(tmp_path, steps):
+    """A clip moving 1 px three times and 4 px the fourth has two clusters of
+    scores, as grain on held frames does. Read as grain, half its drawings were
+    merged away. A real move survives a slight blur, and grain does not."""
+    plan, _w, _h = analyse_video(_cel_on_ones(tmp_path, steps), cfg())
+    assert plan.unique_drawings == 24
+
+
+def test_a_fade_with_uneven_steps_keeps_every_frame(tmp_path):
+    """A fade of 1, 1, 1 then 4 levels clusters like grain too."""
+    import cv2
+    src = tmp_path / "fade.avi"
+    writer = cv2.VideoWriter(str(src), cv2.VideoWriter_fourcc(*"FFV1"), 24.0, (160, 120))
+    level = 40
+    for i in range(24):
+        writer.write(np.full((120, 160, 3), level, np.uint8))
+        level += (1, 1, 1, 4)[i % 4]
+    writer.release()
+    plan, _w, _h = analyse_video(src, cfg())
+    assert max(h.length for h in plan.holds) <= 2, "the fade froze"
 
 
 def test_analyse_rejects_a_missing_file(tmp_path):
