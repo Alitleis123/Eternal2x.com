@@ -114,6 +114,13 @@ H.import_works = true   -- flip to false to simulate a build that refuses
 H.sequence_import_works = true  -- false: refuse the clipInfo form only
 H.under_playhead = true  -- false: the playhead is not over a clip
 
+-- Every list Resolve 20.3 hands to Lua also has a number under __flags, so a
+-- loop over it with pairs meets that number as well as the items.
+local function resolve_list(t)
+    t.__flags = 4194304
+    return t
+end
+
 function H.make_resolve(clip_file_path)
     local mpi = {
         GetClipProperty = function(_self)
@@ -155,7 +162,9 @@ function H.make_resolve(clip_file_path)
         item.GetEnd = function(_self) return H.src_span[2] end
         item.GetDuration = function(_self) return H.src_span[2] - H.src_span[1] end
         item.GetUniqueId = function(_self) return "source-item" end
-        item.GetTrackTypeAndIndex = function(_self) return { "video", H.item_track or 1 } end
+        item.GetTrackTypeAndIndex = function(_self)
+            return resolve_list({ "video", H.item_track or 1 })
+        end
     end
     -- H.tracks[n] lists the spans already on video track n. By default only
     -- the source clip, on track 1.
@@ -182,7 +191,7 @@ function H.make_resolve(clip_file_path)
             for i, span in ipairs(H.tracks[n] or {}) do
                 table.insert(out, span == H.src_span and item or span_item(span, n * 100 + i))
             end
-            return out
+            return resolve_list(out)
         end,
         AddTrack = function(_self, kind)
             if H.add_track_works == false then return false end
@@ -203,12 +212,12 @@ function H.make_resolve(clip_file_path)
     }
     local pool = {
         ImportMedia = function(_self, paths)
-            if not H.import_works then return {} end
+            if not H.import_works then return resolve_list({}) end
             local made = {}
             for _, path in ipairs(paths) do
                 -- A clipInfo table imports a sequence, as Blackmagic documents.
                 if type(path) == "table" then
-                    if not H.sequence_import_works then return {} end
+                    if not H.sequence_import_works then return resolve_list({}) end
                     H.sequence_imports = (H.sequence_imports or 0) + 1
                     H.last_sequence = path
                     path = path.FilePath
@@ -231,7 +240,7 @@ function H.make_resolve(clip_file_path)
                     end,
                 })
             end
-            return made
+            return resolve_list(made)
         end,
         AppendToTimeline = function(_self, clips)
             local out = {}
@@ -239,10 +248,11 @@ function H.make_resolve(clip_file_path)
                 -- A clipInfo says where on the timeline it goes.
                 if clip.mediaPoolItem then
                     if H.place_throws then error("AppendToTimeline failed") end
-                    if H.place_works == false then return {} end
+                    if H.place_works == false then return resolve_list({}) end
                     table.insert(H.placements, clip)
                     local track = H.tracks[clip.trackIndex]
-                    local length = clip.endFrame - clip.startFrame + 1
+                    -- Resolve 20.3 places frames startFrame to endFrame - 1.
+                    local length = clip.endFrame - clip.startFrame
                     table.insert(track, { clip.recordFrame, clip.recordFrame + length })
                 end
                 H.appended = H.appended + 1
@@ -252,7 +262,7 @@ function H.make_resolve(clip_file_path)
                 H.last_placed = placed
                 table.insert(out, placed)
             end
-            return out
+            return resolve_list(out)
         end,
     }
     local project = {

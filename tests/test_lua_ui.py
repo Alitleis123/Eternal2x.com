@@ -637,7 +637,9 @@ def test_the_render_lines_up_on_a_new_track_above_the_original(lua, direct):
     placed = H.placements[1]
     assert placed.trackIndex == 2
     assert placed.recordFrame == 86400, "it does not start where the original does"
-    assert (placed.startFrame, placed.endFrame) == (0, 47)
+    # Resolve 20.3 reads endFrame as one past the last frame, so 0 to 48 is
+    # all 48 frames. 0 to 47 left the original showing on the last one.
+    assert (placed.startFrame, placed.endFrame) == (0, 48)
     assert placed.mediaType == 1
     assert H.track_names[2] == "Eternal2x"
     assert "V2 above the original" in H.status()
@@ -665,7 +667,7 @@ def test_a_sequence_is_placed_with_its_own_length(lua, direct):
     H = load(lua, ui_script(direct))
     finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
                   sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=118, fps=60.0)
-    assert H.placements[1].endFrame == 117
+    assert H.placements[1].endFrame == 118
 
 
 def test_without_the_placement_calls_it_goes_at_the_end(lua, direct):
@@ -732,13 +734,32 @@ def test_a_source_deleted_during_the_render_gets_the_render_at_the_end(lua, dire
     assert H.appended == 1
 
 
-def test_a_render_longer_than_the_source_checks_its_whole_span(lua, direct):
-    """120 frames at 24 fps cover 120 timeline frames, not the source's 48."""
+def test_a_render_longer_than_the_source_is_cut_to_it(lua, direct):
+    """Lined up over a 48 frame clip, the rest of a 120 frame render would
+    cover the next shot."""
     H = load(lua, ui_script(direct))
     H.media_frames = "120"
     lua.execute("local H = ...; H.tracks[2] = { { 86460, 86480 } }", H)
     finish_render(H, direct)
-    assert H.placements[1].trackIndex == 3
+    assert H.placements[1].endFrame == 48
+    assert H.placements[1].trackIndex == 2
+
+
+def test_a_render_a_frame_longer_than_the_source_ends_with_it(lua, direct):
+    """Resolve can report a clip's last frame one past where it ends, so the
+    render has a frame more. Seen in Resolve 20.3.1."""
+    H = load(lua, ui_script(direct))
+    H.media_frames = "49"
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 48
+    assert H.tracks[2][1][2] == 86448, "it runs past the original"
+
+
+def test_a_render_a_frame_short_is_placed_whole(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_frames = "47"
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 47
 
 
 def test_a_sequence_at_an_unconfirmed_rate_stays_in_the_media_pool(lua, direct):
