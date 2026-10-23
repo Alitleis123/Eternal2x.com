@@ -14,9 +14,12 @@ permissions:
   contents: write
 
 # One release at a time, so two runs cannot race to write the feed on main.
+# queue: max keeps every waiting release. By default a new one cancels the
+# one already pending.
 concurrency:
   group: release
   cancel-in-progress: false
+  queue: max
 
 jobs:
   publish:
@@ -67,17 +70,22 @@ jobs:
           # Without it the checkout refuses whenever main's feed has moved on.
           git checkout -f -B main origin/main
           # A re-run of an older tag must not move the feed back, or installs
-          # between the two versions would never be offered the newer one.
-          if ! python - "$RUNNER_TEMP/latest.json" update/latest.json <<'PY'
+          # between the two versions would never be offered the newer one. A
+          # feed that cannot be read fails the step, rather than passing for
+          # a newer one.
+          if [ -f update/latest.json ]; then
+            main_is_newer=$(python - "$RUNNER_TEMP/latest.json" update/latest.json <<'PY'
           import json, sys
           def version(path):
               with open(path, encoding="utf-8-sig") as f:
                   return tuple(int(p) for p in json.load(f)["version"].split("."))
-          sys.exit(0 if version(sys.argv[1]) >= version(sys.argv[2]) else 1)
+          print("yes" if version(sys.argv[2]) > version(sys.argv[1]) else "no")
           PY
-          then
-            echo "main's feed is for a newer version. Leaving it alone."
-            exit 0
+            )
+            if [ "$main_is_newer" = yes ]; then
+              echo "main's feed is for a newer version. Leaving it alone."
+              exit 0
+            fi
           fi
           cp "$RUNNER_TEMP/latest.json" update/latest.json
           if git diff --quiet -- update/latest.json; then
