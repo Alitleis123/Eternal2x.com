@@ -1359,3 +1359,19 @@ def test_the_windows_run_gets_its_own_minimised_window(lua, direct):
     H.click("SmoothBtn")
     outer = H.last_command().split("\n")[0]
     assert " /MIN " in outer and " /B " not in outer, outer
+
+
+def test_a_percent_in_the_plugin_path_is_refused_on_windows(lua, tmp_path, repo_root):
+    """cmd expands %NAME% in a command line even inside quotes."""
+    root = _plugin_tree(tmp_path / "VFX %TEMP% tools" / "Eternal2x", repo_root)
+    (root / "Installer" / "Eternal2x.conf").write_text(
+        f"repo_root={root}\npython={sys.executable}\n"
+        "update_url=https://example.com/latest.json\nauto_update=false\n")
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    H.load(str(ui_script(root)), "/media/shot.mov")
+    for button in ("AnalyseBtn", "SmoothBtn", "UpdateBtn"):
+        H.click(button)
+        assert H.command_count() == 0, f"{button} ran a command from the % folder"
+        assert "contains %" in H.status()
+    assert H.enabled("SmoothBtn"), "the panel was left busy"
