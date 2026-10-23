@@ -111,8 +111,11 @@ left, so Resolve stays usable while it works. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
 same frame, so it lines up with your edit and audio. It goes on the lowest
 track that is empty there, or a new track named Eternal2x. Your other clips are
-never covered or moved. If the timeline changed while it rendered, it goes at
-the end instead.
+never covered or moved. If you move the original while it renders, the result
+follows it. If another timeline is open when it finishes, or the original was
+deleted or re-trimmed, it goes at the end instead. An image sequence whose
+frame rate Resolve would not set stays in the media pool, since it would play
+at the wrong speed.
 
 Then:
 
