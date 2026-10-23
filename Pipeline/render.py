@@ -440,6 +440,10 @@ def render_plan(
         """Upscale if asked, then write one output frame."""
         if factor > 1:
             frame = upscale(frame, factor)
+        if state["written"] and frame.shape[:2] != (state["height"], state["width"]):
+            raise SourceError(f"Frame {state['written']} came out "
+                              f"{frame.shape[1]}x{frame.shape[0]}, not "
+                              f"{state['width']}x{state['height']}.")
         state["height"], state["width"] = frame.shape[:2]
         if is_sequence:
             target = output / f"frame_{state['written']:06d}.png"

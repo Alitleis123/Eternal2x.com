@@ -270,6 +270,48 @@ def test_a_gpu_that_runs_out_of_memory_finishes_on_the_cpu(monkeypatch):
     assert not net.on_gpu
 
 
+def _net_returning(monkeypatch, output):
+    """A Rife whose session returns `output(x)` for its input tensor."""
+    _fake_ort(monkeypatch)
+    net = rife.Rife()
+    monkeypatch.setattr(net, "_infer", output)
+    return net
+
+
+@pytest.mark.parametrize("broken", [
+    lambda x: x[:, :3, ::2, ::2],                         # half size
+    lambda x: np.full_like(x[:, :3], np.nan),             # not numbers
+    lambda x: x[:, :3, :, :, None],                       # wrong rank
+])
+def test_a_broken_frame_from_the_model_stops_the_render(monkeypatch, broken):
+    """Written as it came, a smaller frame made a video short by a frame,
+    and a frame of NaN came out black, both reported as a full render."""
+    net = _net_returning(monkeypatch, broken)
+    with pytest.raises(rife.AIUnavailable, match="broken frame"):
+        net.interpolate_pair(cel(120, 120), cel(150, 116), [0.5])
+
+
+def test_a_good_frame_from_the_model_is_used(monkeypatch):
+    net = _net_returning(monkeypatch, lambda x: x[:, :3])
+    out = net.interpolate_pair(cel(120, 120), cel(150, 116), [0.5])[0]
+    assert np.array_equal(out, cel(120, 120))
+
+
+def test_a_frame_of_another_size_never_reaches_the_file(monkeypatch, make_anime, tmp_path):
+    class Shrinking:
+        def __init__(self, progress=None):
+            pass
+
+        def interpolate_pair(self, a, b, times):
+            return [a[: a.shape[0] // 2] if 0 < t < 1 else a for t in times]
+
+    monkeypatch.setattr(rife, "Rife", Shrinking)
+    src = make_anime(holds=(2,) * 6)
+    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    with pytest.raises(SourceError, match="came out"):
+        render_plan(src, plan, tmp_path / "out.mkv", Eternal2xConfig())
+
+
 def test_the_runtime_is_installed_into_this_python(monkeypatch):
     calls, loaded = [], {"done": False}
 
