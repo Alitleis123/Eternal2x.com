@@ -65,6 +65,19 @@ def test_free_edition_is_detected():
     assert bridge.is_studio(FakeResolve(studio=False)) is False
 
 
+@pytest.mark.parametrize("product,studio", [("DaVinci Resolve Studio", True),
+                                            ("DaVinci Resolve", False)])
+def test_the_edition_comes_from_the_product_name(product, studio):
+    """Resolve's version string is only a number, so it cannot tell."""
+    class Resolve20:
+        def GetVersionString(self):
+            return "20.3.1.6"
+
+        def GetProductName(self):
+            return product
+    assert bridge.is_studio(Resolve20()) is studio
+
+
 def test_unknown_edition_returns_none():
     class Bare:
         pass

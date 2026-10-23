@@ -372,7 +372,9 @@ class FakeResolve:
         return self._pm
 
     def GetVersionString(self) -> str:
-        return f"{self._version} {'Studio' if self._studio else 'Lite'}"
+        # Only the number, as on Resolve Studio 20.3.1, which reports
+        # "20.3.1.6". The edition is in the product name.
+        return self._version
 
     def GetProductName(self) -> str:
         return "DaVinci Resolve Studio" if self._studio else "DaVinci Resolve"
