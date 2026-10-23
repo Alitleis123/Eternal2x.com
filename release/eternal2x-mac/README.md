@@ -33,6 +33,8 @@ it drops straight back into your edit.
 ## What it does
 
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
+  It sees through light grain and flicker, and counts a change of colour, a
+  slow fade or a slow pan as motion rather than a hold.
 - Rebuilds the motion with optical flow, generating the in-between frames that
   were never drawn.
 - Has an AI setting, the RIFE network, that draws fast-moving characters
@@ -142,6 +144,12 @@ If a clip has no duplicated frames, Eternal2x says so and stops. Live action
 and animation already on 1s have nothing to recover, and smoothing them would
 only invent motion that was never there.
 
+It also refuses a clip with a variable frame rate, as phone and screen
+recordings often have. Every rebuilt frame lasts the same time, so such a clip
+would come out a different length and drift against its audio. Render it to a
+constant frame rate first, from Resolve or with
+`ffmpeg -i clip.mp4 -r 24 clip_cfr.mp4` at your timeline's rate.
+
 ## From the command line
 
 Every button is a thin wrapper around one module, so you can script it:
@@ -176,9 +184,10 @@ afterwards.
 | Clicking Eternal2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
 | "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
-| "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
+| "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. Heavy grain on a clip with long holds can also hide them. |
+| "...has a variable frame rate" | Render the clip to a constant frame rate first, from Resolve or with ffmpeg, as the message says. |
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
-| Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` avoids this. |
+| Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` usually avoids this. |
 | Upscale skipped | Super Scale needs Resolve Studio. |
 | Something else | Email the panel's status text and the `.eternal2x_last_run.log` file from the plugin folder. |
 
