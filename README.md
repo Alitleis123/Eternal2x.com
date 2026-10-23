@@ -37,7 +37,8 @@ it drops straight back into your edit.
   so it snaps instead.
 - Upscales 2x using Resolve's Super Scale.
 
-It works like Twixtor without the warping. Where forward and backward motion
+It does a job like Twixtor's, but finds the held drawings first, so it only
+generates the frames that were never drawn. Where forward and backward motion
 disagree, which is where optical flow normally tears, it fades to a soft
 dissolve rather than inventing a broken frame. On a small character moving a
 long way that dissolve can show as a faint double image for a frame. The AI
@@ -123,7 +124,7 @@ Whole file when Resolve does not report one.
 |---|---|
 | **Quality** | `Fast` for a quick look, `Better` for normal work, `Best` tracks fine detail like eyes and fingers at the cost of speed. `AI` uses the RIFE network, the cleanest on fast motion and about six times slower than `Better`. Its first run installs ONNX Runtime and downloads the model, about 40 MB, so it needs a connection once. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
-| **Output** | `Image sequence` is lossless and always imports. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. |
+| **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
 | **Interpolate** | Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
 
