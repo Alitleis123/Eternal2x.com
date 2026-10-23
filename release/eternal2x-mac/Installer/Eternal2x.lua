@@ -252,9 +252,12 @@ local function build_command(module_name, args, background, log)
         -- /MIN gives the run its own minimised window. With /B it shared the
         -- console os.execute opens, which stayed on screen for the whole
         -- render, and closing it killed the render without a word.
-        -- `call` keeps the quotes: given a quoted path holding &, `cmd /c`
-        -- strips them and splits the command there.
-        return "start \"Eternal2x\" /MIN cmd /c call " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
+        -- It starts in the plugin folder and runs the script by name. Given
+        -- the full path, `cmd /c` strips its quotes when it holds & and
+        -- splits there, and `call` would double a ^ in it.
+        local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
+        return "start \"Eternal2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
+            .. basename(RUN_SCRIPT)
     end
     -- The subshell backgrounds the whole run, and records how it ended.
     return "(" .. cd .. " && " .. run .. redirect .. "; echo $? > "
@@ -524,6 +527,9 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
 local RUNNING = false
+-- When this panel started its run, which counts as the first heartbeat until
+-- Python, a second or two later, writes its own.
+local LAUNCHED_AT = nil
 local IMPORTED = false
 local ANALYSING = false
 
@@ -768,8 +774,11 @@ end
 local function run_in_progress()
     if read_exit_code() then return false end
     local st = read_status()
-    return st ~= nil and not st.done and st.updated ~= nil
-        and os.time() - st.updated < STALLED_AFTER
+    if st and st.done then return false end
+    local last = (st and st.updated) or (RUNNING and LAUNCHED_AT)
+    -- Either way of the clock: a heartbeat from before the clock was moved
+    -- back is in the future, and is no more alive than an old one.
+    return last and math.abs(os.time() - last) < STALLED_AFTER or false
 end
 
 -- ---------------------------------------------------------------------------
@@ -850,6 +859,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     set_progress(0.01, "Starting")
     set_status("Analysing. Resolve stays usable while this runs.")
     items.AnalysisLabel.Text = "Analysing..."
+    LAUNCHED_AT = os.time()
     run_background("Stages.resolve_smooth", current_args(" --analyse"))
     start_polling()
 end
@@ -866,6 +876,7 @@ function win.On.SmoothBtn.Clicked(ev)
     set_busy(true)
     set_progress(0.01, "Starting")
     set_status("Working. Resolve stays usable while this runs.")
+    LAUNCHED_AT = os.time()
     run_background("Stages.resolve_smooth", current_args(""))
     start_polling()
 end
