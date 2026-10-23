@@ -968,6 +968,31 @@ def test_a_heartbeat_from_before_the_clock_moved_back_is_not_a_live_run(lua, dir
     assert H.status() == "Ready."
 
 
+def test_the_panel_keeps_its_own_word_while_a_run_reports_progress(lua, direct):
+    """Python's status says Starting until the run is done. Shown on every
+    poll, it hid why Reset did nothing and sat under a bar at 52%."""
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.52, message="Starting", updated=time.time())
+    H.click("CancelBtn")
+    H.click("RefreshStatusBtn")
+    assert "still running" in H.status()
+    assert "52%" in H.widgets["Progress"].Text
+
+
+def test_the_stall_warning_goes_once_progress_resumes(lua, direct):
+    import time
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    write_status(direct, fraction=0.3, updated=time.time() - 10 * 60)
+    H.click("RefreshStatusBtn")
+    assert "No progress" in H.status()
+    write_status(direct, fraction=0.4, updated=time.time())
+    H.click("RefreshStatusBtn")
+    assert "No progress" not in H.status()
+
+
 def test_reset_clears_a_run_that_went_quiet(lua, direct):
     import time
     H = load(lua, ui_script(direct))

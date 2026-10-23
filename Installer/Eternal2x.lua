@@ -697,7 +697,9 @@ end
 local function apply_status(st)
     if not st then return false end
     set_progress(st.fraction, st.stage)
-    if st.message ~= "" then set_status(st.message) end
+    -- Until the run is done its message only ever says Starting, and shown on
+    -- every poll it would hide what the panel itself has to say.
+    if st.done and st.message ~= "" then set_status(st.message) end
     if st.done then
         -- Handled now. Left in place, Refresh Progress in a reopened panel
         -- would import the same render again.
@@ -751,6 +753,9 @@ local function poll()
             set_status(string.format("No progress for %d minutes. If the Eternal2x window "
                 .. "was closed, the render stopped: press Reset and run it again.",
                 math.floor(quiet / 60 + 0.5)))
+        elseif (items.Status.Text or ""):match("^No progress for") then
+            -- It is reporting again, so the warning no longer holds.
+            set_status("Working. Resolve stays usable while this runs.")
         end
         return false
     end
