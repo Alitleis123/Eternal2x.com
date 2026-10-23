@@ -96,7 +96,7 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
             subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", package],
                            capture_output=True, text=True)
     raise AIUnavailable(
-        f"Could not install ONNX Runtime for the AI setting ({why}). It needs "
+        f"Could not install ONNX Runtime for the in-betweens ({why}). It needs "
         f"Python 3.10 or newer on most systems. To install it by hand, run: "
         f"\"{sys.executable}\" -m pip install onnxruntime")
 
@@ -201,6 +201,13 @@ class Rife:
             planes.append(rgb.astype(np.float32).transpose(2, 0, 1) / 255.0)
         planes.append(np.full((1, h + ph, w + pw), t, np.float32))
         y = self._infer(np.concatenate(planes)[None])
+        # A frame of another size would be written as it came, and a video
+        # writer drops it without a word, so the render would come out short.
+        expected = (1, 3, h + ph, w + pw)
+        if getattr(y, "shape", None) != expected or not np.isfinite(y).all():
+            raise AIUnavailable(f"The AI model returned a broken frame (shape "
+                                f"{getattr(y, 'shape', '?')}, expected {expected}), so the "
+                                f"render was stopped.")
         rgb = np.clip(y[0, :, :h, :w].transpose(1, 2, 0) * 255.0 + 0.5, 0, 255)
         return cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
 

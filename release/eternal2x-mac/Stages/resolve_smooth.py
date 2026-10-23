@@ -126,11 +126,11 @@ SEQUENCE_PATTERN = "frame_%06d.png"
 
 def _finished(plan, result) -> str:
     """The panel's message for a finished render."""
-    text = (f"Rendered {plan.unique_drawings} drawings into "
-            f"{result.frames_written} smooth frames.")
     if result.note:
-        text += " " + result.note
-    return text
+        return (f"Rendered {plan.unique_drawings} drawings into "
+                f"{result.frames_written} frames. {result.note}")
+    return (f"Rendered {plan.unique_drawings} drawings into "
+            f"{result.frames_written} smooth frames.")
 
 
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,
