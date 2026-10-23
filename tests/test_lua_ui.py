@@ -1096,9 +1096,10 @@ def test_a_build_without_trim_info_uses_the_whole_file(lua, direct):
 
 
 def test_trim_frames_are_converted_at_the_media_rate(lua, direct):
-    """Older builds give frames, which count at the clip's own rate."""
+    """Older builds give frames, which count at the clip's own rate. The end
+    frame is the last one the cut uses."""
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
-    H.source_frames = lua.table(1470, 1590)
+    H.source_frames = lua.table(1470, 1589)
     H.clip_fps = "60"
     H.load(str(ui_script(direct)), "/media/shot.mov")
     H.click("AnalyseBtn")
@@ -1118,8 +1119,9 @@ def test_media_with_a_start_timecode_still_sends_file_seconds(lua, direct):
 
 def test_the_end_frame_wins_over_the_end_time(lua, direct):
     """Measured on Resolve Studio 20.3.1: a 47 frame cut of 60 fps media on a
-    24 fps timeline reported end frame 1317 but an end time one frame earlier,
-    so a render from the times came out a timeline frame short of the cut."""
+    24 fps timeline covers 117.5 source frames from 1200 and reported end
+    frame 1317, the last one used, but an end time at frame 1316. Rendered
+    from the times it came out a timeline frame short of the cut."""
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
     H.clip_fps = "60"
     H.start_tc = 3600.0
@@ -1127,7 +1129,7 @@ def test_the_end_frame_wins_over_the_end_time(lua, direct):
     H.source_frames = lua.table(1200, 1317)
     H.load(str(ui_script(direct)), "/media/shot.mov")
     H.click("SmoothBtn")
-    assert "--start-time 20.000000 --end-time 21.950000" in H.last_command()
+    assert "--start-time 20.000000 --end-time 21.966667" in H.last_command()
 
 
 def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):

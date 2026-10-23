@@ -122,10 +122,10 @@ function H.make_resolve(clip_file_path)
     }
     local item = { GetMediaPoolItem = function(_self) return mpi end }
     -- Where the clip sits in its media, given in seconds from the start of
-    -- the file. Resolve reports frames from the start of the file, but
-    -- seconds from the media's start timecode, H.start_tc. Left unset, the
-    -- item has no such methods, as on a build that predates them, and the
-    -- whole file is used.
+    -- the file. Resolve reports frames from the start of the file, the end
+    -- frame being the last one used, but seconds from the media's start
+    -- timecode, H.start_tc. Left unset, the item has no such methods, as on a
+    -- build that predates them, and the whole file is used.
     if H.source_range then
         local fps = tonumber(H.clip_fps or "24")
         local tc = H.start_tc or 0
@@ -135,7 +135,7 @@ function H.make_resolve(clip_file_path)
             return math.floor(H.source_range[1] * fps + 0.5)
         end
         item.GetSourceEndFrame = function(_self)
-            return math.floor(H.source_range[2] * fps + 0.5)
+            return math.floor(H.source_range[2] * fps + 0.5) - 1
         end
     end
     if H.source_frames then
