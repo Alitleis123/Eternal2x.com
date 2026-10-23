@@ -647,13 +647,15 @@ local function import_result(st)
 
     -- Handed a single frame, Resolve imports a single still. A sequence needs
     -- the clipInfo form from Blackmagic's README: a printf pattern plus the
-    -- first and last frame numbers.
+    -- first and last frame numbers. If that is refused there is no fallback,
+    -- since the first frame alone would go on the timeline as a still.
     local mpi = nil
     if st.sequence_pattern ~= "" and st.sequence_frames > 0 then
         mpi = try_import({ FilePath = st.sequence_pattern, StartIndex = 0,
                            EndIndex = st.sequence_frames - 1 })
+    else
+        mpi = try_import(path)
     end
-    mpi = mpi or try_import(path)
     if not mpi then
         -- The whole path, so the render can be found and dragged in by hand.
         -- A sequence is its folder, not its first frame.

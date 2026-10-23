@@ -844,7 +844,9 @@ def test_a_sequence_is_imported_with_the_documented_clipinfo(lua, direct):
     assert "added to the timeline" in H.status()
 
 
-def test_a_refused_sequence_import_falls_back_to_the_first_frame(lua, direct):
+def test_a_refused_sequence_import_is_not_swapped_for_a_still(lua, direct):
+    """Handed its first frame instead, Resolve imports one still image, which
+    the panel would append and call done."""
     H = load(lua, ui_script(direct))
     H.sequence_import_works = False
     H.click("SmoothBtn")
@@ -852,7 +854,8 @@ def test_a_refused_sequence_import_falls_back_to_the_first_frame(lua, direct):
                  import_path="/tmp/out/frame_000000.png",
                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=24)
     H.click("RefreshStatusBtn")
-    assert H.imported_at(1) == "/tmp/out/frame_000000.png"
+    assert H.imported_count() == 0 and H.appended == 0
+    assert "would not import /tmp/out." in H.status()
 
 
 # --------------------------------------------------------------------------
