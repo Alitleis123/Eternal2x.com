@@ -478,6 +478,10 @@ def tar_of(*members) -> tarfile.TarFile:
         for name, kind, linkname in members:
             info = tarfile.TarInfo(name)
             info.type, info.linkname = kind, linkname
+            # A real archive's folders can be entered. TarInfo's default mode,
+            # 0o644, would stop anything unpacking into one on macOS or Linux.
+            if kind == tarfile.DIRTYPE:
+                info.mode = 0o755
             data = b"payload" if kind == tarfile.REGTYPE else b""
             info.size = len(data)
             tf.addfile(info, io.BytesIO(data))
@@ -488,8 +492,11 @@ def tar_of(*members) -> tarfile.TarFile:
 def tar_python(request, monkeypatch):
     """Python 3.12 and 3.13 trust every member unless told otherwise, and
     Pythons before them have no filter at all. Both are made to happen here."""
-    monkeypatch.setattr(tarfile.TarFile, "extraction_filter",
-                        staticmethod(tarfile.fully_trusted_filter), raising=False)
+    # Older 3.9 to 3.11 builds, such as the 3.9 CI installs on Windows, have
+    # no filters at all, so they always take the path "no filter" tests.
+    if hasattr(tarfile, "fully_trusted_filter"):
+        monkeypatch.setattr(tarfile.TarFile, "extraction_filter",
+                            staticmethod(tarfile.fully_trusted_filter), raising=False)
     if request.param == "no filter":
         monkeypatch.delattr(tarfile, "data_filter", raising=False)
 

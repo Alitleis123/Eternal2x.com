@@ -335,7 +335,9 @@ function H.make_execute(real_execute)
         local script = dir and (dir .. "\\" .. name)
         local recorded = cmd
         if script then
-            local f = io.open(script, "rb")
+            -- A test can make the panel take its Windows path on macOS or
+            -- Linux, where the script is only found with forward slashes.
+            local f = io.open(script, "rb") or io.open((script:gsub("\\", "/")), "rb")
             if f then
                 recorded = cmd .. "\n" .. f:read("*a")
                 f:close()
