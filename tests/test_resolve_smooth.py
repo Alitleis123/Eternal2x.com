@@ -604,7 +604,7 @@ def test_the_message_says_when_no_in_betweens_could_be_drawn():
     result = _Result()
     result.note = "No in-betweens were drawn, so every drawing is kept as drawn. Offline."
     message = smooth._finished(_Plan(), result)
-    assert message.startswith("Rendered 12 drawings into 24 smooth frames.")
+    assert message.startswith("Rendered 12 drawings into 24 frames.")
     assert "kept as drawn" in message and "Offline" in message
 
 

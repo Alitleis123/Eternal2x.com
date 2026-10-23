@@ -96,7 +96,7 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
             subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", package],
                            capture_output=True, text=True)
     raise AIUnavailable(
-        f"Could not install ONNX Runtime for the AI setting ({why}). It needs "
+        f"Could not install ONNX Runtime for the in-betweens ({why}). It needs "
         f"Python 3.10 or newer on most systems. To install it by hand, run: "
         f"\"{sys.executable}\" -m pip install onnxruntime")
 

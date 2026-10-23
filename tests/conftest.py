@@ -121,9 +121,9 @@ def make_anime(tmp_path):
 
     `holds` gives the number of source frames each successive drawing is held
     for, so `[2] * 12` is twelve drawings on 2s. Each drawing is the same
-    texture translated a little further, which is what optical flow can
-    actually track -- a flat shape on a flat background gives it nothing to
-    lock onto.
+    texture translated a little further. The cut detector tracks that
+    texture to tell motion from a change of shot; a flat shape on a flat
+    background gives it nothing to lock onto.
     """
     import cv2
 

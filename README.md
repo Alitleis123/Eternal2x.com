@@ -242,7 +242,7 @@ same checksums as the published ones.
 
 ## Credits
 
-The AI setting runs [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
+The in-betweens are drawn by [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
 4.25 by Zhewei Huang, under the MIT licence, in the ONNX export made by
 [vs-mlrt](https://github.com/AmusementClub/vs-mlrt). The model is downloaded
 the first time the setting is used and checked against its SHA-256. It is not

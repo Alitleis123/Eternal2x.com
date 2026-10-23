@@ -17,5 +17,5 @@ Thumbs.db
 # what the panel writes into the plugin folder while it runs
 .eternal2x_*
 
-# the AI quality setting downloads its model here on first use
+# the RIFE network's model is downloaded here on first use
 models/
