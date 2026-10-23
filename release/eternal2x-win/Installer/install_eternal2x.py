@@ -114,10 +114,12 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
     if legacy == conf_path:
         legacy = None   # installing into Comp itself: there is no older copy
     settings = {"auto_update": "true", **PANEL_DEFAULTS}
+    # Only a conf that is not there means defaults. One that cannot be read
+    # stops the install, rather than being replaced by defaults unread.
     try:
         saved = (conf_path if conf_path.exists() or not legacy else legacy).read_text(
             encoding="utf-8-sig", errors="replace")
-    except OSError:
+    except FileNotFoundError:
         saved = ""
     for line in saved.splitlines():
         key, sep, value = line.partition("=")
@@ -129,7 +131,18 @@ def write_config(dest_dir: Path, repo_root: Path, python_path: str,
         f"update_url={update_url}",
     ]
     lines += [f"{k}={v}" for k, v in settings.items()]
-    conf_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    # Written beside it and renamed into place, so a write cut off partway
+    # leaves the old conf, or none, never a partial one the next install trusts.
+    staged = conf_path.with_name(conf_path.name + ".new")
+    try:
+        staged.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        os.replace(staged, conf_path)
+    except OSError:
+        try:
+            staged.unlink()
+        except OSError:
+            pass
+        raise
     if legacy:
         try:
             legacy.unlink()
