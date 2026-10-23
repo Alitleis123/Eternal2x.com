@@ -705,7 +705,7 @@ def test_the_windows_background_run_goes_through_a_script(lua, direct):
     H.click("SmoothBtn")
     cmd = H.last_command()
     outer = cmd.split("\n")[0]
-    assert outer.startswith('start "Eternal2x" /MIN cmd /c "'), outer
+    assert outer.startswith('start "Eternal2x" /MIN cmd /c call "'), outer
     assert outer.endswith('.eternal2x_run.cmd"') and "/" not in outer.split('cmd /c')[1], outer
     assert "Tom & Jerry" not in outer, "the clip path must not be on the outer command line"
 

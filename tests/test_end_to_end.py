@@ -28,7 +28,11 @@ HARNESS = Path(__file__).resolve().parent / "lua_harness.lua"
 @pytest.fixture
 def installation(tmp_path, repo_root, make_anime):
     """A real install, a real clip, and a panel loaded through the launcher."""
-    plugin = tmp_path / "Eternal2x"
+    return install(tmp_path, repo_root, make_anime, "Eternal2x")
+
+
+def install(tmp_path, repo_root, make_anime, folder):
+    plugin = tmp_path / folder
     for name in ("Installer", "Stages", "Pipeline"):
         shutil.copytree(repo_root / name, plugin / name)
     shutil.copy2(repo_root / "VERSION", plugin / "VERSION")
@@ -268,3 +272,13 @@ def test_a_trimmed_timeline_clip_is_rebuilt_from_just_its_range(installation, re
     finish(H)
     assert len(read_frames(rendered_output(src))) == 12
     assert H.last_sequence_field("EndIndex") == 11
+
+
+def test_a_plugin_folder_with_an_ampersand_still_runs(tmp_path, repo_root, make_anime,
+                                                       read_frames):
+    """cmd strips the quotes around a script path holding &, and splits there."""
+    H, src = install(tmp_path, repo_root, make_anime, "VFX & Tools/Eternal2x")(
+        holds=(2,) * 6)
+    H.click("SmoothBtn")
+    finish(H)
+    assert len(read_frames(rendered_output(src))) == 12

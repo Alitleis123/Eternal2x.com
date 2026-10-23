@@ -187,7 +187,7 @@ function H.make_execute(real_execute)
         -- On Windows the panel writes the real command to a script and starts
         -- that, so record the script too, or every check of the arguments
         -- would only see `start ... cmd /c "script"`.
-        local script = cmd:match('cmd /c "(.-%.cmd)"$')
+        local script = cmd:match('cmd /c call "(.-%.cmd)"$')
         local recorded = cmd
         if script then
             local f = io.open(script, "rb")

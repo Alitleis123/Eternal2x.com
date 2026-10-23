@@ -247,7 +247,9 @@ local function build_command(module_name, args, background, log)
         -- /MIN gives the run its own minimised window. With /B it shared the
         -- console os.execute opens, which stayed on screen for the whole
         -- render, and closing it killed the render without a word.
-        return "start \"Eternal2x\" /MIN cmd /c " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
+        -- `call` keeps the quotes: given a quoted path holding &, `cmd /c`
+        -- strips them and splits the command there.
+        return "start \"Eternal2x\" /MIN cmd /c call " .. shell_quote((RUN_SCRIPT:gsub("/", "\\")))
     end
     -- The subshell backgrounds the whole run, and records how it ended.
     return "(" .. cd .. " && " .. run .. redirect .. "; echo $? > "
