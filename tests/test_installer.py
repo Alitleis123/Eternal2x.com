@@ -117,6 +117,14 @@ def test_a_failed_install_keeps_the_settings_for_the_next_one(fake_home, monkeyp
     assert not legacy.exists()
 
 
+def test_a_conf_written_into_comp_itself_is_kept(tmp_path):
+    """Comp's own conf is not an older copy of itself to clean up."""
+    comp = tmp_path / "Comp"
+    comp.mkdir()
+    conf = inst.write_config(comp, Path("/plugin"), "python3")
+    assert conf.exists()
+
+
 def test_moving_from_comp_does_not_override_settings_already_in_utility(fake_home,
                                                                         monkeypatch):
     monkeypatch.setattr(sys, "platform", "darwin")
