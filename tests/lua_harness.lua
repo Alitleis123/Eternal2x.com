@@ -140,6 +140,8 @@ function H.make_resolve(clip_file_path)
         end,
     }
     local item = { GetMediaPoolItem = function(_self) return mpi end }
+    -- H.item_off switches the source clip off, as Resolve's clip enable does.
+    item.GetClipEnabled = function(_self) return not H.item_off end
     -- Where the clip sits in its media, given in seconds from the start of
     -- the file. Resolve reports frames from the start of the file, the end
     -- frame being the last one used, but seconds from the media's start
@@ -205,6 +207,7 @@ function H.make_resolve(clip_file_path)
             local it = {}
             for k, v in pairs(item) do it[k] = v end
             it.GetMediaPoolItem = function(_self) return file_mpi end
+            it.GetClipEnabled = function(_self) return true end
             it.GetStart = function(_self) return span[1] end
             it.GetEnd = function(_self) return span[2] end
             it.GetDuration = function(_self) return span[2] - span[1] end
@@ -225,6 +228,12 @@ function H.make_resolve(clip_file_path)
     local timeline = {
         GetCurrentVideoItem = function(_self) return H.under_playhead and item or nil end,
         GetUniqueId = function(_self) return H.timeline_id or "timeline-1" end,
+        -- H.playhead_tc is the playhead's timecode, nil until a test sets it.
+        -- H.tracks_off[n] switches video track n off.
+        GetCurrentTimecode = function(_self) return H.playhead_tc end,
+        GetIsTrackEnabled = function(_self, kind, n)
+            return not (H.tracks_off and H.tracks_off[n])
+        end,
         GetTrackCount = function(_self, kind) return kind == "video" and #H.tracks or 0 end,
         GetItemListInTrack = function(_self, kind, n)
             local out = {}

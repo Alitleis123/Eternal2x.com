@@ -231,6 +231,54 @@ local function original_under(timeline, item, name)
     return ok and found or nil
 end
 
+-- The playhead as a timeline frame, the unit GetStart counts in. Resolve gives
+-- it only as timecode, which numbers frames at the nominal rate, 24 for
+-- 23.976. Drop-frame timecode, written with ;, skips two numbers a minute
+-- (four at 59.94) except every tenth minute.
+local function playhead_frame(timeline)
+    local h, m, s, sep, f = tostring(timeline:GetCurrentTimecode() or "")
+        :match("^(%d+):(%d+):(%d+)([:;])(%d+)$")
+    if not h then return nil end
+    local rate = tonumber(tostring(timeline:GetSetting("timelineFrameRate") or ""):match("[%d.]+"))
+    local nominal = math.floor((rate or 24) + 0.5)
+    local minutes = tonumber(h) * 60 + tonumber(m)
+    local frame = (minutes * 60 + tonumber(s)) * nominal + tonumber(f)
+    if sep == ";" then
+        frame = frame - math.floor(nominal / 15) * (minutes - math.floor(minutes / 10))
+    end
+    return frame
+end
+
+local function clip_is_on(it)
+    return not (it.GetClipEnabled and it:GetClipEnabled() == false)
+end
+
+local function track_is_on(timeline, track)
+    return not (timeline.GetIsTrackEnabled and timeline:GetIsTrackEnabled("video", track) == false)
+end
+
+-- GetCurrentVideoItem is the top clip under the playhead even when it or its
+-- track is switched off, as measured in Resolve 20.3.1. The clip that shows
+-- is the top one switched on, on a track switched on. With none, the top clip
+-- is kept.
+local function shown_item(timeline, top)
+    local kind = top.GetTrackTypeAndIndex and top:GetTrackTypeAndIndex()
+    local track = kind and tonumber(kind[2])
+    if clip_is_on(top) and (not track or track_is_on(timeline, track)) then return top end
+    local frame = playhead_frame(timeline)
+    if not frame then return top end
+    for n = timeline:GetTrackCount("video"), 1, -1 do
+        if track_is_on(timeline, n) then
+            for _, it in ipairs(timeline:GetItemListInTrack("video", n) or {}) do
+                if it:GetStart() <= frame and frame < it:GetEnd() and clip_is_on(it) then
+                    return it
+                end
+            end
+        end
+    end
+    return top
+end
+
 local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
@@ -248,6 +296,9 @@ local function find_clip_path()
     if not item then
         return nil, "No clip under the playhead. Move the playhead over a clip on the timeline."
     end
+    -- A failed lookup keeps the top clip, as before it was made.
+    local looked, shown = pcall(shown_item, timeline, item)
+    if looked and shown then item = shown end
 
     local mpi = item:GetMediaPoolItem()
     if not mpi then return nil, "That item has no source media." end

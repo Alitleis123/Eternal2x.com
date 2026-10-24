@@ -90,6 +90,60 @@ def is_studio(resolve: Any) -> Optional[bool]:
 # finding the clip to work on
 # --------------------------------------------------------------------------
 
+_TIMECODE = re.compile(r"^(\d+):(\d+):(\d+)([:;])(\d+)$")
+
+
+def _playhead_frame(timeline: Any) -> Optional[int]:
+    """The playhead as a timeline frame, the unit GetStart counts in.
+
+    Resolve gives it only as timecode, which numbers frames at the nominal
+    rate, 24 for 23.976. Drop-frame timecode, written with ;, skips two numbers
+    a minute (four at 59.94) except every tenth minute.
+    """
+    match = _TIMECODE.match(str(timeline.GetCurrentTimecode() or ""))
+    if not match:
+        return None
+    hours, mins, secs, sep, frames = match.groups()
+    rate = re.search(r"[\d.]+", str(timeline.GetSetting("timelineFrameRate") or ""))
+    nominal = round(float(rate.group()) if rate else 24.0)
+    minutes = int(hours) * 60 + int(mins)
+    frame = (minutes * 60 + int(secs)) * nominal + int(frames)
+    if sep == ";":
+        frame -= nominal // 15 * (minutes - minutes // 10)
+    return frame
+
+
+def _clip_is_on(item: Any) -> bool:
+    getter = getattr(item, "GetClipEnabled", None)
+    return not (callable(getter) and getter() is False)
+
+
+def _track_is_on(timeline: Any, track: int) -> bool:
+    getter = getattr(timeline, "GetIsTrackEnabled", None)
+    return not (callable(getter) and getter("video", track) is False)
+
+
+def _shown_item(timeline: Any, top: Any) -> Any:
+    """GetCurrentVideoItem is the top clip under the playhead even when it or
+    its track is switched off, as measured in Resolve 20.3.1. The clip that
+    shows is the top one switched on, on a track switched on. With none, the
+    top clip is kept."""
+    kind = top.GetTrackTypeAndIndex() if hasattr(top, "GetTrackTypeAndIndex") else None
+    track = int(kind[1]) if kind else None
+    if _clip_is_on(top) and (track is None or _track_is_on(timeline, track)):
+        return top
+    frame = _playhead_frame(timeline)
+    if frame is None:
+        return top
+    for n in range(int(timeline.GetTrackCount("video") or 0), 0, -1):
+        if not _track_is_on(timeline, n):
+            continue
+        for item in timeline.GetItemListInTrack("video", n) or []:
+            if item.GetStart() <= frame < item.GetEnd() and _clip_is_on(item):
+                return item
+    return top
+
+
 def selected_clip(timeline: Any) -> Optional[Any]:
     """The clip the user means: their selection, else the one under the playhead."""
     getter = getattr(timeline, "GetSelectedItems", None)
@@ -106,9 +160,16 @@ def selected_clip(timeline: Any) -> Optional[Any]:
     getter = getattr(timeline, "GetCurrentVideoItem", None)
     if callable(getter):
         try:
-            return getter()
+            top = getter()
         except Exception:
             return None
+        if top is None:
+            return None
+        # A failed lookup keeps the top clip, as before it was made.
+        try:
+            return _shown_item(timeline, top)
+        except Exception:
+            return top
     return None
 
 

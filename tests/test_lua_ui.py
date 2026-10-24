@@ -869,6 +869,48 @@ def test_a_single_file_render_over_its_original_is_skipped_too(lua, direct):
     assert "/media/shot.mov" in H.last_command()
 
 
+def _under_a_clip(lua, direct, setup=""):
+    """B.mov on V2 over A.mov on V1, the playhead ten frames in."""
+    H = load(lua, ui_script(direct), clip="/media/B.mov")
+    lua.execute("local H = ...; H.tracks = nil; H.src_span = nil; H.item_track = 2; "
+                "H.under_paths = { '/media/A.mov' }; H.playhead_tc = '01:00:00:10'; " + setup, H)
+    H.click("RefreshBtn")
+    return H
+
+
+def test_a_clip_switched_off_is_passed_over(lua, direct):
+    """GetCurrentVideoItem returns the top clip even switched off, as measured
+    in Resolve 20.3.1, so the panel took a clip the viewer did not show."""
+    H = _under_a_clip(lua, direct, "H.item_off = true")
+    assert "A.mov" in H.text_of("SourceLabel")
+    H.click("AnalyseBtn")
+    assert "/media/A.mov" in H.last_command()
+
+
+def test_a_clip_on_a_track_switched_off_is_passed_over(lua, direct):
+    H = _under_a_clip(lua, direct, "H.tracks_off = { [2] = true }")
+    assert "A.mov" in H.text_of("SourceLabel")
+
+
+def test_the_top_clip_is_used_while_it_shows(lua, direct):
+    H = _under_a_clip(lua, direct)
+    assert "B.mov" in H.text_of("SourceLabel")
+
+
+def test_the_playhead_counts_whole_frames_on_ntsc_timelines(lua, direct):
+    """Timecode on a 23.976 timeline numbers 24 frames a second. Taken as
+    23.976, an hour in lands 86 frames early, outside the clip."""
+    H = _under_a_clip(lua, direct, "H.item_off = true; H.timeline_fps = '23.976'")
+    assert "A.mov" in H.text_of("SourceLabel")
+
+
+def test_the_playhead_is_found_in_drop_frame_timecode(lua, direct):
+    """01:00:00;00 is frame 107892 at 29.97 drop-frame, not 108000."""
+    H = _under_a_clip(lua, direct, "H.item_off = true; H.timeline_fps = '29.97'; "
+                                   "H.item_start = 107892; H.playhead_tc = '01:00:00;10'")
+    assert "A.mov" in H.text_of("SourceLabel")
+
+
 def test_the_third_smooth_skips_both_earlier_renders(lua, direct):
     """Two runs leave renders on V2 and V3. The third took the V2 render."""
     H = _stacked(lua, direct, "C:\\r\\shot_f0-47_smooth_02.mkv",

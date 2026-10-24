@@ -114,6 +114,55 @@ def test_no_clip_at_all_returns_none():
     assert bridge.selected_clip(FakeTimeline(strict=True)) is None
 
 
+def _b_over_a(start=86400, rate="24", playhead="01:00:00:10"):
+    """B.mov on V2 over A.mov on V1, B under the playhead as Resolve reports it."""
+    timeline = FakeTimeline(strict=True)
+    a = timeline.add_item(FakeTimelineItem(start, 48, FakeMediaPoolItem("A.mov", "/media/A.mov")), 1)
+    b = timeline.add_item(FakeTimelineItem(start, 48, FakeMediaPoolItem("B.mov", "/media/B.mov")), 2)
+    timeline._current_video_item = b
+    timeline.frame_rate, timeline.playhead_tc = rate, playhead
+    return timeline, a, b
+
+
+def test_a_clip_switched_off_is_passed_over():
+    """GetCurrentVideoItem returns the top clip even switched off, as measured
+    in Resolve 20.3.1."""
+    timeline, a, b = _b_over_a()
+    b.enabled = False
+    assert bridge.selected_clip(timeline) is a
+
+
+def test_a_clip_on_a_track_switched_off_is_passed_over():
+    timeline, a, b = _b_over_a()
+    timeline.tracks_off.add(2)
+    assert bridge.selected_clip(timeline) is a
+
+
+def test_the_top_clip_is_used_while_it_shows():
+    timeline, a, b = _b_over_a()
+    assert bridge.selected_clip(timeline) is b
+
+
+@pytest.mark.parametrize("rate, timecode, frame", [
+    ("24", "01:00:00:10", 86410),
+    ("23.976", "01:00:00:10", 86410),
+    ("29.97", "01:00:00;00", 107892),
+    ("29.97", "00:10:00;00", 17982),
+    ("59.94", "00:01:00;04", 3600),
+    ("25", "bad", None),
+])
+def test_the_playhead_frame_follows_the_timecode(rate, timecode, frame):
+    timeline = FakeTimeline(strict=True)
+    timeline.frame_rate, timeline.playhead_tc = rate, timecode
+    assert bridge._playhead_frame(timeline) == frame
+
+
+def test_with_every_clip_switched_off_the_top_one_is_kept():
+    timeline, a, b = _b_over_a()
+    a.enabled = b.enabled = False
+    assert bridge.selected_clip(timeline) is b
+
+
 def test_source_path_is_read_from_the_media_pool_item(install_fake_resolve):
     _r, timeline, _items, _ = install_fake_resolve([(0, 10)],
                                                    media_path="/media/scene 01.mov")
