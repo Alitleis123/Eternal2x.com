@@ -105,7 +105,7 @@ move it.
    Nothing is changed, so this is safe to run on anything.
 4. Click **Smooth Clip**.
 
-![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](docs/assets/demo/resolve.jpg)
+![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://eternal2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
@@ -252,7 +252,7 @@ part of the Eternal2x download.
 
 The demo footage is from [Hero](https://studio.blender.org/projects/hero/) by
 the Blender Foundation, CC BY 4.0. The film on the site,
-[docs/assets/demo/promo.mp4](docs/assets/demo/promo.mp4), uses music from
+[promo.mp4](https://eternal2x.com/assets/demo/promo.mp4), uses music from
 Happy Beats Business Moves Vol. 11 by [ende.app](https://ende.app/en), CC BY
 4.0, and sounds by [Kenney](https://kenney.nl/), CC0.
 
