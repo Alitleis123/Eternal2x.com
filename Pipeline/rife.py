@@ -68,6 +68,24 @@ def _packages() -> List[str]:
     return ["onnxruntime"]
 
 
+# How often a pip run that is still going says so. The panel takes a run that
+# has not written its status for three minutes for a dead one, and pip can
+# take longer than that on a slow connection.
+HEARTBEAT_SECONDS = 15.0
+
+
+def _pip(cmd: List[str], progress: Optional[ProgressFn]) -> subprocess.CompletedProcess:
+    """Run pip, writing the status again every HEARTBEAT_SECONDS until it ends."""
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    while True:
+        try:
+            out, err = proc.communicate(timeout=HEARTBEAT_SECONDS)
+            return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
+        except subprocess.TimeoutExpired:
+            if progress:
+                progress("Installing AI runtime", 0.0)
+
+
 def ensure_runtime(progress: Optional[ProgressFn] = None):
     """Import ONNX Runtime, installing it into this Python the first time."""
     try:
@@ -79,7 +97,7 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
     why = ""
     for package in _packages():
         cmd = [sys.executable, "-m", "pip", "install", "--disable-pip-version-check", package]
-        done = subprocess.run(cmd, capture_output=True, text=True)
+        done = _pip(cmd, progress)
         if done.returncode != 0:
             lines = [x for x in (done.stderr or done.stdout or "").splitlines() if x.strip()]
             why = lines[-1].strip() if lines else f"pip exited with {done.returncode}"
@@ -93,8 +111,7 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
             why = f"{package} installed but will not load: {exc}"
             for name in [m for m in sys.modules if m.split(".")[0] == "onnxruntime"]:
                 del sys.modules[name]
-            subprocess.run([sys.executable, "-m", "pip", "uninstall", "-y", package],
-                           capture_output=True, text=True)
+            _pip([sys.executable, "-m", "pip", "uninstall", "-y", package], progress)
     raise AIUnavailable(
         f"Could not install ONNX Runtime for the in-betweens ({why}). It needs "
         f"Python 3.10 or newer on most systems. To install it by hand, run: "

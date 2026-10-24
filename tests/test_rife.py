@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -121,8 +122,8 @@ def test_a_runtime_that_will_not_install_says_why(monkeypatch):
         raise ImportError(name)
 
     monkeypatch.setattr(rife.importlib, "import_module", no_module)
-    monkeypatch.setattr(rife.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
-        a, 1, "", "ERROR: No matching distribution found for onnxruntime\n"))
+    monkeypatch.setattr(rife, "_pip", lambda cmd, progress=None: subprocess.CompletedProcess(
+        cmd, 1, "", "ERROR: No matching distribution found for onnxruntime\n"))
     with pytest.raises(rife.AIUnavailable) as caught:
         rife.ensure_runtime()
     message = str(caught.value)
@@ -148,7 +149,7 @@ def _install(monkeypatch, platform, refused=()):
 
     monkeypatch.setattr(rife.sys, "platform", platform)
     monkeypatch.setattr(rife.importlib, "import_module", module)
-    monkeypatch.setattr(rife.subprocess, "run", run)
+    monkeypatch.setattr(rife, "_pip", lambda cmd, progress=None: run(cmd))
     assert rife.ensure_runtime() == "onnxruntime module"
     return asked
 
@@ -185,7 +186,7 @@ def test_a_gpu_runtime_that_will_not_load_makes_way_for_the_cpu_one(monkeypatch)
 
     monkeypatch.setattr(rife.sys, "platform", "win32")
     monkeypatch.setattr(rife.importlib, "import_module", module)
-    monkeypatch.setattr(rife.subprocess, "run", run)
+    monkeypatch.setattr(rife, "_pip", lambda cmd, progress=None: run(cmd))
     assert rife.ensure_runtime() == "onnxruntime module"
     assert calls == [("install", "onnxruntime-directml"), ("uninstall", "onnxruntime-directml"),
                      ("install", "onnxruntime")]
@@ -197,14 +198,25 @@ def test_runtimes_that_all_fail_to_load_say_why(monkeypatch):
 
     monkeypatch.setattr(rife.sys, "platform", "win32")
     monkeypatch.setattr(rife.importlib, "import_module", module)
-    monkeypatch.setattr(rife.subprocess, "run",
-                        lambda cmd, **k: subprocess.CompletedProcess(cmd, 0, "", ""))
+    monkeypatch.setattr(rife, "_pip",
+                        lambda cmd, progress=None: subprocess.CompletedProcess(cmd, 0, "", ""))
     with pytest.raises(rife.AIUnavailable, match="will not load: DLL load failed"):
         rife.ensure_runtime()
 
 
 def test_macos_gets_the_plain_runtime(monkeypatch):
     assert _install(monkeypatch, "darwin") == ["onnxruntime"]
+
+
+def test_a_slow_pip_keeps_saying_it_is_working(monkeypatch):
+    """The panel takes three quiet minutes for a dead run, so a long install
+    has to keep writing its status."""
+    said = []
+    monkeypatch.setattr(rife, "HEARTBEAT_SECONDS", 0.05)
+    done = rife._pip([sys.executable, "-c", "import time; time.sleep(0.4); print('ok')"],
+                     lambda stage, fraction: said.append(stage))
+    assert done.returncode == 0 and done.stdout.strip() == "ok"
+    assert len(said) >= 3 and set(said) == {"Installing AI runtime"}
 
 
 class _FakeSession:
@@ -327,7 +339,7 @@ def test_the_runtime_is_installed_into_this_python(monkeypatch):
         return subprocess.CompletedProcess(cmd, 0, "", "")
 
     monkeypatch.setattr(rife.importlib, "import_module", module)
-    monkeypatch.setattr(rife.subprocess, "run", run)
+    monkeypatch.setattr(rife, "_pip", lambda cmd, progress=None: run(cmd))
     assert rife.ensure_runtime() == "onnxruntime module"
     assert calls and calls[0][:4] == [rife.sys.executable, "-m", "pip", "install"]
 
