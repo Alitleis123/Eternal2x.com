@@ -440,15 +440,19 @@ if is_windows() then
             local si = ffi.new("E2X_STARTUPINFOW")
             si.cb = ffi.sizeof(si)
             local pi = ffi.new("E2X_PROCESS_INFORMATION")
+            local code = ffi.new("uint32_t[1]")
             if k32.CreateProcessW(nil, wide, nil, nil, 0, 0x08000000, nil, nil, si, pi) == 0 then
                 return nil
             end
-            k32.WaitForSingleObject(pi.process, 0xFFFFFFFF)
-            local code = ffi.new("uint32_t[1]")
-            k32.GetExitCodeProcess(pi.process, code)
+            -- Started, so it must not run a second time through os.execute,
+            -- whatever goes wrong while waiting for it.
+            pcall(function()
+                k32.WaitForSingleObject(pi.process, 0xFFFFFFFF)
+                k32.GetExitCodeProcess(pi.process, code)
+            end)
             k32.CloseHandle(pi.thread)
             k32.CloseHandle(pi.process)
-            return tonumber(code[0])
+            return true, tonumber(code[0])
         end
     end)
 end
@@ -456,8 +460,8 @@ end
 -- Runs a command and returns its exit code, like os.execute.
 local function execute(cmd)
     if hidden_execute then
-        local ok, code = pcall(hidden_execute, cmd)
-        if ok and code then return code end
+        local ok, started, code = pcall(hidden_execute, cmd)
+        if ok and started then return code end
     end
     return os.execute(cmd)
 end

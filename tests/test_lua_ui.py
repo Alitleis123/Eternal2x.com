@@ -1164,9 +1164,12 @@ package.preload.ffi = function()
                 CREATED[#CREATED + 1] = { line = line.text, flags = flags }
                 return REFUSE and 0 or 1
             end,
-            WaitForSingleObject = function() return 0 end,
+            WaitForSingleObject = function()
+                if WAIT_FAILS then error("wait failed") end
+                return 0
+            end,
             GetExitCodeProcess = function(process, code) code[0] = 0 return 1 end,
-            CloseHandle = function() return 1 end,
+            CloseHandle = function() CLOSED = (CLOSED or 0) + 1 return 1 end,
         }
     end
     return ffi
@@ -1187,6 +1190,17 @@ def test_windows_commands_start_without_a_console_window(lua, direct):
     assert ' /c start "Eternal2x" /D ' in last.line
     assert last.line.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd")
     assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
+
+
+def test_a_command_that_started_never_runs_twice(lua, direct):
+    """A failure while waiting for the started command fell through to
+    os.execute, which ran the command again."""
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    lua.execute(FAKE_FFI + "\nWAIT_FAILS = true")
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not any("start" in c for c in H.commands.values()), "os.execute ran it again"
+    assert lua.eval("CLOSED") == 2 * len(lua.eval("CREATED")), "a process handle was left open"
 
 
 def test_without_create_process_the_command_still_runs(lua, direct):
