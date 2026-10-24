@@ -427,6 +427,13 @@ def test_progress_is_shown_while_running(lua, direct):
     assert "50%" in H.widgets["Progress"].Text
 
 
+def test_a_stage_at_zero_percent_is_still_named(lua, direct):
+    H = load(lua, ui_script(direct))
+    write_status(direct, stage="Installing AI runtime", fraction=0.0)
+    H.click("RefreshStatusBtn")
+    assert "Installing AI runtime" in H.widgets["Progress"].Text
+
+
 def test_progress_bar_fills_as_it_goes(lua, direct):
     H = load(lua, ui_script(direct))
     filled = []

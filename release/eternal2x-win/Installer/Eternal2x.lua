@@ -637,8 +637,10 @@ local function set_status(msg)
     print("[Eternal2x] " .. (msg or ""))
 end
 
+-- A stage at 0% is still shown: installing the AI runtime on first use stays
+-- at 0% for as long as pip takes, and a blank bar then looks stuck.
 local function set_progress(fraction, stage)
-    if not fraction or fraction <= 0 then
+    if not fraction or (fraction <= 0 and (stage or "") == "") then
         items.Progress.Text = ""
         return
     end
