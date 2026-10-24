@@ -257,10 +257,11 @@ local function track_is_on(timeline, track)
     return not (timeline.GetIsTrackEnabled and timeline:GetIsTrackEnabled("video", track) == false)
 end
 
--- GetCurrentVideoItem is the top clip under the playhead even when it or its
--- track is switched off, as measured in Resolve 20.3.1. The clip that shows
--- is the top one switched on, on a track switched on. With none, the top clip
--- is kept.
+-- GetCurrentVideoItem is meant to be the clip that shows under the playhead,
+-- and in Resolve 20.3.1 it passed over a video clip or track switched off.
+-- It still returned a render switched off on the track above its original.
+-- So a clip it returns switched off is passed over for the top one switched
+-- on, on a track switched on. With none, the top clip is kept.
 local function shown_item(timeline, top)
     local kind = top.GetTrackTypeAndIndex and top:GetTrackTypeAndIndex()
     local track = kind and tonumber(kind[2])

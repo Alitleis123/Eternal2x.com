@@ -124,10 +124,12 @@ def _track_is_on(timeline: Any, track: int) -> bool:
 
 
 def _shown_item(timeline: Any, top: Any) -> Any:
-    """GetCurrentVideoItem is the top clip under the playhead even when it or
-    its track is switched off, as measured in Resolve 20.3.1. The clip that
-    shows is the top one switched on, on a track switched on. With none, the
-    top clip is kept."""
+    """GetCurrentVideoItem is meant to be the clip that shows under the
+    playhead, and in Resolve 20.3.1 it passed over a video clip or track
+    switched off. It still returned a render switched off on the track above
+    its original. So a clip it returns switched off is passed over for the
+    top one switched on, on a track switched on. With none, the top clip is
+    kept."""
     kind = top.GetTrackTypeAndIndex() if hasattr(top, "GetTrackTypeAndIndex") else None
     track = int(kind[1]) if kind else None
     if _clip_is_on(top) and (track is None or _track_is_on(timeline, track)):
