@@ -399,17 +399,79 @@ local function launch_problem()
     return nil
 end
 
+-- On Windows, os.execute runs its command in a console window that flashes up
+-- for as long as the command takes, as on every update check. Started with
+-- CreateProcessW and CREATE_NO_WINDOW, cmd gets a console nobody sees, and
+-- the programs it runs share it. The command line is the one os.execute
+-- builds, so quoting is unchanged, and a render still opens its own
+-- minimised window through `start`. UTF-16 also carries non-ASCII paths that
+-- os.execute's ANSI code page cannot. Without LuaJIT's ffi, os.execute runs.
+local hidden_execute = nil
+if is_windows() then
+    pcall(function()
+        local ffi = require("ffi")
+        -- Declared once per Lua state; a second cdef of the same names fails.
+        if not pcall(ffi.typeof, "E2X_STARTUPINFOW") then
+            ffi.cdef[[
+                typedef struct {
+                    uint32_t cb; void *reserved, *desktop, *title;
+                    uint32_t x, y, xsize, ysize, xchars, ychars, fill, flags;
+                    uint16_t show, reserved2; void *reserved3, *input, *output, *error;
+                } E2X_STARTUPINFOW;
+                typedef struct { void *process, *thread; uint32_t pid, tid; } E2X_PROCESS_INFORMATION;
+                int CreateProcessW(const wchar_t *app, wchar_t *cmdline, void *pattr, void *tattr,
+                                   int inherit, uint32_t flags, void *env, const wchar_t *cwd,
+                                   E2X_STARTUPINFOW *si, E2X_PROCESS_INFORMATION *pi);
+                uint32_t WaitForSingleObject(void *handle, uint32_t ms);
+                int GetExitCodeProcess(void *process, uint32_t *code);
+                int CloseHandle(void *handle);
+                int MultiByteToWideChar(uint32_t page, uint32_t flags, const char *s, int n,
+                                        wchar_t *out, int size);
+            ]]
+        end
+        local k32 = ffi.load("kernel32")
+        hidden_execute = function(cmd)
+            local line = (os.getenv("ComSpec") or "cmd.exe") .. " /c " .. cmd
+            local size = k32.MultiByteToWideChar(65001, 0, line, #line, nil, 0)
+            if size <= 0 then return nil end
+            local wide = ffi.new("wchar_t[?]", size + 1)
+            k32.MultiByteToWideChar(65001, 0, line, #line, wide, size)
+            local si = ffi.new("E2X_STARTUPINFOW")
+            si.cb = ffi.sizeof(si)
+            local pi = ffi.new("E2X_PROCESS_INFORMATION")
+            if k32.CreateProcessW(nil, wide, nil, nil, 0, 0x08000000, nil, nil, si, pi) == 0 then
+                return nil
+            end
+            k32.WaitForSingleObject(pi.process, 0xFFFFFFFF)
+            local code = ffi.new("uint32_t[1]")
+            k32.GetExitCodeProcess(pi.process, code)
+            k32.CloseHandle(pi.thread)
+            k32.CloseHandle(pi.process)
+            return tonumber(code[0])
+        end
+    end)
+end
+
+-- Runs a command and returns its exit code, like os.execute.
+local function execute(cmd)
+    if hidden_execute then
+        local ok, code = pcall(hidden_execute, cmd)
+        if ok and code then return code end
+    end
+    return os.execute(cmd)
+end
+
 local function run_blocking(module_name, args, log)
     local cmd = build_command(module_name, args, false, log)
     print("[Eternal2x] " .. cmd)
-    local ok = os.execute(cmd)
+    local ok = execute(cmd)
     return (ok == true or ok == 0)
 end
 
 local function run_background(module_name, args)
     local cmd = build_command(module_name, args, true)
     print("[Eternal2x] " .. cmd)
-    os.execute(cmd)
+    execute(cmd)
 end
 
 local function read_log(path)
@@ -1314,7 +1376,7 @@ function win.On.FolderBtn.Clicked(ev)
               shell_quote(LAST_OUTPUT:match("^(.+)/") or ".") .. " >/dev/null 2>&1 &"
     end
     print("[Eternal2x] " .. cmd)
-    os.execute(cmd)
+    execute(cmd)
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)

@@ -1144,6 +1144,59 @@ def test_a_refused_super_scale_is_not_reported_as_done(lua, direct):
     assert "upscale not applied" in H.status()
 
 
+# LuaJIT's ffi as the panel uses it, recording what CreateProcessW is given.
+# The tests' Lua has no ffi of its own.
+FAKE_FFI = r'''
+CREATED = {}
+package.preload.ffi = function()
+    local ffi = {}
+    function ffi.typeof(name) error("no such type: " .. name) end
+    function ffi.cdef(text) end
+    function ffi.sizeof(x) return 104 end
+    function ffi.new(kind) return { [0] = 0 } end
+    function ffi.load(name)
+        return {
+            MultiByteToWideChar = function(page, flags, s, n, out)
+                if out then out.text = s end
+                return n
+            end,
+            CreateProcessW = function(app, line, pa, ta, inherit, flags, env, cwd, si, pi)
+                CREATED[#CREATED + 1] = { line = line.text, flags = flags }
+                return REFUSE and 0 or 1
+            end,
+            WaitForSingleObject = function() return 0 end,
+            GetExitCodeProcess = function(process, code) code[0] = 0 return 1 end,
+            CloseHandle = function() return 1 end,
+        }
+    end
+    return ffi
+end
+'''
+
+
+def test_windows_commands_start_without_a_console_window(lua, direct):
+    """os.execute flashed a console window up on every update check. The same
+    command line now goes to CreateProcessW with CREATE_NO_WINDOW."""
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    lua.execute(FAKE_FFI)
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    created = lua.eval("CREATED")
+    last = created[len(created)]
+    assert last.flags == 0x08000000
+    assert ' /c start "Eternal2x" /D ' in last.line
+    assert last.line.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd")
+    assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
+
+
+def test_without_create_process_the_command_still_runs(lua, direct):
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    lua.execute(FAKE_FFI + "\nREFUSE = true")
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert H.last_command().startswith('start "Eternal2x" /D ')
+
+
 def test_the_windows_background_run_goes_through_a_script(lua, direct):
     """An & in a path split the old nested `cmd /c "..."` command.
 
