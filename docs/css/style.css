@@ -343,7 +343,8 @@ a:hover { color: var(--accent-hover); }
 
 .frames { margin: 0 0 32px; }
 
-.frames img {
+.frames img,
+.frames video {
     display: block;
     width: 100%;
     height: auto;

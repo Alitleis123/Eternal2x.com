@@ -105,6 +105,8 @@ move it.
    Nothing is changed, so this is safe to run on anything.
 4. Click **Smooth Clip**.
 
+![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](docs/assets/demo/resolve.jpg)
+
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
@@ -247,6 +249,12 @@ The in-betweens are drawn by [Practical-RIFE](https://github.com/hzwer/Practical
 [vs-mlrt](https://github.com/AmusementClub/vs-mlrt). The model is downloaded
 the first time in-betweens are drawn and checked against its SHA-256. It is not
 part of the Eternal2x download.
+
+The demo footage is from [Hero](https://studio.blender.org/projects/hero/) by
+the Blender Foundation, CC BY 4.0. The film on the site,
+[docs/assets/demo/promo.mp4](docs/assets/demo/promo.mp4), uses music from
+Happy Beats Business Moves Vol. 11 by [ende.app](https://ende.app/en), CC BY
+4.0, and sounds by [Kenney](https://kenney.nl/), CC0.
 
 ## Questions
 
