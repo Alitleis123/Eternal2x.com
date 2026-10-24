@@ -36,7 +36,7 @@ it drops straight back into your edit.
   It counts a change of colour, a slow fade or a slow pan as motion rather
   than a hold. With **Grainy source** ticked, it sees through film grain.
 - Draws the in-between frames that were never drawn with the RIFE network,
-  run on your own machine, on the GPU on Windows. Moving characters stay in
+  run on your own machine, on the GPU on Windows wherever DirectML loads. Moving characters stay in
   one piece.
 - Makes no in-between by warping pixels, which doubles lines and smears fast
   characters on drawn animation. Where the network cannot run, the drawings
@@ -135,7 +135,7 @@ Whole file when Resolve does not report one.
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
-| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
+| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
 | **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
 
 Settings are remembered between sessions.

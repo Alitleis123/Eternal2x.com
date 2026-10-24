@@ -127,7 +127,7 @@
                 Every frame has to be read and every missing in-between generated, so the time scales with the
                 length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so
                 trimming it short makes it quicker, though a cut late in a long file is still decoded up to its
-                start first, shown as Seeking. On Windows the in-betweens are drawn on the GPU, and ten seconds
+                start first, shown as Seeking. On Windows the in-betweens are drawn on the GPU through DirectML, and ten seconds
                 of 1080p takes roughly ten to twenty seconds. Where the CPU has to draw them it is about ten
                 times slower. With Grainy source on, the clip is read twice while Analyse measures its grain. Resolve stays usable
                 throughout, and <strong>Analyse</strong> is much quicker if you only want to see what a clip
