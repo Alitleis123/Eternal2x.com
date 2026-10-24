@@ -18,7 +18,7 @@ drawings   A   B   C     D          4 unique drawings
 rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer hold
 ```
 
-![Six frames of a walk from the open movie Hero. As drawn, each drawing is held for two frames. From Eternal2x, each repeat is replaced by a new in-between.](docs/assets/demo/frames.jpg)
+![Six frames of a walk from the open movie Hero. As drawn, each drawing is held for two frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
 
 *Six frames of a walk from [Hero](https://studio.blender.org/projects/hero/)
 (Blender Foundation, CC BY 4.0). The [site](https://eternal2x.com) has the
