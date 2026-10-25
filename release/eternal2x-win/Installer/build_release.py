@@ -35,7 +35,7 @@ PAYLOAD = ["Pipeline", "Stages", "Installer", "VERSION", "README.md",
 SKIP_DIRS = {"__pycache__", ".pytest_cache"}
 SKIP_SUFFIXES = {".pyc", ".pyo"}
 
-REPO = "Alitleis123/Eternal2x.com"
+REPO = "sidebandstudio/Eternal2x.com"
 RELEASE_URL = "https://github.com/" + REPO + "/releases/download/{tag}/{name}.zip"
 
 

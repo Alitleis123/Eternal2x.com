@@ -7,7 +7,7 @@ import sys
 
 DEFAULT_UPDATE_URL = (
     "https://raw.githubusercontent.com/"
-    "Alitleis123/Eternal2x.com/main/update/latest.json"
+    "sidebandstudio/Eternal2x.com/main/update/latest.json"
 )
 
 

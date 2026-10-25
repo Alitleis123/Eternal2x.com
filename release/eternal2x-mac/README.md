@@ -1,6 +1,6 @@
 # Eternal2x
 
-[![CI](https://github.com/Alitleis123/Eternal2x.com/actions/workflows/ci.yml/badge.svg)](https://github.com/Alitleis123/Eternal2x.com/actions/workflows/ci.yml)
+[![CI](https://github.com/sidebandstudio/Eternal2x.com/actions/workflows/ci.yml/badge.svg)](https://github.com/sidebandstudio/Eternal2x.com/actions/workflows/ci.yml)
 
 Smooth 2x for hand-drawn animation, inside DaVinci Resolve Studio.
 
