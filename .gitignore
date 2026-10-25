@@ -19,3 +19,8 @@ Thumbs.db
 
 # the RIFE network's model is downloaded here on first use
 models/
+
+# the site film's sound and renders, made by promo/build.py
+promo/film/assets/sound/
+promo/film/.hyperframes/
+promo/out/
