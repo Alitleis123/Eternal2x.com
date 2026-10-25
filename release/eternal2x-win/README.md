@@ -250,4 +250,4 @@ part of the Eternal2x download.
 
 ## Questions
 
-Email `Justlighttbusiness@gmail.com`
+Email `hello@sideband.studio`
