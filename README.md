@@ -252,9 +252,9 @@ part of the Eternal2x download.
 
 The demo footage is from [Hero](https://studio.blender.org/projects/hero/) by
 the Blender Foundation, CC BY 4.0. The film on the site,
-[promo.mp4](https://eternal2x.com/assets/demo/promo.mp4), uses music from
-Happy Beats Business Moves Vol. 11 by [ende.app](https://ende.app/en), CC BY
-4.0, and sounds by [Kenney](https://kenney.nl/), CC0.
+[promo.mp4](https://eternal2x.com/assets/demo/promo.mp4), uses footsteps,
+clicks and paper sounds by [Kenney](https://kenney.nl/), CC0. Its wind is made
+from noise.
 
 ## Questions
 
