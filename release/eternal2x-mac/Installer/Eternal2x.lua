@@ -365,14 +365,14 @@ local function build_command(module_name, args, background, log)
         -- the rest of the script as UTF-8, so non-ASCII paths survive.
         -- Binary mode keeps Lua from turning \r\n into \r\r\n. The exit code
         -- line puts the redirection first, because `echo 2> file` would
-        -- redirect stderr instead of writing 2.
+        -- redirect stderr instead of writing 2. Unwritten, the script left
+        -- from the last run would start in its place, so nothing starts.
         local f = io.open(RUN_SCRIPT, "wb")
-        if f then
-            f:write("@echo off\r\nchcp 65001 >nul\r\n", (cd:gsub("%%", "%%%%")), "\r\n",
-                    ((run .. redirect):gsub("%%", "%%%%")), "\r\n",
-                    ">", (shell_quote(EXIT_PATH):gsub("%%", "%%%%")), " echo %ERRORLEVEL%\r\n")
-            f:close()
-        end
+        if not f then return nil end
+        f:write("@echo off\r\nchcp 65001 >nul\r\n", (cd:gsub("%%", "%%%%")), "\r\n",
+                ((run .. redirect):gsub("%%", "%%%%")), "\r\n",
+                ">", (shell_quote(EXIT_PATH):gsub("%%", "%%%%")), " echo %ERRORLEVEL%\r\n")
+        f:close()
         -- /MIN gives the run its own minimised window. With /B it shared the
         -- console os.execute opens, which stayed on screen for the whole
         -- render, and closing it killed the render without a word.
@@ -473,10 +473,13 @@ local function run_blocking(module_name, args, log)
     return (ok == true or ok == 0)
 end
 
+-- True once the run is on its way. Python reports from then on.
 local function run_background(module_name, args)
     local cmd = build_command(module_name, args, true)
+    if not cmd then return false end
     print("[Eternal2x] " .. cmd)
-    execute(cmd)
+    local ok = execute(cmd)
+    return (ok == true or ok == 0)
 end
 
 local function read_log(path)
@@ -1184,12 +1187,19 @@ local function poll()
     local st = read_status()
     if apply_status(st) then return true end
     if not exited then
-        local quiet = (st and st.updated and st.updated > 0) and (os.time() - st.updated) or 0
-        if quiet > STALLED_AFTER then
+        -- With no status yet, the quiet counts from the launch: a run whose
+        -- window closed before Python started leaves no file at all.
+        local last = (st and st.updated and st.updated > 0) and st.updated or LAUNCHED_AT
+        local quiet = last and (os.time() - last) or 0
+        if quiet > STALLED_AFTER and not st then
+            set_status(string.format("Python has not started after %d minutes. Press Reset "
+                .. "and run it again. Log: %s", math.floor(quiet / 60 + 0.5), LOG_PATH))
+        elseif quiet > STALLED_AFTER then
             set_status(string.format("No progress for %d minutes. If the Eternal2x window "
                 .. "was closed, the render stopped: press Reset and run it again.",
                 math.floor(quiet / 60 + 0.5)))
-        elseif (items.Status.Text or ""):match("^No progress for") then
+        elseif (items.Status.Text or ""):match("^No progress for")
+            or (items.Status.Text or ""):match("^Python has not started") then
             -- It is reporting again, so the warning no longer holds.
             set_status("Working. Resolve stays usable while this runs.")
         end
@@ -1252,6 +1262,22 @@ local function start_polling()
     end
 end
 
+-- A run that never started has nothing to poll, so the panel says so now.
+local function start_run(args)
+    LAUNCHED_AT = os.time()
+    if run_background("Stages.resolve_smooth", args) then
+        start_polling()
+        return
+    end
+    local msg = "Could not start the run. Check that Eternal2x's folder can be written to, "
+        .. "then try again."
+    set_busy(false)
+    set_progress(0, nil)
+    if ANALYSING then items.AnalysisLabel.Text = msg end
+    ANALYSING = false
+    set_status(msg)
+end
+
 -- ---------------------------------------------------------------------------
 -- handlers
 -- ---------------------------------------------------------------------------
@@ -1307,9 +1333,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     set_progress(0.01, "Starting")
     set_status("Analysing. Resolve stays usable while this runs.")
     items.AnalysisLabel.Text = "Analysing..."
-    LAUNCHED_AT = os.time()
-    run_background("Stages.resolve_smooth", current_args(" --analyse"))
-    start_polling()
+    start_run(current_args(" --analyse"))
 end
 
 function win.On.SmoothBtn.Clicked(ev)
@@ -1332,9 +1356,7 @@ function win.On.SmoothBtn.Clicked(ev)
     set_busy(true)
     set_progress(0.01, "Starting")
     set_status("Working. Resolve stays usable while this runs.")
-    LAUNCHED_AT = os.time()
-    run_background("Stages.resolve_smooth", current_args(""))
-    start_polling()
+    start_run(current_args(""))
 end
 
 -- Switch the smoothed clip off and on, so the original under it shows through.
@@ -1387,7 +1409,9 @@ end
 function win.On.RefreshStatusBtn.Clicked(ev)
     -- A finished run's status is gone once handled, but the shell can still
     -- write the exit code after it, so that alone is not a run to report on.
-    if not read_status() and not (RUNNING and read_exit_code()) then
+    -- A run this panel started is polled even before Python reports, so one
+    -- that never started is caught.
+    if not read_status() and not RUNNING then
         set_status("No run in progress.")
         return
     end
@@ -1498,11 +1522,19 @@ else
     items.Meta.Text = short_path(REPO_ROOT, 68)
     refresh_source()
     set_status(SOURCE_PATH and "Ready." or items.SourceLabel.Text)
+    local waiting = read_status()
     if run_in_progress() then
         -- Closed mid-run and reopened: follow that run, and import it when done.
         set_busy(true)
         start_polling()
         set_status("A run started earlier is still going. Its progress shows here.")
+    elseif waiting and waiting.done and waiting.ok and waiting.import_path ~= "" then
+        -- It finished after its panel closed, so nothing has imported it, and
+        -- the next run would delete its status unseen.
+        LAST_OUTPUT = render_location(waiting)
+        items.FolderBtn.Enabled = LAST_OUTPUT ~= nil
+        set_status("A render finished while the panel was closed. "
+            .. "Press Refresh Progress to add it to the timeline.")
     elseif AUTO_UPDATE then
         run_update(true)
     end

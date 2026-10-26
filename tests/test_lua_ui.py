@@ -1681,6 +1681,55 @@ def test_a_run_that_is_still_reporting_is_not_flagged(lua, direct):
     assert "No progress" not in H.status()
 
 
+def advance_clock(lua, seconds):
+    lua.execute(f"local real = os.time; os.time = function(t) "
+                f"if t then return real(t) end return real() + {seconds} end")
+
+
+def test_a_run_that_never_started_is_flagged(lua, direct):
+    """Its window closed before Python wrote a status, so there is no file to
+    go quiet. The panel said Working, and Refresh said no run, for good."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    advance_clock(lua, 600)
+    H.click("RefreshStatusBtn")
+    assert "Python has not started after 10 minutes" in H.status()
+    H.click("CancelBtn")
+    assert H.enabled("SmoothBtn")
+
+
+def test_a_launch_that_fails_is_reported_at_once(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.exit_code = 1
+    H.click("SmoothBtn")
+    assert "Could not start the run" in H.status()
+    assert H.enabled("SmoothBtn") and H.enabled("AnalyseBtn")
+
+
+def test_an_unwritable_run_script_does_not_rerun_the_last_one(lua, direct):
+    """The script left from the last run would start in its place."""
+    H = load(lua, ui_script(direct))
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    (direct / ".eternal2x_run.cmd").mkdir()
+    before = H.command_count()
+    H.click("AnalyseBtn")
+    assert H.command_count() == before, "a run started without its script"
+    assert "Could not start the run" in H.status()
+    assert "Could not start the run" in H.text_of("AnalysisLabel")
+    assert H.enabled("SmoothBtn")
+
+
+def test_a_render_that_finished_while_the_panel_was_closed_is_offered(lua, direct):
+    write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
+                 import_path=str(direct / "shot_smooth.mp4"))
+    H = load(lua, ui_script(direct))
+    assert "finished while the panel was closed" in H.status()
+    assert H.enabled("FolderBtn")
+    assert H.imported_count() == 0
+    H.click("RefreshStatusBtn")
+    assert H.imported_count() == 1
+
+
 def test_the_windows_run_gets_its_own_minimised_window(lua, direct):
     """Sharing os.execute's console left it open, and closing it killed the run."""
     lua.execute('package.config = "\\\\" .. package.config:sub(2)')
