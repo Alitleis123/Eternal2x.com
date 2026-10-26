@@ -18,24 +18,22 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Klee+One:wght@600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="masthead">
-    <div class="pegs" aria-hidden="true"><i></i><i></i><i></i></div>
+<header class="top">
     <div class="wrap">
         <a class="brand" href="index.html" aria-label="Eternal2x home">
             <img src="assets/icon.svg" alt="" width="34" height="34">
-            <span class="wordmark">Eternal<em>2x</em></span>
+            <span>Eternal<span>2x</span></span>
         </a>
-        <nav class="nav" aria-label="Main">
-            <a href="index.html#how">How it works</a>
+        <nav aria-label="Main">
             <a href="help.html" aria-current="page">Help</a>
-            <a href="contact.html">Contact</a>
-            <a class="nav-cta" href="download.html">Download</a>
+            <a class="hide-small" href="contact.html">Contact</a>
+            <a class="btn btn-amber" href="download.html">Download</a>
         </nav>
     </div>
 </header>
@@ -44,15 +42,14 @@
 
     <section class="page-head">
         <div class="wrap">
-            <p class="kicker">Help</p>
-            <h1 class="display">The manual.</h1>
+            <h1>Help</h1>
             <p class="lede">Installing, using the panel, and what to do when it tells you something went wrong. If your answer isn't here, <a href="contact.html">write to us</a>.</p>
         </div>
     </section>
 
     <div class="wrap help-grid">
         <nav class="toc" aria-label="On this page">
-            <p class="kicker">On this page</p>
+            <p class="label">On this page</p>
             <ol>
                 <li><a href="#windows">Install on Windows</a></li>
                 <li><a href="#macos">Install on macOS</a></li>
@@ -67,7 +64,7 @@
         <div class="doc">
 
             <section id="windows" aria-labelledby="windows-title">
-                <h2 class="display" id="windows-title">Install on Windows</h2>
+                <h2 id="windows-title">Install on Windows</h2>
                 <p class="sub">Extract, run the installer, restart Resolve.</p>
                 <ol class="os-steps">
                     <li>
@@ -98,7 +95,7 @@
             </section>
 
             <section id="macos" aria-labelledby="macos-title">
-                <h2 class="display" id="macos-title">Install on macOS</h2>
+                <h2 id="macos-title">Install on macOS</h2>
                 <p class="sub">The same steps, with Terminal.</p>
                 <ol class="os-steps">
                     <li>
@@ -129,7 +126,7 @@ python3 Installer/gui_installer.py</code></div>
             </section>
 
             <section id="usage" aria-labelledby="usage-title">
-                <h2 class="display" id="usage-title">Using the panel</h2>
+                <h2 id="usage-title">Using the panel</h2>
                 <p class="sub">Analyse to see what you have, then rebuild it.</p>
                 <ol class="os-steps">
                     <li>
@@ -154,7 +151,7 @@ python3 Installer/gui_installer.py</code></div>
             </section>
 
             <section id="settings" aria-labelledby="settings-title">
-                <h2 class="display" id="settings-title">Settings</h2>
+                <h2 id="settings-title">Settings</h2>
                 <p class="sub">The panel remembers them between sessions.</p>
                 <dl class="settings">
                     <div><dt>Hold pattern</dt><dd>Leave it on <code>Auto detect</code>. Force <code>On 2s</code> or <code>On 3s</code> if a clip has unusual timing that trips the detector.</dd></div>
@@ -167,7 +164,7 @@ python3 Installer/gui_installer.py</code></div>
             </section>
 
             <section id="expect" aria-labelledby="expect-title">
-                <h2 class="display" id="expect-title">What to expect</h2>
+                <h2 id="expect-title">What to expect</h2>
                 <h3>Held poses stay still</h3>
                 <p>A drawing held on purpose keeps its full length instead of drifting. Only the timing between drawings is smoothed.</p>
                 <h3>Cuts stay hard</h3>
@@ -177,7 +174,7 @@ python3 Installer/gui_installer.py</code></div>
             </section>
 
             <section id="troubleshooting" aria-labelledby="troubleshooting-title">
-                <h2 class="display" id="troubleshooting-title">Troubleshooting</h2>
+                <h2 id="troubleshooting-title">Troubleshooting</h2>
                 <p class="sub">Find the message the panel showed you.</p>
                 <div class="faq">
                     <details>
@@ -263,7 +260,7 @@ python3 Installer/gui_installer.py</code></div>
             </section>
 
             <section id="updates" aria-labelledby="updates-title">
-                <h2 class="display" id="updates-title">Updates</h2>
+                <h2 id="updates-title">Updates</h2>
                 <p class="sub">They arrive on their own.</p>
                 <h3>Automatically</h3>
                 <p>Each time the panel opens, Eternal2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it. Untick Auto-update to stop this.</p>
@@ -281,14 +278,11 @@ python3 Installer/gui_installer.py</code></div>
 
 <footer class="foot">
     <div class="wrap">
-        <a class="brand" href="index.html" aria-label="Eternal2x home">
-            <img src="assets/icon.svg" alt="" width="26" height="26">
-            <span class="wordmark">Eternal<em>2x</em></span>
-        </a>
-        <span>Made by <a href="https://sideband.studio">Sideband Studio</a>. Write to <a href="mailto:hello@sideband.studio">hello@sideband.studio</a>.</span>
-        <nav class="foot-links" aria-label="Footer">
+        <span>Made by <a href="https://sideband.studio">Sideband Studio</a></span>
+        <nav aria-label="Footer">
             <a href="index.html">Home</a>
             <a href="download.html">Download</a>
+            <a href="help.html">Help</a>
             <a href="contact.html">Contact</a>
             <a href="https://github.com/sidebandstudio/Eternal2x.com">GitHub</a>
         </nav>

@@ -18,24 +18,22 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Klee+One:wght@600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="masthead">
-    <div class="pegs" aria-hidden="true"><i></i><i></i><i></i></div>
+<header class="top">
     <div class="wrap">
         <a class="brand" href="index.html" aria-label="Eternal2x home">
             <img src="assets/icon.svg" alt="" width="34" height="34">
-            <span class="wordmark">Eternal<em>2x</em></span>
+            <span>Eternal<span>2x</span></span>
         </a>
-        <nav class="nav" aria-label="Main">
-            <a href="index.html#how">How it works</a>
+        <nav aria-label="Main">
             <a href="help.html">Help</a>
-            <a href="contact.html" aria-current="page">Contact</a>
-            <a class="nav-cta" href="download.html">Download</a>
+            <a class="hide-small" href="contact.html" aria-current="page">Contact</a>
+            <a class="btn btn-amber" href="download.html">Download</a>
         </nav>
     </div>
 </header>
@@ -44,8 +42,7 @@
 
     <section class="page-head">
         <div class="wrap">
-            <p class="kicker">Contact</p>
-            <h1 class="display">Write to us.</h1>
+            <h1>Contact</h1>
             <p class="lede">Questions, bug reports and ideas all go to one inbox at Sideband Studio, the people who make Eternal2x.</p>
         </div>
     </section>
@@ -53,15 +50,15 @@
     <div class="wrap">
         <div class="letter">
             <div class="envelope">
-                <p class="kicker">Email</p>
+                <p class="label">Email</p>
                 <a class="address" href="mailto:hello@sideband.studio?subject=Eternal2x%20question">hello@sideband.studio</a>
-                <a class="btn btn-gold" href="mailto:hello@sideband.studio?subject=Eternal2x%20question">
+                <a class="btn btn-amber" href="mailto:hello@sideband.studio?subject=Eternal2x%20question">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
                     Send an email
                 </a>
             </div>
             <div class="envelope">
-                <p class="kicker">For a bug, include</p>
+                <p class="label">For a bug, include</p>
                 <ul class="checklist">
                     <li>Your Resolve version, and whether it's Studio</li>
                     <li>Windows or macOS, and which version</li>
@@ -71,22 +68,19 @@
                 </ul>
             </div>
         </div>
-        <p class="fine" style="margin-top: 22px;">Most problems have a fix on the <a href="help.html#troubleshooting">help page</a> already.</p>
+        <p class="note">Most problems have a fix on the <a href="help.html#troubleshooting">help page</a> already.</p>
     </div>
 
 </main>
 
 <footer class="foot">
     <div class="wrap">
-        <a class="brand" href="index.html" aria-label="Eternal2x home">
-            <img src="assets/icon.svg" alt="" width="26" height="26">
-            <span class="wordmark">Eternal<em>2x</em></span>
-        </a>
-        <span>Made by <a href="https://sideband.studio">Sideband Studio</a>.</span>
-        <nav class="foot-links" aria-label="Footer">
+        <span>Made by <a href="https://sideband.studio">Sideband Studio</a></span>
+        <nav aria-label="Footer">
             <a href="index.html">Home</a>
             <a href="download.html">Download</a>
             <a href="help.html">Help</a>
+            <a href="contact.html">Contact</a>
             <a href="https://github.com/sidebandstudio/Eternal2x.com">GitHub</a>
         </nav>
     </div>

@@ -18,24 +18,22 @@
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&family=Klee+One:wght@600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/site.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
-<header class="masthead">
-    <div class="pegs" aria-hidden="true"><i></i><i></i><i></i></div>
+<header class="top">
     <div class="wrap">
         <a class="brand" href="index.html" aria-label="Eternal2x home">
             <img src="assets/icon.svg" alt="" width="34" height="34">
-            <span class="wordmark">Eternal<em>2x</em></span>
+            <span>Eternal<span>2x</span></span>
         </a>
-        <nav class="nav" aria-label="Main">
-            <a href="index.html#how">How it works</a>
+        <nav aria-label="Main">
             <a href="help.html">Help</a>
-            <a href="contact.html">Contact</a>
-            <a class="nav-cta" href="download.html" aria-current="page">Download</a>
+            <a class="hide-small" href="contact.html">Contact</a>
+            <a class="btn btn-amber" href="download.html" aria-current="page">Download</a>
         </nav>
     </div>
 </header>
@@ -44,8 +42,8 @@
 
     <section class="page-head">
         <div class="wrap">
-            <p class="kicker">Free, for Windows and macOS</p>
-            <h1 class="display">Download.</h1>
+            <p class="label">Free, for Windows and macOS</p>
+            <h1>Download</h1>
             <p class="lede">Each zip holds the panel, the Python pipeline and the installer. The AI model isn't in it. The first render downloads it and checks it against its SHA-256.</p>
         </div>
     </section>
@@ -60,7 +58,7 @@
                     </div>
                     <span class="tag pending" data-version>Latest</span>
                 </div>
-                <a class="btn btn-gold" data-asset="eternal2x-win.zip"
+                <a class="btn btn-amber" data-asset="eternal2x-win.zip"
                    href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-win.zip">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     eternal2x-win.zip
@@ -75,7 +73,7 @@
                     </div>
                     <span class="tag pending" data-version>Latest</span>
                 </div>
-                <a class="btn btn-gold" data-asset="eternal2x-mac.zip"
+                <a class="btn btn-amber" data-asset="eternal2x-mac.zip"
                    href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-mac.zip">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     eternal2x-mac.zip
@@ -90,8 +88,7 @@
 
         <section class="section" aria-labelledby="install-title">
             <div class="section-head">
-                <p class="kicker">Then</p>
-                <h2 class="display" id="install-title">Install in<br>three steps.</h2>
+                <h2 id="install-title">Install in three steps</h2>
                 <p>You need DaVinci Resolve Studio 18 or newer and Python 3.10 to 3.14. Python 3.15 is too new for the AI runtime. The <a href="help.html#windows">help page</a> walks through every click.</p>
             </div>
             <ol class="three">
@@ -112,8 +109,7 @@
 
         <section class="section" id="older" aria-labelledby="older-title">
             <div class="section-head">
-                <p class="kicker">Every release</p>
-                <h2 class="display" id="older-title">Older<br>versions.</h2>
+                <h2 id="older-title">Older versions</h2>
                 <p id="release-state">Loading the release list from GitHub.</p>
             </div>
             <div class="older" id="older-list" hidden>
@@ -122,7 +118,7 @@
                     <tbody id="older-rows"></tbody>
                 </table>
             </div>
-            <p class="fine" style="margin-top: 18px;">All of them, with notes, are on <a href="https://github.com/sidebandstudio/Eternal2x.com/releases">GitHub</a>.</p>
+            <p class="note">All of them, with notes, are on <a href="https://github.com/sidebandstudio/Eternal2x.com/releases">GitHub</a>.</p>
         </section>
     </div>
 
@@ -130,13 +126,10 @@
 
 <footer class="foot">
     <div class="wrap">
-        <a class="brand" href="index.html" aria-label="Eternal2x home">
-            <img src="assets/icon.svg" alt="" width="26" height="26">
-            <span class="wordmark">Eternal<em>2x</em></span>
-        </a>
-        <span>Made by <a href="https://sideband.studio">Sideband Studio</a>. Write to <a href="mailto:hello@sideband.studio">hello@sideband.studio</a>.</span>
-        <nav class="foot-links" aria-label="Footer">
+        <span>Made by <a href="https://sideband.studio">Sideband Studio</a></span>
+        <nav aria-label="Footer">
             <a href="index.html">Home</a>
+            <a href="download.html">Download</a>
             <a href="help.html">Help</a>
             <a href="contact.html">Contact</a>
             <a href="https://github.com/sidebandstudio/Eternal2x.com">GitHub</a>
