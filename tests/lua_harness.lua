@@ -171,9 +171,12 @@ function H.make_resolve(clip_file_path)
         local start = H.item_start or 86400
         H.src_span = { start, start + (H.item_duration or 48) }
     end
-    -- Markers on the clip, keyed by frame from its first frame, as Resolve
-    -- keeps them, with the __flags entry every Resolve table carries.
+    -- Markers on the clip, keyed in timeline frames from the start of its
+    -- media, as Resolve keeps them, so a clip trimmed H.left_offset frames
+    -- into its media has its first frame there. Each table carries the
+    -- __flags entry every Resolve table does.
     H.markers = H.markers or {}
+    item.GetLeftOffset = function(_self) return H.left_offset or 0 end
     item.GetMarkers = function(_self)
         local out = { __flags = 4194304 }
         for frame, info in pairs(H.markers) do out[frame] = info end

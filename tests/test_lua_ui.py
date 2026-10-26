@@ -1867,3 +1867,38 @@ def test_the_threshold_slider_sets_how_big_a_change_counts(lua, direct):
     assert "--threshold 0.008000" in H.last_command()
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
     assert "threshold=7" in conf
+
+
+def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
+    """Resolve keys the markers from the media's start: M pressed 10 frames
+    into a clip trimmed 20 frames in reads back as frame 30."""
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    for key in (30, 20, 5, 75):
+        H.add_marker(key)
+    H.click("SmoothBtn")
+    assert "--marks 0,10 " in H.last_command() + " ", "the trimmed-off frames count for nothing"
+
+
+def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "20,22,24"
+
+
+def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
+    """A 30 fps clip on a 23.976 timeline: markers sit on timeline frames."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "30", "23.976"
+    H.left_offset = 47
+    H.add_marker(47)
+    H.add_marker(57)
+    H.click("SmoothBtn")
+    assert "--marks 0,13 " in H.last_command() + " "
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,13,25", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "47,57,67"

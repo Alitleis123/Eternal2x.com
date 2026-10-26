@@ -289,6 +289,24 @@ local function shown_item(timeline, top)
     return top
 end
 
+-- How the clip's markers line up with its frames. Resolve counts them in
+-- timeline frames from the start of the media, not from the clip's left edge,
+-- so a trimmed clip's first frame is at its left offset. A clip at another
+-- rate than the timeline has `per` source frames to each timeline frame.
+-- Measured on Resolve 20.3.1.
+local function marked_clip(item, timeline, props)
+    local ok, clip = pcall(function()
+        local fps = tonumber(tostring(props["FPS"] or ""):match("^%s*([%d%.]+)"))
+        local rate = tonumber(timeline:GetSetting("timelineFrameRate"))
+        local per = (fps and rate and fps > 0 and rate > 0) and fps / rate or 1
+        local origin = tonumber(item:GetLeftOffset())
+        if not origin then origin = (tonumber(item:GetSourceStartFrame()) or 0) / per end
+        return { item = item, origin = math.floor(origin + 0.5), per = per,
+                 length = tonumber(item:GetDuration()) }
+    end)
+    return ok and clip or { item = item, origin = 0, per = 1 }
+end
+
 local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
@@ -342,7 +360,7 @@ local function find_clip_path()
                       and place.item) then
         place = nil
     end
-    return path, nil, clip_range(item, props), place, item
+    return path, nil, clip_range(item, props), place, marked_clip(item, timeline, props)
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an
@@ -760,7 +778,7 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
 -- The clip on the timeline, whose markers say which frames count, and the one
--- the running analysis will mark.
+-- the running analysis will mark, as marked_clip describes them.
 local SOURCE_ITEM = nil
 local ANALYSED_ITEM = nil
 -- Where the source clip sits on the timeline, and where the running render's
@@ -841,19 +859,19 @@ end
 -- leaves every marker the editor placed.
 local MARK_TAG = "eternal2x"
 
--- The frames marked on the clip, counted from its first frame, sorted. Every
--- marker on the clip counts, whatever its colour. Markers on the timeline's
--- ruler do not, since editors keep beat markers there.
-local function clip_marks(item)
-    if not item then return {} end
+-- The frames marked on the clip, as source frames from its first frame,
+-- sorted. Every marker on the clip counts, whatever its colour. Markers on the
+-- timeline's ruler do not, since editors keep beat markers there.
+local function clip_marks(clip)
+    if not clip then return {} end
     local ok, frames = pcall(function()
-        local length = tonumber(item:GetDuration())
         local out, seen = {}, {}
-        for frame in pairs(item:GetMarkers() or {}) do
-            local f = tonumber(frame)
-            if f then
-                f = math.floor(f + 0.5)
-                if f >= 0 and (not length or f < length) and not seen[f] then
+        for key in pairs(clip.item:GetMarkers() or {}) do
+            local t = tonumber(key)
+            if t then
+                t = math.floor(t + 0.5) - clip.origin
+                local f = math.floor(t * clip.per + 0.5)
+                if t >= 0 and (not clip.length or t < clip.length) and not seen[f] then
                     seen[f] = true
                     out[#out + 1] = f
                 end
@@ -865,19 +883,23 @@ local function clip_marks(item)
     return ok and frames or {}
 end
 
--- Put a marker on each frame Analyse found, after taking down the ones it put
--- there last time. Returns how many it placed.
-local function mark_drawings(item, marks)
+-- Put a marker on each frame Analyse found, given as source frames from the
+-- clip's first frame, after taking down the ones it put there last time.
+-- Returns how many it placed.
+local function mark_drawings(clip, marks)
     local placed = 0
     pcall(function()
-        for frame, info in pairs(item:GetMarkers() or {}) do
+        local item = clip.item
+        for key, info in pairs(item:GetMarkers() or {}) do
             if type(info) == "table" and info.customData == MARK_TAG then
-                item:DeleteMarkerAtFrame(tonumber(frame))
+                item:DeleteMarkerAtFrame(tonumber(key))
             end
         end
         for f in marks:gmatch("%d+") do
-            if item:AddMarker(tonumber(f), "Yellow", "Eternal2x",
-                              "Delete this marker to leave the frame out.", 1, MARK_TAG) then
+            local t = math.floor(tonumber(f) / clip.per + 0.5)
+            if (not clip.length or t < clip.length)
+                and item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
+                                   "Delete this marker to leave the frame out.", 1, MARK_TAG) then
                 placed = placed + 1
             end
         end
