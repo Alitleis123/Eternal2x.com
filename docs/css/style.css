@@ -8,13 +8,15 @@
     --sheet: #f8f5ee;
     --ink: #17150f;
     --ink-soft: #46423a;
-    --ink-mute: #6f695d;
+    --ink-mute: #625d52;
     --rule: rgba(23, 21, 15, .16);
     --rule-soft: rgba(23, 21, 15, .08);
     --grid: rgba(58, 99, 184, .13);
     --blue: #3a63b8;
     --red: #d6361f;
     --red-deep: #ad2914;
+    /* The red for small text, dark enough to read on every paper tone. */
+    --red-text: #b8301a;
     --table: #12110e;
     --table-2: #1d1b17;
     --table-line: rgba(242, 238, 228, .14);
@@ -341,7 +343,8 @@ code, kbd {
     display: block;
     position: absolute;
     left: 12px; bottom: 12px;
-    padding: 7px 13px;
+    min-height: 38px;
+    padding: 0 15px;
     font: 600 12px/1 var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -352,6 +355,7 @@ code, kbd {
     cursor: pointer;
 }
 .compare.js .compare-pause:hover { border-color: #ff8a73; }
+@media (pointer: coarse) { .compare.js .compare-pause { min-height: 44px; left: 8px; bottom: 8px; } }
 
 /* --------------------------------------------------------------------- */
 /* sections                                                               */
@@ -461,7 +465,7 @@ code, kbd {
 
 /* A new in-between: boxed in red pencil. */
 .cel.new img { outline: 3px solid var(--red); outline-offset: 3px; }
-.cel.new figcaption, .cel.new figcaption .hand { color: var(--red); }
+.cel.new figcaption, .cel.new figcaption .hand { color: var(--red-text); }
 
 @media (max-width: 720px) {
     .sheet { min-width: 600px; }
@@ -504,7 +508,7 @@ code, kbd {
     position: relative;
 }
 .steps li + li { padding-left: clamp(18px, 2.4vw, 30px); border-left: 1px solid var(--rule); }
-.step-no { font: 600 12px/1 var(--mono); color: var(--red); letter-spacing: .12em; }
+.step-no { font: 600 12px/1 var(--mono); color: var(--red-text); letter-spacing: .12em; }
 .steps h3 {
     font: 900 clamp(34px, 3.6vw, 46px)/.95 var(--display);
     text-transform: uppercase;
@@ -540,6 +544,7 @@ code, kbd {
 }
 .film::before { left: 12px; }
 .film::after { right: 12px; }
+@media (max-width: 760px) { .film::before, .film::after { display: none; } }
 .film .kicker { color: rgba(242, 238, 228, .6); }
 .film-head { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 18px 40px; margin-bottom: 28px; }
 .film-head h2 { font-size: clamp(44px, 6.4vw, 88px); }
@@ -577,7 +582,7 @@ code, kbd {
 .rule-mark {
     grid-row: span 2;
     font: 600 19px/1.1 var(--hand);
-    color: var(--red);
+    color: var(--red-text);
     transform: rotate(-6deg);
     transform-origin: left top;
     padding-top: 2px;
@@ -718,7 +723,7 @@ code, kbd {
 }
 .three li { counter-increment: n; padding: 22px 24px 8px 0; }
 .three li + li { padding-left: 24px; border-left: 1px solid var(--rule); }
-.three li::before { content: "0" counter(n); font: 600 12px/1 var(--mono); color: var(--red); letter-spacing: .12em; }
+.three li::before { content: "0" counter(n); font: 600 12px/1 var(--mono); color: var(--red-text); letter-spacing: .12em; }
 .three h3 { font: 900 30px/.95 var(--display); text-transform: uppercase; margin: 12px 0 10px; }
 .three p { color: var(--ink-soft); font-size: 16px; }
 @media (max-width: 860px) {

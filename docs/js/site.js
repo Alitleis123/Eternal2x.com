@@ -59,13 +59,40 @@
     box.classList.add('js');
     video.controls = false;
 
+    // A finger on the picture may be scrolling the page, so it only moves the
+    // divider once it heads sideways, or lifts again without moving: a tap.
+    // A mouse or pen moves it at once.
+    var dragging = false, touch = null;
     box.addEventListener('pointerdown', function (e) {
         if (e.target === pause) return;
+        if (e.pointerType === 'touch') {
+            touch = { x: e.clientX, y: e.clientY };
+            return;
+        }
+        dragging = true;
         box.setPointerCapture(e.pointerId);
         fromPointer(e);
     });
     box.addEventListener('pointermove', function (e) {
-        if (box.hasPointerCapture(e.pointerId)) fromPointer(e);
+        if (touch && !dragging) {
+            var dx = Math.abs(e.clientX - touch.x), dy = Math.abs(e.clientY - touch.y);
+            if (dx > 8 && dx > dy) {
+                dragging = true;
+                box.setPointerCapture(e.pointerId);
+            } else if (dy > 8) {
+                touch = null;
+            }
+        }
+        if (dragging) fromPointer(e);
+    });
+    box.addEventListener('pointerup', function (e) {
+        if (touch && !dragging) fromPointer(e);
+        dragging = false;
+        touch = null;
+    });
+    box.addEventListener('pointercancel', function () {
+        dragging = false;
+        touch = null;
     });
     slider.addEventListener('input', function () { setPos(slider.value / 100); });
     box.addEventListener('click', function (e) {
@@ -111,6 +138,7 @@
             sel.removeAllRanges();
             sel.addRange(range);
             button.textContent = 'Selected';
+            setTimeout(function () { button.textContent = 'Copy'; }, 2500);
         }
         button.addEventListener('click', function () {
             if (!navigator.clipboard) return select();

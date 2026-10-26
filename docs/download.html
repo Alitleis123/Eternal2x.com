@@ -210,8 +210,22 @@ fetch('https://api.github.com/repos/' + REPO + '/releases')
         document.getElementById('older-list').hidden = false;
     })
     .catch(function () {
-        // The API is down or rate limited. The buttons above still work.
+        // The API is down or rate limited. The buttons above still work, and
+        // the update feed, which has no such limit, still names the version.
         state.textContent = 'Could not load the list from GitHub. The buttons above still get the newest version.';
+        return fetch('https://raw.githubusercontent.com/' + REPO + '/main/update/latest.json')
+            .then(function (res) {
+                if (!res.ok) throw new Error('feed returned ' + res.status);
+                return res.json();
+            })
+            .then(function (feed) {
+                if (typeof feed.version !== 'string') return;
+                document.querySelectorAll('[data-version]').forEach(function (tag) {
+                    tag.textContent = 'v' + feed.version;
+                    tag.classList.remove('pending');
+                });
+            })
+            .catch(function () {});
     });
 </script>
 </body>
