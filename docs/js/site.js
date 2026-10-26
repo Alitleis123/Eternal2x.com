@@ -20,15 +20,15 @@
         // A zero-width source rectangle throws in some browsers.
         if (x > 0) ctx.drawImage(video, 0, 0, x, H, 0, 0, x, H);
         if (x < W) ctx.drawImage(video, x, H, W - x, H, x, 0, W - x, H);
-        // A cream line with a gold grip.
-        ctx.fillStyle = '#f2e9d6';
+        // A light line with an amber grip.
+        ctx.fillStyle = '#f4f4f1';
         ctx.fillRect(x - 1.5, 0, 3, H);
         ctx.beginPath();
         ctx.arc(x, H / 2, 17, 0, Math.PI * 2);
-        ctx.fillStyle = '#d4af37';
+        ctx.fillStyle = '#f2a93b';
         ctx.fill();
         ctx.lineWidth = 3;
-        ctx.strokeStyle = '#0d0c0a';
+        ctx.strokeStyle = '#101013';
         ctx.stroke();
         ctx.beginPath();
         ctx.moveTo(x - 4, H / 2 - 5); ctx.lineTo(x - 9, H / 2); ctx.lineTo(x - 4, H / 2 + 5);
