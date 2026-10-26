@@ -193,19 +193,61 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .section h2 { font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15; }
 .section .lead { margin: 10px 0 24px; color: var(--soft); max-width: 36em; }
 
-/* The three buttons sit in one quiet row under the film. */
-.steps {
-    list-style: none;
-    margin: 36px 0 0;
-    padding: 0;
+/* How it works: the film on the left, and beside it the clip's path
+   through the panel drawn as a chain of nodes, the way Fusion shows one. */
+.how {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 24px 40px;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: clamp(28px, 4vw, 56px);
+    align-items: center;
 }
-.steps .label { color: var(--amber); }
-.steps h3 { margin: 8px 0 6px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
-.steps p { color: var(--soft); font-size: 15.5px; }
-@media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+.how-text h2 { font-size: clamp(26px, 3vw, 34px); line-height: 1.15; }
+.how-text > p { margin-top: 10px; color: var(--soft); }
+@media (max-width: 900px) { .how { grid-template-columns: 1fr; } }
+
+.flow { list-style: none; margin: 26px 0 0; padding: 0; }
+.node {
+    position: relative;
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--raise);
+}
+/* The ports each node is wired through. */
+.node::before, .node::after {
+    content: "";
+    position: absolute;
+    left: 22px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--mute);
+}
+.node::before { top: -6px; }
+.node::after { bottom: -6px; }
+.node:first-child::before, .node:last-child::after { display: none; }
+.node + .node { margin-top: 22px; }
+/* The wire between two nodes, with a pulse running down it. */
+.node + .node > .node-kind::before {
+    content: "";
+    position: absolute;
+    left: 26px;
+    top: -18px;
+    width: 2px;
+    height: 14px;
+    background: linear-gradient(var(--amber), var(--amber)) 0 0 / 100% 40% no-repeat, var(--line-strong);
+    animation: wire 1.8s linear infinite;
+}
+@keyframes wire { from { background-position: 0 -60%; } to { background-position: 0 160%; } }
+@media (prefers-reduced-motion: reduce) { .node + .node > .node-kind::before { animation: none; } }
+.node-kind { font: 500 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.node strong { font-size: 16.5px; font-weight: 600; }
+.node span:last-child { font-size: 14px; color: var(--soft); }
+.node-on { border-color: var(--amber); background: rgba(242, 169, 59, .1); }
+.node-on .node-kind { color: var(--amber); }
+.node-on::before, .node-on::after { border-color: var(--amber); }
 
 /* The film opens on a frame inside Resolve with one big play button, so it
    reads as a video. Its own controls come back once it plays. */
