@@ -291,18 +291,34 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 }
 .player.playing .play { display: none; }
 
-/* Six short specs in two columns, spaced apart rather than ruled off. */
-.specs {
-    margin: 0;
+/* What you need, read at a glance: one strip, four readouts. */
+.needs {
+    list-style: none;
+    margin: 32px auto 0;
+    padding: 0;
+    max-width: 980px;
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 28px 48px;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    text-align: left;
 }
-.specs dt { font: 500 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
-.specs dd { margin: 6px 0 0; font-size: 17px; }
-.specs small { display: block; margin-top: 3px; color: var(--mute); font-size: 14.5px; line-height: 1.5; }
-.specs a { color: var(--soft); }
-@media (max-width: 640px) { .specs { grid-template-columns: 1fr; gap: 22px; } }
+.needs li { display: grid; gap: 4px; align-content: start; padding: 20px 20px 22px; }
+.needs li + li { border-left: 1px solid var(--line); }
+.needs svg { width: 22px; height: 22px; margin-bottom: 8px; color: var(--amber); }
+.needs strong { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.needs span { font-size: 14px; line-height: 1.5; color: var(--mute); }
+.needs a { color: var(--soft); }
+@media (max-width: 860px) {
+    .needs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .needs li:nth-child(3) { border-left: 0; }
+    .needs li:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+    .needs { grid-template-columns: 1fr; }
+    .needs li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
 
 .get {
     margin-top: clamp(64px, 9vw, 104px);
@@ -313,6 +329,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .get h2 { font-size: clamp(30px, 4vw, 42px); }
 .get p { margin-top: 10px; color: var(--soft); }
 .get .actions { justify-content: center; margin-top: 26px; }
+.get .note { margin-top: 18px; }
 
 /* footer */
 
