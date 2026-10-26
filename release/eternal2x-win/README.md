@@ -105,8 +105,9 @@ move it.
 2. Open **Workspace → Scripts → Eternal2x**.
 3. Click **Analyse**. It reads the clip, tells you what it found, for
    example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`,
-   and puts a marker on the clip at every drawing. A pose held longer than the
-   clip's pattern is marked at both ends, so it stays still.
+   and puts a marker on the clip at every drawing. A pose held for more than
+   twice the clip's pattern is a pause. It gets a second marker just before
+   the next drawing, so it stays still and then moves on at the clip's pace.
 4. Check the markers. Delete one to leave its frame out, even if it moved, or
    select the clip and press **M** to mark a frame Analyse missed. If it marked
    too many or too few, move **Threshold** and analyse again. That replaces

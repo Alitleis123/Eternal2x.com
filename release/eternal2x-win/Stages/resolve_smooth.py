@@ -163,16 +163,19 @@ def _output_path(source: Path, output_dir: Optional[str], fmt: str,
 def drawing_marks(plan) -> list:
     """The frames to mark on the clip for this plan's drawings.
 
-    Each drawing is marked where it starts. A pose held longer than the clip's
-    pattern is marked where it ends as well, or rendering from the marks would
-    draw it slowly into the next drawing, where detection keeps it still.
+    Each drawing is marked where it starts, so everything between two
+    drawings is drawn fresh. A pose held for more than twice the clip's
+    pattern is a pause, and is marked again one pattern before it ends, so it
+    stays still and then moves into the next drawing at the clip's own pace.
+    Marked only where it starts, it would drift the whole way there. Shorter
+    holds are drawn through, like 3s in a clip mostly on 2s.
     """
-    from Pipeline.dedupe import hold_repeats
+    base = max(2, plan.base_hold)
     marks = set()
     for hold in plan.holds:
         marks.add(hold.index)
-        if hold_repeats(hold, plan.base_hold) > 1:
-            marks.add(hold.end)
+        if hold.length > 2 * base:
+            marks.add(hold.index + hold.length - base)
     return sorted(marks)
 
 
