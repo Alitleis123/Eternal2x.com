@@ -111,7 +111,7 @@
                     </li>
                     <li>
                         <h3>Run the installer</h3>
-                        <p>You need Python 3.10 to 3.14 from python.org, or 3.10 to 3.13 on an Intel Mac, where the AI runtime stops at 3.13. Get <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> or <a href="https://www.python.org/downloads/latest/python3.13/">Python 3.13</a>. Then open Terminal and run:</p>
+                        <p>Which Python works depends on the Mac, because the AI runtime only has builds for some pairs. On macOS 14 or newer, use 3.10 to 3.14 on Apple Silicon and 3.10 to 3.13 on Intel. On macOS 13, use 3.10 to 3.13, and on macOS 12, 3.10 to 3.12. Get <a href="https://www.python.org/downloads/latest/python3.14/">3.14</a>, <a href="https://www.python.org/downloads/latest/python3.13/">3.13</a> or <a href="https://www.python.org/downloads/latest/python3.12/">3.12</a> from python.org. Then open Terminal and run:</p>
                         <div class="code"><code>cd ~/path/to/eternal2x-mac
 python3 Installer/gui_installer.py</code></div>
                         <p>Click Install and wait for it to finish. It works on Apple Silicon and Intel Macs.</p>
@@ -134,7 +134,7 @@ python3 Installer/gui_installer.py</code></div>
                 <ol class="os-steps">
                     <li>
                         <h3>Put the playhead on a clip</h3>
-                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. Analyse and Smooth Clip always work on the clip under the playhead when you press them. <strong>Use Clip at Playhead</strong> shows you which one that is.</p>
+                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. Analyse and Smooth Clip pick up the clip under the playhead when you press them, and if the playhead sits in a gap, they keep the last clip. <strong>Use Clip at Playhead</strong> shows you which one that is.</p>
                     </li>
                     <li>
                         <h3>Analyse</h3>
@@ -144,6 +144,7 @@ python3 Installer/gui_installer.py</code></div>
                         <h3>Smooth Clip</h3>
                         <p>Press <strong>Smooth Clip</strong>. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
                         <p>When it's done, the result is imported, with Super Scale applied if Upscale 2x is ticked, and placed above the original, starting on the same frame, at the same length and frame rate. It goes on the lowest track that is empty there, or a new track named Eternal2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
+                        <p>If another timeline is open when it finishes, or the original was deleted or retrimmed, it goes at the end of the timeline instead. An image sequence whose frame rate Resolve won't set stays in the media pool, since it would play at the wrong speed.</p>
                     </li>
                     <li>
                         <h3>Compare</h3>
@@ -254,7 +255,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"python" is not recognised</summary>
                         <div class="answer">
-                            <p>Install <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org. Any version from 3.10 to 3.14 works. 3.15 is too new for the AI runtime, and Eternal2x would keep every drawing as drawn.</p>
+                            <p>Install <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org. Any version from 3.10 to 3.14 works on Windows. 3.15 is too new for the AI runtime, and Eternal2x would keep every drawing as drawn. On a Mac the range depends on the macOS version. See <a href="#macos">Install on macOS</a>.</p>
                             <p>On Windows, tick Add python.exe to PATH in its installer, then open a new Command Prompt window.</p>
                         </div>
                     </details>

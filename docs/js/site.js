@@ -121,7 +121,18 @@
 
 // Copy buttons on the help page's command blocks.
 (function () {
-    document.querySelectorAll('.code').forEach(function (block) {
+    var blocks = document.querySelectorAll('.code');
+    if (!blocks.length) return;
+    // Tells a screen reader what the button did, which its label alone doesn't.
+    var status = document.createElement('p');
+    status.className = 'sr-only';
+    status.setAttribute('role', 'status');
+    document.body.appendChild(status);
+    function say(text) {
+        status.textContent = '';
+        setTimeout(function () { status.textContent = text; }, 30);
+    }
+    blocks.forEach(function (block) {
         var code = block.querySelector('code');
         if (!code) return;
         var button = document.createElement('button');
@@ -138,12 +149,14 @@
             sel.removeAllRanges();
             sel.addRange(range);
             button.textContent = 'Selected';
+            say('Command selected. Press Control C or Command C to copy it.');
             setTimeout(function () { button.textContent = 'Copy'; }, 2500);
         }
         button.addEventListener('click', function () {
             if (!navigator.clipboard) return select();
             navigator.clipboard.writeText(code.textContent.trim()).then(function () {
                 button.textContent = 'Copied';
+                say('Command copied.');
                 setTimeout(function () { button.textContent = 'Copy'; }, 1500);
             }, select);
         });
