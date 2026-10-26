@@ -103,10 +103,22 @@ move it.
    scripts which clip is selected, so Eternal2x works on the clip under the
    playhead, read again each time you press a button.
 2. Open **Workspace → Scripts → Eternal2x**.
-3. Click **Analyse**. It reads the clip and tells you what it found, for
-   example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`
-   Nothing is changed, so this is safe to run on anything.
-4. Click **Smooth Clip**.
+3. Click **Analyse**. It reads the clip, tells you what it found, for
+   example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`,
+   and puts a marker on the clip at every drawing. A pose held longer than the
+   clip's pattern is marked at both ends, so it stays still.
+4. Check the markers. Delete one to leave its frame out, even if it moved, or
+   select the clip and press **M** to mark a frame Analyse missed. If it marked
+   too many or too few, move **Threshold** and analyse again. That replaces
+   only its own markers, never yours.
+5. Click **Render**.
+
+Render keeps every marked frame as drawn and draws every frame between two
+markers fresh, so a part you leave unmarked never counts. Every marker on the
+clip counts, whatever its colour, and the clip's first frame always does.
+Markers on the timeline's ruler do not, so beat markers are safe there. You can
+skip Analyse and mark the frames yourself. A clip with no markers at all is
+rendered from the drawings Eternal2x finds on its own.
 
 ![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://eternal2x.com/assets/demo/resolve.jpg)
 
@@ -137,6 +149,7 @@ Whole file when Resolve does not report one.
 
 | Setting | What it does |
 |---|---|
+| **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
 | **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
