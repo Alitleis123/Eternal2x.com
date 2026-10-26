@@ -186,7 +186,7 @@ end
 -- 20.3.1 a 119 frame cut from 1200 reported 1318. Where the timeline's rate
 -- differs from the media's, the end time fell short of it, and a render from
 -- the times came out a timeline frame short of the cut.
-local function clip_range(item, props)
+local function clip_range(item, props, rate)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
         return ok and tonumber(value) or nil
@@ -196,6 +196,13 @@ local function clip_range(item, props)
     if not (fps and fps > 0 and f0) then return nil end
     local start = f0 / fps
     local f1 = call("GetSourceEndFrame")
+    -- At the timeline's own rate Resolve reports the end frame as the last one
+    -- used at 60 fps but one past it at 23.976 (20.3.1), so the clip's length
+    -- settles it. A retimed clip's length is no guide and keeps the end frame.
+    local length = call("GetDuration")
+    if f1 and length and rate and math.abs(rate - fps) < 0.001 and math.abs(f1 - f0 - length) <= 1 then
+        return { start = start, finish = (f0 + length) / fps }
+    end
     if f1 and f1 >= f0 then return { start = start, finish = (f1 + 1) / fps } end
     local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
     if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
@@ -360,7 +367,9 @@ local function find_clip_path()
                       and place.item) then
         place = nil
     end
-    return path, nil, clip_range(item, props), place, marked_clip(item, timeline, props)
+    local rate = nil
+    pcall(function() rate = tonumber(timeline:GetSetting("timelineFrameRate")) end)
+    return path, nil, clip_range(item, props, rate), place, marked_clip(item, timeline, props)
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an

@@ -1659,6 +1659,29 @@ def test_the_end_frame_wins_over_the_end_time(lua, direct):
     assert "--start-time 20.000000 --end-time 21.966667" in H.last_command()
 
 
+def test_a_cut_at_the_timeline_rate_ends_where_the_clip_does(lua, direct):
+    """Measured on Resolve Studio 20.3.1: at 23.976 fps a 40 frame cut from
+    frame 20 reports end frame 60, one past its last, so the render read a
+    frame past the cut, which can be the next shot."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_frames = lua.table(20, 60)
+    H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "23.976", 40
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 0.834168 --end-time 2.502503" in H.last_command()
+
+
+def test_a_cut_whose_end_frame_is_its_last_keeps_it(lua, direct):
+    """At 60 fps the same build reports the last frame used: 119 frames
+    from 1200 end at 1318."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_frames = lua.table(1200, 1318)
+    H.clip_fps, H.timeline_fps, H.item_duration = "60", "60", 119
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 20.000000 --end-time 21.983333" in H.last_command()
+
+
 def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
     H.source_range = lua.table(1.0, 2.0)
