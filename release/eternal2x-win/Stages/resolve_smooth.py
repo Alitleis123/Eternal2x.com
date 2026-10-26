@@ -21,6 +21,7 @@ from typing import Optional, Tuple
 try:
     from Pipeline import resolve_bridge as bridge
     from Pipeline.config import Eternal2xConfig
+    from Pipeline.dedupe import plan_from_marks
     from Pipeline.render import SourceError, analyse_video, probe_video, render_plan
 except ImportError as exc:
     IMPORT_ERROR: Optional[ImportError] = exc
@@ -51,6 +52,9 @@ class StatusFile:
         # A sequence carries no frame rate, so Resolve would play it at the
         # project's. The panel sets this on the imported clip.
         self.fps = 0.0
+        # After an analysis, the frames found to be drawings, counted from the
+        # clip's first frame, for the panel to mark on the clip.
+        self.marks = ""
 
     def write(self, *, done: bool = False, ok: bool = False,
               message: Optional[str] = None) -> None:
@@ -68,6 +72,7 @@ class StatusFile:
             "sequence_pattern": self.sequence_pattern,
             "sequence_frames": self.sequence_frames,
             "fps": round(self.fps, 3),
+            "marks": self.marks,
             "done": done,
             "ok": ok,
             "updated": time.time(),
@@ -184,6 +189,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "Leave off for clean animation.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
+    parser.add_argument("--marks", default=None,
+                        help="Comma-separated frames, counted from the clip's first frame, "
+                             "to keep as drawn. Every other frame becomes an in-between "
+                             "of the marks around it, and nothing is detected.")
     # A panel still open across an update sends the quality it used to offer.
     # The in-betweens are always drawn by the network now, so it is ignored.
     parser.add_argument("--quality", default=None, help=argparse.SUPPRESS)
@@ -289,9 +298,32 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=False, message=str(exc))
         return 2
 
+    if args.marks is not None:
+        try:
+            marks = [int(m) for m in args.marks.split(",") if m.strip()]
+        except ValueError:
+            message = f"The marked frames could not be read: {args.marks}"
+            print(f"Error: {message}")
+            summary["error"] = message
+            status.write(done=True, ok=False, message=message)
+            return 2
+        plan = plan_from_marks(marks, plan.source_frames, plan.fps)
     print(plan.describe())
     summary.update({"source": str(source), "width": width, "height": height,
                     "plan": plan.to_dict()})
+
+    if plan.is_noop and plan.marked:
+        if plan.unique_drawings <= 1:
+            why = "Only the first frame is marked, so there is nothing to draw between."
+            short = "Mark at least one more frame on the clip, or delete the markers to let Eternal2x find the drawings."
+        else:
+            why = "Every frame is marked, so there is nothing to draw between."
+            short = "Every frame is marked. Delete the markers on frames that should be drawn fresh."
+        print(f"Nothing to do. {why}")
+        summary["skipped"] = "marks"
+        summary["ok"] = True
+        status.write(done=True, ok=True, message=short)
+        return 0
 
     if plan.is_noop:
         if plan.unique_drawings <= 1:
@@ -316,6 +348,7 @@ def _run(args, summary: dict) -> int:
     if args.analyse:
         print("Analysis only. Nothing was changed.")
         summary["ok"] = True
+        status.marks = ",".join(str(h.index) for h in plan.holds)
         status.write(done=True, ok=True, message=plan.describe())
         return 0
 

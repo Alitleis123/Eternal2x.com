@@ -51,6 +51,9 @@ class DedupePlan:
     # Every frame came out new, but the scores look like grain on held
     # frames: worth turning on Grainy source and analysing again.
     grain_suspected: bool = False
+    # Made from the frames the editor marked, not from detection. Every frame
+    # between two marks is then an in-between, however long the gap.
+    marked: bool = False
 
     @property
     def unique_drawings(self) -> int:
@@ -84,6 +87,9 @@ class DedupePlan:
     def describe(self) -> str:
         if self.source_frames == 0:
             return "Empty clip."
+        if self.marked:
+            return (f"{self.source_frames} frames, {self.unique_drawings} marked. "
+                    "Rebuilding from the marked frames.")
         if self.is_noop and self.unique_drawings <= 1:
             return (
                 f"{self.source_frames} frames, one drawing held throughout. "
@@ -112,6 +118,7 @@ class DedupePlan:
             "output_frames": self.output_frames,
             "stretch": self.stretch,
             "is_noop": self.is_noop,
+            "marked": self.marked,
             "holds": [{"index": h.index, "length": h.length} for h in self.holds],
             "output_indices": self.output_indices,
         }
@@ -237,6 +244,29 @@ def plan_from_scores(
     )
 
 
+def plan_from_marks(marks: Sequence[int], source_frames: int, fps: float) -> DedupePlan:
+    """A plan from the frames the editor marked, in place of detection.
+
+    Each marked frame is kept as drawn and every frame up to the next mark is
+    an in-between of the two, however much it moved in the source, so a part
+    the editor leaves unmarked never counts. Frames are counted from the
+    clip's first frame, which always counts: before it there is nothing to
+    draw from.
+    """
+    keep = sorted({int(m) for m in marks if 0 <= int(m) < source_frames} | {0})
+    if source_frames <= 0:
+        keep = []
+    holds = [Hold(index=a, length=b - a) for a, b in zip(keep, keep[1:] + [source_frames])]
+    return DedupePlan(
+        source_frames=max(0, source_frames),
+        fps=fps,
+        holds=holds,
+        base_hold=1,
+        output_indices=[h.index for h in holds],
+        marked=True,
+    )
+
+
 def output_time_map(plan: DedupePlan) -> List[float]:
     """Where each final frame sits in the intermediate clip, as a float index.
 
@@ -263,7 +293,7 @@ def output_time_map(plan: DedupePlan) -> List[float]:
     positions: List[float] = []
     slot = 0
     for hold in plan.holds:
-        repeats = hold_repeats(hold, plan.base_hold)
+        repeats = 1 if plan.marked else hold_repeats(hold, plan.base_hold)
         step = repeats / float(hold.length)
         positions.extend(min(last, slot + k * step) for k in range(hold.length))
         slot += repeats

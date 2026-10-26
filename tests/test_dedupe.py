@@ -324,3 +324,41 @@ def test_a_mostly_ones_clip_with_held_frames_is_not_a_noop():
 def test_a_single_drawing_is_still_a_noop():
     plan = plan_from_scores(scores_for([24]), 24.0, threshold=T)
     assert plan.is_noop
+
+
+# --------------------------------------------------------------------------
+# frames the editor marked
+# --------------------------------------------------------------------------
+
+def test_marked_frames_are_the_drawings_and_the_rest_are_in_betweens():
+    from Pipeline.dedupe import output_time_map, plan_from_marks
+    plan = plan_from_marks([0, 4, 6], 8, 24.0)
+    assert [h.index for h in plan.holds] == [0, 4, 6]
+    assert plan.output_indices == [0, 4, 6]
+    assert output_time_map(plan) == [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2]
+
+
+def test_the_first_frame_always_counts():
+    from Pipeline.dedupe import plan_from_marks
+    plan = plan_from_marks([3], 6, 24.0)
+    assert [(h.index, h.length) for h in plan.holds] == [(0, 3), (3, 3)]
+
+
+def test_marks_outside_the_clip_or_repeated_are_dropped():
+    from Pipeline.dedupe import plan_from_marks
+    plan = plan_from_marks([5, 5, -1, 12, 2], 10, 24.0)
+    assert [h.index for h in plan.holds] == [0, 2, 5]
+
+
+def test_a_long_gap_between_marks_is_drawn_through_not_held():
+    """Detection keeps a long hold still. Marks are the editor's word, so
+    every frame between two of them is an in-between, however long the gap."""
+    from Pipeline.dedupe import output_time_map, plan_from_marks
+    plan = plan_from_marks([0, 8], 10, 24.0)
+    assert output_time_map(plan)[:8] == [k / 8 for k in range(8)]
+
+
+def test_marking_every_frame_or_only_the_first_leaves_nothing_to_do():
+    from Pipeline.dedupe import plan_from_marks
+    assert plan_from_marks(range(6), 6, 24.0).is_noop
+    assert plan_from_marks([], 6, 24.0).is_noop
