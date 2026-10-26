@@ -21,8 +21,9 @@ rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer ho
 ![Six frames of a walk from the open movie Hero. As drawn, each drawing is held for two frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
 
 *Six frames of a walk from [Hero](https://studio.blender.org/projects/hero/)
-(Blender Foundation, CC BY 4.0). The [site](https://eternal2x.com) has the
-moving version, with a divider to drag between the two.*
+(Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)),
+edited by Eternal2x. The [site](https://eternal2x.com) has the moving version,
+with a divider to drag between the two.*
 
 Every drawing starts on the same frame it did in the source, so cuts and lip
 sync stay where the edit put them.
@@ -56,14 +57,16 @@ which is where retimers tear, melt and double lines.
 - **DaVinci Resolve Studio** 18 or newer. Since 19.1 the free edition blocks
   script panels like this one, so it cannot open Eternal2x. The 2x upscale uses
   Super Scale, which is Studio only too.
-- Python 3.8+ on your PATH, from [python.org](https://www.python.org/downloads/).
+- Python 3.10 to 3.14 on your PATH, from
+  [python.org](https://www.python.org/downloads/latest/python3.14/). 3.15 is too
+  new for the AI runtime, and on an Intel Mac it stops at 3.13.
 
 ## Install
 
 ### With the installer window
 
 1. Extract the download somewhere permanent.
-2. From inside the extracted folder, run `python Installer/gui_installer.py`
+2. From the folder that contains `Installer`, run `python Installer/gui_installer.py`
    (`python3` on macOS) and click **Install**.
 3. It installs `numpy` and `opencv-python`, copies the plugin into Resolve's
    scripts folder and writes the config.

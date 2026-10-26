@@ -113,8 +113,9 @@ def ensure_runtime(progress: Optional[ProgressFn] = None):
                 del sys.modules[name]
             _pip([sys.executable, "-m", "pip", "uninstall", "-y", package], progress)
     raise AIUnavailable(
-        f"Could not install ONNX Runtime for the in-betweens ({why}). It needs "
-        f"Python 3.10 or newer on most systems. To install it by hand, run: "
+        f"Could not install ONNX Runtime for the in-betweens ({why}). This is Python "
+        f"{sys.version_info[0]}.{sys.version_info[1]}, and it has builds for 3.10 to 3.14, "
+        f"or up to 3.13 on an Intel Mac. To install it by hand, run: "
         f"\"{sys.executable}\" -m pip install onnxruntime")
 
 

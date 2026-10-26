@@ -143,7 +143,7 @@
             <div class="faq-answer">
                 Analyse found nothing to do. The clip has no duplicated frames, so there is nothing to recover. It is either live action or
                 animation already drawn on 1s. Smoothing it would only invent motion that was never there, so
-                Eternal2x stops instead. If the panel adds that the differences look like grain, tick
+                Eternal2x stops instead. If the panel says instead that every frame differs but the differences look like grain, tick
                 <strong>Grainy source</strong> and analyse again. Leave it off for clean animation, where it can
                 merge fine real changes.
             </div>
@@ -203,7 +203,8 @@
                 <span class="faq-chevron" aria-hidden="true">&#9660;</span>
             </summary>
             <div class="faq-answer">
-                Install Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
+                Install <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org. Any version from 3.10 to 3.14
+                works. 3.15 is too new for the AI runtime, and Eternal2x would keep every drawing as drawn.
                 On Windows, tick <strong>Add python.exe to PATH</strong> in its installer, then open a new
                 terminal. If the installer window still does not open, your Python was built without Tk. Use
                 the manual install commands further down this page instead. They do the same job without a
@@ -256,8 +257,8 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Run the installer</h3>
-                <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
-                   Open the extracted folder, then the <code>eternal2x-win</code> folder inside it, the one that
+                <p>You need Python 3.10 to 3.14. Get <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org, not
+                   3.15, which is too new for the AI runtime. Open the extracted folder, then the <code>eternal2x-win</code> folder inside it, the one that
                    contains <code>Installer</code>. Type <code>cmd</code> in the address bar and press Enter, then run:</p>
                 <div class="code-block">
                     python Installer\gui_installer.py
@@ -328,8 +329,9 @@
             <div class="step-number">3</div>
             <div class="step-content">
                 <h3>Run the installer</h3>
-                <p>You need Python 3.8 or newer from <a href="https://www.python.org/downloads/">python.org</a>.
-                   Open Terminal and run:</p>
+                <p>You need Python 3.10 to 3.14, or 3.10 to 3.13 on an Intel Mac, where the AI runtime stops
+                   at 3.13. Get <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> or <a href="https://www.python.org/downloads/latest/python3.13/">Python 3.13</a>
+                   from python.org. Open Terminal and run:</p>
                 <div class="code-block">
                     cd ~/path/to/eternal2x-mac<br>
                     python3 Installer/gui_installer.py
