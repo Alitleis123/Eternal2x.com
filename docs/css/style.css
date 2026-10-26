@@ -453,7 +453,7 @@ code, kbd {
     border-radius: 2px;
     opacity: .8;
 }
-.cel.held figcaption { color: var(--fg-mute); }
+.cel.held figcaption { color: var(--fg-soft); }
 
 /* A new in-between: boxed in red pencil. */
 .cel.new img { outline: 2px solid var(--gold); outline-offset: 3px; }
