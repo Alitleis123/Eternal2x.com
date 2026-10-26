@@ -178,6 +178,7 @@ function H.make_resolve(clip_file_path)
     H.markers = H.markers or {}
     item.GetLeftOffset = function(_self) return H.left_offset or 0 end
     item.GetMarkers = function(_self)
+        if H.markers_fail then error("GetMarkers failed") end
         local out = { __flags = 4194304 }
         for frame, info in pairs(H.markers) do out[frame] = info end
         return out
@@ -234,6 +235,25 @@ function H.make_resolve(clip_file_path)
             it.GetEnd = function(_self) return span[2] end
             it.GetDuration = function(_self) return span[2] - span[1] end
             it.GetUniqueId = function(_self) return "under-" .. i end
+            -- Each clip underneath keeps its own markers, in H.under_markers[i].
+            H.under_markers = H.under_markers or {}
+            H.under_markers[i] = H.under_markers[i] or {}
+            local own = H.under_markers[i]
+            it.GetMarkers = function(_self)
+                local out = { __flags = 4194304 }
+                for frame, info in pairs(own) do out[frame] = info end
+                return out
+            end
+            it.AddMarker = function(_self, frame, color, name, note, duration, custom)
+                if own[frame] then return false end
+                own[frame] = { color = color, customData = custom or "" }
+                return true
+            end
+            it.DeleteMarkerAtFrame = function(_self, frame)
+                if not own[frame] then return false end
+                own[frame] = nil
+                return true
+            end
             it.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", i }) end
             under[span] = it
         end

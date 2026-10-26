@@ -1826,6 +1826,11 @@ def test_a_saved_quality_from_an_older_version_is_dropped(lua, direct):
 # frames marked on the clip
 # --------------------------------------------------------------------------
 
+def marks_sent(direct):
+    """The frames Render handed the stage, from the file it wrote them to."""
+    return (direct / ".eternal2x_marks.txt").read_text()
+
+
 def test_the_run_button_says_render(lua, direct):
     """It smooths and upscales, so Smooth Clip undersold it."""
     H = load(lua, ui_script(direct))
@@ -1837,7 +1842,8 @@ def test_render_hands_over_the_frames_marked_on_the_clip(lua, direct):
     for frame in (12, 0, 6):
         H.add_marker(frame)
     H.click("SmoothBtn")
-    assert "--marks 0,6,12" in H.last_command()
+    assert "--marks-file" in H.last_command()
+    assert marks_sent(direct) == "0,6,12"
     assert "3 frames marked" in H.status()
 
 
@@ -1854,7 +1860,7 @@ def test_markers_past_the_end_of_the_clip_do_not_count(lua, direct):
     H.add_marker(2)
     H.add_marker(400)
     H.click("SmoothBtn")
-    assert "--marks 2 " in H.last_command() + " "
+    assert marks_sent(direct) == "2"
 
 
 def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
@@ -1900,7 +1906,7 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
     for key in (30, 20, 5, 75):
         H.add_marker(key)
     H.click("SmoothBtn")
-    assert "--marks 0,10 " in H.last_command() + " ", "the trimmed-off frames count for nothing"
+    assert marks_sent(direct) == "0,10", "the trimmed-off frames count for nothing"
 
 
 def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
@@ -1920,8 +1926,44 @@ def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
     H.add_marker(47)
     H.add_marker(57)
     H.click("SmoothBtn")
-    assert "--marks 0,13 " in H.last_command() + " "
+    assert marks_sent(direct) == "0,13"
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,13,25", message="On 2s.")
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "47,57,67"
+
+
+def test_markers_that_cannot_be_read_stop_the_render(lua, direct):
+    """Rendering as if the clip were unmarked would undo the editor's choice."""
+    H = load(lua, ui_script(direct))
+    H.markers_fail = True
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before, "it should not have started"
+    assert "Could not read the markers" in H.status()
+
+
+def test_an_analysis_with_nothing_to_mark_clears_its_old_markers(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.add_marker(5)
+    H.add_marker(9, "eternal2x")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="",
+                 message="Every frame is a new drawing, so there is nothing to rebuild.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "5"
+
+
+def test_markers_on_a_render_above_its_original_count_too(lua, direct):
+    """The editor sees the render on top and may mark that instead."""
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_markers[1][0] = {}; H.under_markers[1][12] = {}", H)
+    H.click("RefreshBtn")
+    H.add_marker(6)
+    H.click("SmoothBtn")
+    assert "shot.mov" in H.last_command()
+    assert marks_sent(direct) == "0,6,12"
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3", message="On 3s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "6", "Analyse marks the original, not the render"

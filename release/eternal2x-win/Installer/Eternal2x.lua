@@ -97,6 +97,9 @@ local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] 
 local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
+-- The frames marked on the clip go to the stage in this file. A long clip's
+-- list does not fit on a Windows command line.
+local MARKS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_marks.txt")
 local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
 -- The update check runs each time the panel opens, so it logs apart from
 -- renders. Sharing a log wiped the render's, the one worth sending in.
@@ -346,7 +349,10 @@ local function find_clip_path()
     -- again, so the clip it was made from is used instead.
     local name = render_name(path)
     local below = name and original_under(timeline, item, name)
+    local render = nil
     if below then
+        -- Markers an editor puts on the render, the clip they see, count too.
+        render = marked_clip(item, timeline, props)
         item = below
         props = below:GetMediaPoolItem():GetClipProperty() or {}
         path = props["File Path"]
@@ -369,7 +375,9 @@ local function find_clip_path()
     end
     local rate = nil
     pcall(function() rate = tonumber(timeline:GetSetting("timelineFrameRate")) end)
-    return path, nil, clip_range(item, props, rate), place, marked_clip(item, timeline, props)
+    local clip = marked_clip(item, timeline, props)
+    clip.also = render
+    return path, nil, clip_range(item, props, rate), place, clip
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an
@@ -869,27 +877,30 @@ end
 local MARK_TAG = "eternal2x"
 
 -- The frames marked on the clip, as source frames from its first frame,
--- sorted. Every marker on the clip counts, whatever its colour. Markers on the
--- timeline's ruler do not, since editors keep beat markers there.
+-- sorted, with those marked on a render of it stacked above. Every marker on
+-- the clip counts, whatever its colour. Markers on the timeline's ruler do
+-- not, since editors keep beat markers there. nil if Resolve would not say.
 local function clip_marks(clip)
     if not clip then return {} end
-    local ok, frames = pcall(function()
-        local out, seen = {}, {}
-        for key in pairs(clip.item:GetMarkers() or {}) do
-            local t = tonumber(key)
-            if t then
-                t = math.floor(t + 0.5) - clip.origin
-                local f = math.floor(t * clip.per + 0.5)
-                if t >= 0 and (not clip.length or t < clip.length) and not seen[f] then
-                    seen[f] = true
-                    out[#out + 1] = f
+    local out, seen = {}, {}
+    for _, c in ipairs({ clip, clip.also }) do
+        local ok = pcall(function()
+            for key in pairs(c.item:GetMarkers() or {}) do
+                local t = tonumber(key)
+                if t then
+                    t = math.floor(t + 0.5) - c.origin
+                    local f = math.floor(t * c.per + 0.5)
+                    if t >= 0 and (not c.length or t < c.length) and not seen[f] then
+                        seen[f] = true
+                        out[#out + 1] = f
+                    end
                 end
             end
-        end
-        table.sort(out)
-        return out
-    end)
-    return ok and frames or {}
+        end)
+        if not ok then return nil end
+    end
+    table.sort(out)
+    return out
 end
 
 -- Put a marker on each frame Analyse found, given as source frames from the
@@ -1254,7 +1265,7 @@ local function apply_status(st)
         set_progress(1.0, "Finished")
         if ANALYSING then
             ANALYSING = false
-            local placed = (st.marks ~= "" and ANALYSED_ITEM) and mark_drawings(ANALYSED_ITEM, st.marks) or 0
+            local placed = ANALYSED_ITEM and mark_drawings(ANALYSED_ITEM, st.marks) or 0
             if st.message ~= "" then items.AnalysisLabel.Text = st.message end
             if placed > 0 then
                 items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
@@ -1465,6 +1476,22 @@ function win.On.SmoothBtn.Clicked(ev)
         return
     end
     if not pick_source() then return end
+    -- Read before anything starts. Rendering as if unmarked would throw away
+    -- the frames the editor chose.
+    local marks = clip_marks(SOURCE_ITEM)
+    if not marks then
+        set_status("Could not read the markers on the clip from Resolve, so nothing was rendered.")
+        return
+    end
+    if #marks > 0 then
+        local f = io.open(MARKS_PATH, "w")
+        if not f or not f:write(table.concat(marks, ",")) then
+            if f then f:close() end
+            set_status("Could not write the marked frames to " .. MARKS_PATH .. ".")
+            return
+        end
+        f:close()
+    end
     clear_status()
     IMPORTED = false
     ANALYSING = false
@@ -1474,10 +1501,9 @@ function win.On.SmoothBtn.Clicked(ev)
     items.CompareBtn.Enabled = false
     set_busy(true)
     set_progress(0.01, "Starting")
-    local marks = clip_marks(SOURCE_ITEM)
     if #marks > 0 then
         set_status("Rendering from the " .. #marks .. " frames marked on the clip. Resolve stays usable.")
-        start_run(current_args(" --marks " .. table.concat(marks, ",")))
+        start_run(current_args(" --marks-file " .. shell_quote(MARKS_PATH)))
     else
         set_status("No markers on the clip, so Eternal2x finds the drawings. Resolve stays usable.")
         start_run(current_args(""))

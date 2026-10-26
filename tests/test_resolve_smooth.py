@@ -715,3 +715,14 @@ def test_analyse_marks_3s_in_a_clip_on_1s_once(make_anime, monkeypatch, tmp_path
                              "--status-file", str(status)]) == 0
     marks = json.loads(status.read_text(encoding="utf-8"))["marks"]
     assert marks == "0,3,6,9,12,15,18,19,20,21,22,23"
+
+
+def test_marks_can_come_from_a_file(make_anime, monkeypatch, tmp_path):
+    """A long clip's marks do not fit on a Windows command line."""
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    marks = tmp_path / "marks.txt"
+    marks.write_text("0,4,8", encoding="utf-8")
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--marks-file", str(marks),
+                             "--status-file", str(status)]) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["ok"]

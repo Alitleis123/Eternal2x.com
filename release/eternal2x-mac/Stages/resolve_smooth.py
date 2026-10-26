@@ -214,6 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
                              "of the marks around it, and nothing is detected.")
     # A panel still open across an update sends the quality it used to offer.
     # The in-betweens are always drawn by the network now, so it is ignored.
+    parser.add_argument("--marks-file", default=None,
+                        help="A file holding the --marks list, for a list too long "
+                             "for the command line.")
     parser.add_argument("--quality", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-interpolate", action="store_true",
                         help="De-duplicate only, without drawing in-betweens. With it on, "
@@ -317,6 +320,11 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=False, message=str(exc))
         return 2
 
+    if args.marks_file is not None:
+        try:
+            args.marks = Path(args.marks_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            args.marks = f"(unreadable: {exc})"
     if args.marks is not None:
         try:
             marks = [int(m) for m in args.marks.split(",") if m.strip()]
