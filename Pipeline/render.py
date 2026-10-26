@@ -262,6 +262,9 @@ def frame_difference_scores(
         height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
 
         ok, first = cap.read()
+        if not ok and frames and frames[0] > 0:
+            raise SourceError(f"The clip's in and out points are outside its media, "
+                              f"which ends before frame {frames[0]}.")
         if not ok:
             raise SourceError(f"Could not read any frames from: {path}")
         _require_constant_rate(cap, fps, path)

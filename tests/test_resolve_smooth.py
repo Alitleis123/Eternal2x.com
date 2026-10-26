@@ -551,21 +551,46 @@ def test_a_cut_of_a_file_with_a_nonsense_frame_count_is_read(make_anime, monkeyp
     """An MKV that was never finished reports a negative count."""
     src = make_anime(holds=(2,) * 12, fps=24.0)
     monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, -221139789095419232))
-    assert smooth.source_frames(src, 0.25, 0.75) == (6, 18)
+    assert smooth.source_frames(src, 0.25, 0.75) == ((6, 18), False)
 
 
 def test_a_cut_running_past_a_short_frame_count_is_not_cut_short(make_anime, monkeypatch):
     """An MPEG-2 program stream says 238 frames where 240 decode."""
     src = make_anime(holds=(2,) * 12, fps=24.0)
     monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, 20))
-    assert smooth.source_frames(src, 0.5, 1.0) == (12, 24)
+    assert smooth.source_frames(src, 0.5, 1.0) == ((12, 24), False)
+
+
+def test_a_cut_that_ends_on_a_short_frame_count_stops_there(make_anime, monkeypatch, capsys):
+    """Taken for the whole file, it read on past its out point."""
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, 20))
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--start-time", "0", "--end-time", str(20 / 24)]) == 0
+    assert "20 frames" in capsys.readouterr().out
+
+
+def test_a_cut_past_a_short_frame_count_is_not_refused(make_anime, monkeypatch, capsys):
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, 20))
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--start-time", str(22 / 24), "--end-time", "1.0"]) == 0
+    assert "2 frames" in capsys.readouterr().out
+
+
+def test_a_cut_of_the_whole_file_is_named_as_the_whole_file(make_anime, monkeypatch, tmp_path):
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--start-time", "0", "--end-time", "1.0"]) == 0
+    assert len(list((out / f"{src.stem}_smooth").glob("frame_*.png"))) == 24
 
 
 def test_a_range_covering_the_whole_file_is_the_whole_file(make_anime):
     src = make_anime(holds=(2,) * 12, fps=24.0)
-    assert smooth.source_frames(src, 0.0, 1.0) is None
-    assert smooth.source_frames(src, None, None) is None
-    assert smooth.source_frames(src, 0.5, None) == (12, 24)
+    assert smooth.source_frames(src, 0.0, 1.0) == ((0, 24), True)
+    assert smooth.source_frames(src, None, None) == (None, True)
+    assert smooth.source_frames(src, 0.5, None) == ((12, 24), False)
 
 
 def test_a_clip_named_outside_the_system_code_page_runs(make_anime, repo_root, tmp_path):

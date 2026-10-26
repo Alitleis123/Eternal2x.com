@@ -14,7 +14,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 # numpy and OpenCV load through these. A Python without them must still be
 # able to tell the panel so, or the panel waits on a run that never started.
@@ -216,27 +216,28 @@ def config_from_args(args) -> Eternal2xConfig:
 
 
 def source_frames(source: Path, start_time: Optional[float],
-                  end_time: Optional[float]) -> Optional[tuple]:
-    """The [start, end) source frames a trimmed clip covers, or None for all.
+                  end_time: Optional[float]) -> Tuple[Optional[tuple], bool]:
+    """The [start, end) source frames a clip covers, or None for all, and
+    whether that is the whole file.
 
     The panel passes seconds rather than frames because seconds mean the same
     thing whatever the timeline's frame rate, and only the file knows its own.
+    Some containers only carry an estimated frame count, a few frames short or
+    even negative, so the count never moves a cut's bounds and reads stop at
+    the real end of the file. It only decides whether a cut from frame 0 is
+    the whole file, which keeps the range out of the render's name.
     """
     if start_time is None and end_time is None:
-        return None
+        return None, True
     fps, total = probe_video(source)
-    # Some containers only carry an estimated count, a few frames short or
-    # even negative, so it does not cut the range. Reads stop at the real end.
     total = max(0, total)
     start = max(0, int(round((start_time or 0.0) * fps)))
     end = int(round(end_time * fps)) if end_time is not None else total
-    if start >= end or (total and start >= total):
+    if start >= end:
         raise SourceError(
             f"The clip's in and out points ({start_time}s to {end_time}s) are "
-            f"outside its media, which is {total} frames long.")
-    if start == 0 and total and end >= total:
-        return None
-    return start, end
+            f"outside its media.")
+    return (start, end), start == 0 and end == total
 
 
 def _run(args, summary: dict) -> int:
@@ -276,8 +277,8 @@ def _run(args, summary: dict) -> int:
     progress = _progress_printer(status)
 
     try:
-        frames = source_frames(source, start_time, end_time)
-        if frames:
+        frames, whole = source_frames(source, start_time, end_time)
+        if not whole:
             print(f"Trimmed to source frames {frames[0]} to {frames[1] - 1}.")
             summary["frames"] = list(frames)
         plan, width, height = analyse_video(source, cfg, progress=progress,
@@ -318,7 +319,7 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=True, message=plan.describe())
         return 0
 
-    output = _output_path(source, args.output_dir, args.format, frames)
+    output = _output_path(source, args.output_dir, args.format, None if whole else frames)
     print(f"Rendering to: {output}")
     try:
         result = render_plan(source, plan, output, cfg, progress=progress,
