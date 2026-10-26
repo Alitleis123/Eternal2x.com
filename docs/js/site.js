@@ -1,37 +1,3 @@
-// The phone menu: a drawer that slides over the page. Closed, it is hidden
-// from the keyboard too (see .sidebar in style.css), so Tab cannot land on a
-// link nobody can see.
-(function () {
-    var sidebar = document.getElementById('sidebar');
-    var overlay = document.getElementById('overlay');
-    var button = document.getElementById('menu-button');
-    if (!sidebar || !overlay || !button) return;
-
-    function setOpen(open, returnFocus) {
-        sidebar.classList.toggle('open', open);
-        overlay.classList.toggle('open', open);
-        button.setAttribute('aria-expanded', open ? 'true' : 'false');
-        if (open) {
-            var first = sidebar.querySelector('a');
-            if (first) first.focus();
-        } else if (returnFocus) {
-            button.focus();
-        }
-    }
-
-    button.addEventListener('click', function () {
-        setOpen(!sidebar.classList.contains('open'), false);
-    });
-    overlay.addEventListener('click', function () { setOpen(false, true); });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && sidebar.classList.contains('open')) setOpen(false, true);
-    });
-    // On a phone the drawer covers the page, so close it once a link is chosen.
-    sidebar.querySelectorAll('a').forEach(function (link) {
-        link.addEventListener('click', function () { setOpen(false, false); });
-    });
-})();
-
 // The demo on the home page: one video holds the original above the
 // Eternal2x render, and a canvas shows the original left of a divider and
 // the render right of it. One video keeps both sides on the same frame,
@@ -54,16 +20,23 @@
         // A zero-width source rectangle throws in some browsers.
         if (x > 0) ctx.drawImage(video, 0, 0, x, H, 0, 0, x, H);
         if (x < W) ctx.drawImage(video, x, H, W - x, H, x, 0, W - x, H);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(x - 1, 0, 2, H);
+        // The divider is a strip of paper with a red pencil grip.
+        ctx.fillStyle = '#f2eee4';
+        ctx.fillRect(x - 1.5, 0, 3, H);
         ctx.beginPath();
-        ctx.arc(x, H / 2, 14, 0, Math.PI * 2);
+        ctx.arc(x, H / 2, 17, 0, Math.PI * 2);
+        ctx.fillStyle = '#d6361f';
         ctx.fill();
-        ctx.fillStyle = '#0b0b0f';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('↔', x, H / 2 + 1);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#f2eee4';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 4, H / 2 - 5); ctx.lineTo(x - 9, H / 2); ctx.lineTo(x - 4, H / 2 + 5);
+        ctx.moveTo(x + 4, H / 2 - 5); ctx.lineTo(x + 9, H / 2); ctx.lineTo(x + 4, H / 2 + 5);
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
     }
 
     function loop() {
@@ -117,4 +90,35 @@
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     label();
     setPlaying(!still);
+})();
+
+// Copy buttons on the help page's command blocks.
+(function () {
+    document.querySelectorAll('.code').forEach(function (block) {
+        var code = block.querySelector('code');
+        if (!code) return;
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy';
+        button.textContent = 'Copy';
+        button.setAttribute('aria-label', 'Copy this command');
+        // Where the clipboard is out of reach, the command is selected
+        // instead, ready for Ctrl+C.
+        function select() {
+            var range = document.createRange();
+            range.selectNodeContents(code);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            button.textContent = 'Selected';
+        }
+        button.addEventListener('click', function () {
+            if (!navigator.clipboard) return select();
+            navigator.clipboard.writeText(code.textContent.trim()).then(function () {
+                button.textContent = 'Copied';
+                setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+            }, select);
+        });
+        block.appendChild(button);
+    });
 })();
