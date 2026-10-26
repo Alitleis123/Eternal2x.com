@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- A sheet of animation paper: three peg holes, and a timing chart with
+       a key at each end and the in-between Eternal2x draws. -->
+  <rect width="512" height="512" rx="116" fill="#D6361F"/>
+  <g fill="#F2EEE4">
+    <circle cx="140" cy="108" r="30"/>
+    <rect x="200" y="78" width="112" height="60" rx="30"/>
+    <circle cx="372" cy="108" r="30"/>
+    <rect x="128" y="309" width="256" height="22" rx="11"/>
+    <circle cx="128" cy="320" r="50"/>
+    <circle cx="384" cy="320" r="50"/>
+  </g>
+  <rect x="245" y="256" width="22" height="128" rx="11" fill="#17150F"/>
+</svg>
