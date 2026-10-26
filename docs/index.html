@@ -56,10 +56,6 @@
     </section>
 
     <figure class="panel" id="demo">
-        <div class="panel-head label" aria-hidden="true">
-            <span>Original</span>
-            <span class="on">Eternal2x</span>
-        </div>
         <div class="compare" id="compare">
             <video class="compare-video" id="compare-video" src="assets/demo/compare.mp4"
                    poster="assets/demo/poster.jpg" controls muted loop playsinline preload="metadata"
@@ -73,9 +69,21 @@
         <figcaption>Drag across the picture to compare. Half speed. From <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, rebuilt by Eternal2x.</figcaption>
     </figure>
 
-    <section class="section" id="steps" aria-labelledby="steps-title">
-        <h2 id="steps-title">How it works</h2>
-        <p class="lead">A panel inside Resolve, opened from Workspace, Scripts. Three buttons.</p>
+    <section class="section" id="how" aria-labelledby="how-title">
+        <h2 id="how-title">How it works</h2>
+        <p class="lead">A panel inside Resolve, opened from Workspace, Scripts. Three buttons, shown here in 21 seconds.</p>
+        <figure class="panel film">
+            <div class="player">
+                <video src="assets/demo/promo.mp4" poster="assets/demo/promo-resolve.jpg" controls playsinline preload="none"
+                       width="1920" height="1080"
+                       aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
+                <button class="play" type="button">
+                    <span class="play-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z"/></svg></span>
+                    <span class="play-label">Watch, 0:21, sound on</span>
+                </button>
+            </div>
+            <figcaption>Footage from <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, edited. Sounds by <a href="https://kenney.nl/">Kenney</a>, CC0.</figcaption>
+        </figure>
         <ol class="steps">
             <li>
                 <span class="label">01</span>
@@ -93,23 +101,6 @@
                 <p>The result lands on the track above your clip, on the same frame. Show Original flips between the two.</p>
             </li>
         </ol>
-    </section>
-
-    <section class="section" id="how" aria-labelledby="film-title">
-        <h2 id="film-title">See it in Resolve</h2>
-        <p class="lead">Analyse the clip, press Smooth Clip, and the result lands on the track above, lined up with the original.</p>
-        <figure class="panel film">
-            <div class="player">
-                <video src="assets/demo/promo.mp4" poster="assets/demo/promo-resolve.jpg" controls playsinline preload="none"
-                       width="1920" height="1080"
-                       aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
-                <button class="play" type="button">
-                    <span class="play-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z"/></svg></span>
-                    <span class="play-label">Watch, 0:21, sound on</span>
-                </button>
-            </div>
-            <figcaption>Footage from <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, edited. Sounds by <a href="https://kenney.nl/">Kenney</a>, CC0.</figcaption>
-        </figure>
     </section>
 
     <section class="section" id="specs" aria-labelledby="specs-title">
