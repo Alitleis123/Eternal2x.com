@@ -43,31 +43,31 @@
 <main id="main" class="wrap">
 
     <section class="hero">
-        <p class="label">For DaVinci Resolve Studio</p>
-        <h1>Smooth out <span>choppy animation.</span></h1>
-        <p>Hand-drawn animation, from anime to cartoons, often holds each drawing for two or three frames, so it moves in steps. Eternal2x draws the frames in between, right inside DaVinci Resolve, so it plays smooth at the full frame rate.</p>
-        <div class="actions">
-            <a class="btn btn-amber" href="download.html">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-                Download, free
-            </a>
-            <a class="btn" href="help.html#windows">How to install</a>
+        <div class="hero-text">
+            <h1>Smooth out <span>choppy animation.</span></h1>
+            <p>Hand-drawn animation, from anime to cartoons, often holds each drawing for two or three frames, so it moves in steps. Eternal2x draws the frames in between, right inside DaVinci Resolve, so it plays smooth at the full frame rate.</p>
+            <div class="actions">
+                <a class="btn btn-amber" href="download.html">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    Download, free
+                </a>
+                <a class="btn" href="help.html#windows">How to install</a>
+            </div>
         </div>
+        <figure class="panel" id="demo">
+            <div class="compare" id="compare">
+                <video class="compare-video" id="compare-video" src="assets/demo/compare.mp4"
+                       poster="assets/demo/poster.jpg" controls muted loop playsinline preload="metadata"
+                       width="960" height="804"
+                       aria-label="A shot from Hero, as drawn on 2s on top and rebuilt by Eternal2x below, at half speed"></video>
+                <canvas class="compare-canvas" id="compare-canvas" width="960" height="402" aria-hidden="true"></canvas>
+                <input class="compare-slider" id="compare-slider" type="range" min="0" max="100" value="50"
+                       aria-label="Divider position. Left of it is the original, right of it is Eternal2x">
+                <button class="compare-pause" id="compare-pause" type="button">Pause</button>
+            </div>
+            <figcaption>Drag across the picture to compare. Half speed. From <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, rebuilt by Eternal2x.</figcaption>
+        </figure>
     </section>
-
-    <figure class="panel" id="demo">
-        <div class="compare" id="compare">
-            <video class="compare-video" id="compare-video" src="assets/demo/compare.mp4"
-                   poster="assets/demo/poster.jpg" controls muted loop playsinline preload="metadata"
-                   width="960" height="804"
-                   aria-label="A shot from Hero, as drawn on 2s on top and rebuilt by Eternal2x below, at half speed"></video>
-            <canvas class="compare-canvas" id="compare-canvas" width="960" height="402" aria-hidden="true"></canvas>
-            <input class="compare-slider" id="compare-slider" type="range" min="0" max="100" value="50"
-                   aria-label="Divider position. Left of it is the original, right of it is Eternal2x">
-            <button class="compare-pause" id="compare-pause" type="button">Pause</button>
-        </div>
-        <figcaption>Drag across the picture to compare. Half speed. From <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, rebuilt by Eternal2x.</figcaption>
-    </figure>
 
     <section class="section" id="how" aria-labelledby="how-title">
         <h2 id="how-title">How it works</h2>

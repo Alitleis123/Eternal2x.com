@@ -17,7 +17,7 @@
     --sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
     --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
 
-    --page: 1080px;
+    --page: 1200px;
     --gutter: clamp(20px, 5vw, 48px);
 }
 
@@ -118,21 +118,29 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 
 /* hero */
 
-.hero { padding: clamp(56px, 10vw, 112px) 0 clamp(36px, 5vw, 56px); }
-.hero h1 { font-size: clamp(40px, 6.4vw, 72px); line-height: 1.02; max-width: 14ch; }
+/* The pitch on the left, the slider it describes on the right. */
+.hero {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(32px, 4vw, 56px);
+    align-items: center;
+    padding: clamp(48px, 8vw, 96px) 0 0;
+}
+.hero h1 { font-size: clamp(38px, 4.6vw, 60px); line-height: 1.04; }
 .hero h1 span { color: var(--amber); }
-.hero .label { margin-bottom: 18px; }
-.hero p:not(.label) { margin-top: 20px; max-width: 34em; font-size: clamp(17px, 1.6vw, 19px); color: var(--soft); }
-.hero .actions { margin-top: 32px; }
+.hero-text p { margin-top: 18px; max-width: 32em; font-size: clamp(16.5px, 1.4vw, 18px); color: var(--soft); }
+.hero .actions { margin-top: 28px; }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
 
 /* panels that hold footage */
 
 .panel {
     margin: 0;
     background: var(--panel);
-    border: 1px solid var(--line);
+    border: 1px solid rgba(242, 169, 59, .32);
     border-radius: 12px;
     padding: 10px;
+    box-shadow: 0 0 0 4px rgba(242, 169, 59, .05), 0 30px 80px -40px rgba(242, 169, 59, .35);
 }
 .panel-head {
     display: flex;
