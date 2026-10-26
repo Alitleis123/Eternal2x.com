@@ -167,6 +167,26 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .section h2 { font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15; }
 .section .lead { margin: 10px 0 24px; color: var(--soft); max-width: 36em; }
 
+.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+.steps li { padding: 22px 24px 24px; }
+.steps li + li { border-left: 1px solid var(--line); }
+.steps .label { color: var(--amber); }
+.steps h3 { margin: 10px 0 8px; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.steps p { color: var(--soft); font-size: 15.5px; }
+@media (max-width: 760px) {
+    .steps { grid-template-columns: 1fr; }
+    .steps li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
+
 /* The film opens on a frame inside Resolve with one big play button, so it
    reads as a video. Its own controls come back once it plays. */
 .player { position: relative; }
