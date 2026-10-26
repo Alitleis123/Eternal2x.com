@@ -225,15 +225,16 @@ def source_frames(source: Path, start_time: Optional[float],
     if start_time is None and end_time is None:
         return None
     fps, total = probe_video(source)
+    # Some containers only carry an estimated count, a few frames short or
+    # even negative, so it does not cut the range. Reads stop at the real end.
+    total = max(0, total)
     start = max(0, int(round((start_time or 0.0) * fps)))
     end = int(round(end_time * fps)) if end_time is not None else total
-    if total:
-        end = min(end, total)
     if start >= end or (total and start >= total):
         raise SourceError(
             f"The clip's in and out points ({start_time}s to {end_time}s) are "
             f"outside its media, which is {total} frames long.")
-    if start == 0 and total and end == total:
+    if start == 0 and total and end >= total:
         return None
     return start, end
 

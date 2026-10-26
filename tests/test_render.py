@@ -511,3 +511,35 @@ def test_reaching_the_start_of_a_range_reports_progress(make_anime, tmp_path):
 def test_a_range_past_the_end_of_the_file_stops_at_the_end(make_anime):
     plan, _w, _h = analyse_video(make_anime(holds=(2,) * 12), cfg(), frames=(20, 400))
     assert plan.source_frames == 4
+
+
+def miscounted(monkeypatch, count):
+    """Have OpenCV report `count` frames, as it does for files that only carry
+    an estimate: an MKV that was never finished says -221139789095419232, and
+    an MPEG-2 program stream 238 where 240 decode."""
+    import cv2
+    from Pipeline import render
+    real = cv2.VideoCapture
+
+    class Capture:
+        def __init__(self, path):
+            self._cap = real(path)
+
+        def get(self, prop):
+            return count if prop == cv2.CAP_PROP_FRAME_COUNT else self._cap.get(prop)
+
+        def __getattr__(self, name):
+            return getattr(self._cap, name)
+
+    monkeypatch.setattr(render.cv2, "VideoCapture", Capture)
+
+
+@pytest.mark.parametrize("count", [-221139789095419232, 20])
+def test_every_frame_is_read_whatever_the_file_says_its_count_is(make_anime, monkeypatch,
+                                                                  tmp_path, count):
+    src = make_anime(holds=(2,) * 12)
+    miscounted(monkeypatch, count)
+    plan, _w, _h = analyse_video(src, cfg())
+    assert plan.source_frames == 24
+    result = render_plan(src, plan, tmp_path / "out", cfg(), sequence=True)
+    assert result.frames_written == 24

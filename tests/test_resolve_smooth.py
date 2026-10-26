@@ -547,6 +547,20 @@ def test_in_and_out_points_outside_the_media_are_reported(make_anime, monkeypatc
     assert "outside its media" in capsys.readouterr().out
 
 
+def test_a_cut_of_a_file_with_a_nonsense_frame_count_is_read(make_anime, monkeypatch):
+    """An MKV that was never finished reports a negative count."""
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, -221139789095419232))
+    assert smooth.source_frames(src, 0.25, 0.75) == (6, 18)
+
+
+def test_a_cut_running_past_a_short_frame_count_is_not_cut_short(make_anime, monkeypatch):
+    """An MPEG-2 program stream says 238 frames where 240 decode."""
+    src = make_anime(holds=(2,) * 12, fps=24.0)
+    monkeypatch.setattr(smooth, "probe_video", lambda _p: (24.0, 20))
+    assert smooth.source_frames(src, 0.5, 1.0) == (12, 24)
+
+
 def test_a_range_covering_the_whole_file_is_the_whole_file(make_anime):
     src = make_anime(holds=(2,) * 12, fps=24.0)
     assert smooth.source_frames(src, 0.0, 1.0) is None

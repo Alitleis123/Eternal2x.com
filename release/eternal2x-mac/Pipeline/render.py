@@ -72,11 +72,11 @@ class _ClipReader:
                  end: Optional[int] = None,
                  progress: Optional[ProgressFn] = None) -> None:
         self._cap = cap
-        total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        # Reads stop where the file does, not at its frame count. Some
+        # containers only carry an estimate, a few frames short or, in an
+        # MKV that was never finished, negative.
         self._start = max(0, start)
         self._end = end
-        if total and (self._end is None or self._end > total):
-            self._end = total
         self._read = 0
         # When the file's first frame is shown, in ms. Some files start late.
         self._origin: Optional[float] = None
@@ -114,8 +114,10 @@ class _ClipReader:
         return abs((ms - self._origin) * fps / 1000.0 - (self._start + self._read - 1))
 
     def get(self, prop: int) -> float:
-        if prop == cv2.CAP_PROP_FRAME_COUNT and self._end is not None:
-            return float(max(0, self._end - self._start))
+        if prop == cv2.CAP_PROP_FRAME_COUNT:
+            # Only a guide to progress, which is all it is good for.
+            total = self._cap.get(prop) if self._end is None else self._end - self._start
+            return float(max(0, total))
         return self._cap.get(prop)
 
     def release(self) -> None:
