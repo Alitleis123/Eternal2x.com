@@ -80,6 +80,12 @@ local conf = read_conf(CONF_PATH)
 local REPO_ROOT = trim_trailing_sep(conf["repo_root"] or _G.ETERNAL2X_ROOT or root or "")
 local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
+-- The repo moved to sidebandstudio. An install keeps the feed it was set up
+-- with through every update, and the old one only works while GitHub
+-- redirects it, so it is swapped for the new one.
+if UPDATE_URL == "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json" then
+    UPDATE_URL = "https://raw.githubusercontent.com/sidebandstudio/Eternal2x.com/main/update/latest.json"
+end
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
 local DO_UPSCALE = parse_bool(conf["upscale"], true)

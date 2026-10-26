@@ -1426,6 +1426,18 @@ def test_opening_the_panel_keeps_the_render_log(lua, direct):
     assert ".eternal2x_update.log" in cmd and ".eternal2x_last_run.log" not in cmd
 
 
+def test_an_install_set_up_with_the_old_feed_checks_the_new_one(lua, direct):
+    """Installs keep the feed they were set up with through every update."""
+    import re
+    conf = direct / "Installer" / "Eternal2x.conf"
+    old = "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json"
+    conf.write_text(re.sub(r"update_url=.*", "update_url=" + old, conf.read_text()))
+    H = load(lua, ui_script(direct))
+    H.click("UpdateBtn")
+    assert "sidebandstudio/Eternal2x.com/main/update/latest.json" in H.last_command()
+    assert "Alitleis123" not in H.last_command()
+
+
 def test_an_update_check_that_never_ran_does_not_repeat_the_last_verdict(lua, direct):
     (direct / ".eternal2x_update.log").write_text(
         "Update applied. Restart Resolve to use the new version.\n")
