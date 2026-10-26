@@ -160,6 +160,22 @@ def _output_path(source: Path, output_dir: Optional[str], fmt: str,
     return target
 
 
+def drawing_marks(plan) -> list:
+    """The frames to mark on the clip for this plan's drawings.
+
+    Each drawing is marked where it starts. A pose held longer than the clip's
+    pattern is marked where it ends as well, or rendering from the marks would
+    draw it slowly into the next drawing, where detection keeps it still.
+    """
+    from Pipeline.dedupe import hold_repeats
+    marks = set()
+    for hold in plan.holds:
+        marks.add(hold.index)
+        if hold_repeats(hold, plan.base_hold) > 1:
+            marks.add(hold.end)
+    return sorted(marks)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Rebuild the selected Resolve clip with smooth motion."
@@ -348,7 +364,7 @@ def _run(args, summary: dict) -> int:
     if args.analyse:
         print("Analysis only. Nothing was changed.")
         summary["ok"] = True
-        status.marks = ",".join(str(h.index) for h in plan.holds)
+        status.marks = ",".join(str(f) for f in drawing_marks(plan))
         status.write(done=True, ok=True, message=plan.describe())
         return 0
 

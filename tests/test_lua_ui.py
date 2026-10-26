@@ -1797,3 +1797,73 @@ def test_a_saved_quality_from_an_older_version_is_dropped(lua, direct):
     assert "quality=" not in conf.read_text()
     H.click("SmoothBtn")
     assert "--quality" not in H.last_command()
+
+
+# --------------------------------------------------------------------------
+# frames marked on the clip
+# --------------------------------------------------------------------------
+
+def test_the_run_button_says_render(lua, direct):
+    """It smooths and upscales, so Smooth Clip undersold it."""
+    H = load(lua, ui_script(direct))
+    assert "Render" in H.widgets["SmoothBtn"].Text
+
+
+def test_render_hands_over_the_frames_marked_on_the_clip(lua, direct):
+    H = load(lua, ui_script(direct))
+    for frame in (12, 0, 6):
+        H.add_marker(frame)
+    H.click("SmoothBtn")
+    assert "--marks 0,6,12" in H.last_command()
+    assert "3 frames marked" in H.status()
+
+
+def test_render_without_markers_finds_the_drawings_itself(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert "--marks" not in H.last_command()
+    assert "No markers" in H.status()
+
+
+def test_markers_past_the_end_of_the_clip_do_not_count(lua, direct):
+    """The clip may be trimmed shorter than the media its markers sit on."""
+    H = load(lua, ui_script(direct))
+    H.add_marker(2)
+    H.add_marker(400)
+    H.click("SmoothBtn")
+    assert "--marks 2 " in H.last_command() + " "
+
+
+def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,8",
+                 message="12 frames, 4 unique drawings. Animated on 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,4,8"
+    assert H.tagged_markers() == 4
+    assert "Marked 4 frames" in H.widgets["AnalysisLabel"].Text
+    assert "Render" in H.status()
+
+
+def test_analysing_again_replaces_only_its_own_markers(lua, direct):
+    """The editor's markers stay. Eternal2x's from last time go."""
+    H = load(lua, ui_script(direct))
+    H.add_marker(5)
+    H.add_marker(9, "eternal2x")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,5"
+
+
+def test_the_threshold_slider_sets_how_big_a_change_counts(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--threshold" not in H.last_command(), "the default should send nothing"
+    H.set_slider("ThresholdSlider", 7)
+    assert H.widgets["ThresholdValue"].Text == "7"
+    H.click("AnalyseBtn")
+    assert "--threshold 0.008000" in H.last_command()
+    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
+    assert "threshold=7" in conf

@@ -128,7 +128,10 @@ def test_analyse_reports_the_real_pattern(installation):
     summary = H.widgets["AnalysisLabel"].Text
     assert "12 unique drawings" in summary, f"panel showed: {summary!r}"
     assert "on 2s" in summary
-    assert "Analysis complete" in H.status()
+    # The drawings it found are marked on the clip, ready to edit.
+    assert "Marked 12 frames on the clip" in summary
+    assert H.marker_frames() == ",".join(str(f) for f in range(0, 24, 2))
+    assert "press Render" in H.status()
 
 
 def test_analyse_detects_threes(installation):

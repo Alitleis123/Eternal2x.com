@@ -693,3 +693,13 @@ def test_only_the_first_frame_marked_asks_for_more(make_anime, monkeypatch, tmp_
     assert run(monkeypatch, ["--video", str(src), "--marks", "0",
                              "--status-file", str(status)]) == 0
     assert "Mark at least one more frame" in json.loads(status.read_text(encoding="utf-8"))["message"]
+
+
+def test_analyse_marks_both_ends_of_a_held_pose(make_anime, monkeypatch, tmp_path):
+    """Marked only where it starts, a pose held for eight frames would be
+    drawn slowly into the next drawing. Detection keeps it still."""
+    src = make_anime(holds=(2, 2, 8, 2), fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--status-file", str(status)]) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["marks"] == "0,2,4,11,12"

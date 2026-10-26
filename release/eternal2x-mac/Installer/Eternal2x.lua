@@ -92,6 +92,8 @@ local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
 local GRAINY = parse_bool(conf["grain"], false)
 local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
+-- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
+local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
@@ -119,6 +121,7 @@ local function save_conf()
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
     f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
+    f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
@@ -339,15 +342,15 @@ local function find_clip_path()
                       and place.item) then
         place = nil
     end
-    return path, nil, clip_range(item, props), place
+    return path, nil, clip_range(item, props), place, item
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an
 -- error would stop the window from ever appearing.
 local function selected_clip_path()
-    local ok, path, err, range, place = pcall(find_clip_path)
+    local ok, path, err, range, place, item = pcall(find_clip_path)
     if not ok then return nil, "Could not read the clip from Resolve: " .. tostring(path) end
-    return path, err, range, place
+    return path, err, range, place, item
 end
 
 -- ---------------------------------------------------------------------------
@@ -572,6 +575,7 @@ local function read_status()
         import_path = json_string(s, "import_path") or "",
         sequence_pattern = json_string(s, "sequence_pattern") or "",
         sequence_frames = tonumber(s:match('"sequence_frames"%s*:%s*(%d+)')) or 0,
+        marks    = json_string(s, "marks") or "",
         updated  = tonumber(s:match('"updated"%s*:%s*([%d%.eE]+)')),
         fps      = tonumber(s:match('"fps"%s*:%s*([%d%.]+)')) or 0,
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
@@ -639,6 +643,9 @@ local GHOST = [[
     QPushButton:disabled { background-color: #0f0f13; border-color: #18181f; color: #4a4a5a; }
 ]]
 
+local RENDER_LABEL = "\xE2\x96\xB2  Render"
+local ANALYSIS_HINT = "Analyse marks the drawings on the clip. Or mark the frames yourself with M. Render uses the marked frames."
+
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
@@ -682,12 +689,19 @@ local win = disp:AddWindow({
         ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = GHOST,
                    ToolTip = "Read the clip under the playhead. Resolve does not tell scripts which clip is selected." },
         ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = GHOST,
-                   ToolTip = "Count the drawings and read the timing. Changes nothing." },
+                   ToolTip = "Find the drawings and mark them on the clip. Delete a marker to leave a frame out, or add your own with M." },
     },
-    ui:Label{ ID = "AnalysisLabel", Text = "Analyse to see how this clip is animated.",
+    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT,
               StyleSheet = CARD, WordWrap = true, MinimumSize = { 0, 46 } },
 
     ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
+    ui:HGroup{ Spacing = 6,
+        ui:Label{ Text = "Threshold", Weight = 0.4 },
+        ui:Slider{ ID = "ThresholdSlider", Weight = 0.5, Minimum = 1, Maximum = 9,
+                   Value = THRESHOLD, Orientation = "Horizontal",
+                   ToolTip = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones." },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), Weight = 0.1 },
+    },
     ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Hold pattern", Weight = 0.4 },
         ui:ComboBox{ ID = "HoldCombo", Weight = 0.6,
@@ -708,7 +722,7 @@ local win = disp:AddWindow({
     },
 
     ui:Label{ ID = "RunSection", Text = "RUN", StyleSheet = SECTION },
-    ui:Button{ ID = "SmoothBtn", Text = "\xE2\x96\xB2  Smooth Clip", StyleSheet = START,
+    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START,
                MinimumSize = { 0, 38 }, MaximumSize = { 16777215, 38 } },
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = CARD, WordWrap = true,
@@ -745,6 +759,10 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
+-- The clip on the timeline, whose markers say which frames count, and the one
+-- the running analysis will mark.
+local SOURCE_ITEM = nil
+local ANALYSED_ITEM = nil
 -- Where the source clip sits on the timeline, and where the running render's
 -- clip sat when it started, since the playhead can move while it renders.
 local SOURCE_PLACE = nil
@@ -785,7 +803,7 @@ local function set_busy(busy)
     items.AnalyseBtn.Enabled = not busy
     items.RefreshBtn.Enabled = not busy
     items.UpdateBtn.Enabled = not busy
-    items.SmoothBtn.Text = busy and "Working..." or "\xE2\x96\xB2  Smooth Clip"
+    items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
 end
 
 -- Seconds as text that Python's float() reads, whatever the locale.
@@ -801,20 +819,70 @@ local function range_text(range)
 end
 
 local function refresh_source()
-    local path, err, range, place = selected_clip_path()
+    local path, err, range, place, item = selected_clip_path()
     if not path then
         SOURCE_PATH = nil
         SOURCE_RANGE = nil
         SOURCE_PLACE = nil
+        SOURCE_ITEM = nil
         items.SourceLabel.Text = err or "No clip under the playhead."
         return false
     end
     SOURCE_PATH = path
     SOURCE_RANGE = range
     SOURCE_PLACE = place
+    SOURCE_ITEM = item
     items.SourceLabel.Text = basename(path) .. "\n" .. range_text(range)
     items.Meta.Text = short_path(path, 68)
     return true
+end
+
+-- Eternal2x's own markers carry this, so analysing again replaces them and
+-- leaves every marker the editor placed.
+local MARK_TAG = "eternal2x"
+
+-- The frames marked on the clip, counted from its first frame, sorted. Every
+-- marker on the clip counts, whatever its colour. Markers on the timeline's
+-- ruler do not, since editors keep beat markers there.
+local function clip_marks(item)
+    if not item then return {} end
+    local ok, frames = pcall(function()
+        local length = tonumber(item:GetDuration())
+        local out, seen = {}, {}
+        for frame in pairs(item:GetMarkers() or {}) do
+            local f = tonumber(frame)
+            if f then
+                f = math.floor(f + 0.5)
+                if f >= 0 and (not length or f < length) and not seen[f] then
+                    seen[f] = true
+                    out[#out + 1] = f
+                end
+            end
+        end
+        table.sort(out)
+        return out
+    end)
+    return ok and frames or {}
+end
+
+-- Put a marker on each frame Analyse found, after taking down the ones it put
+-- there last time. Returns how many it placed.
+local function mark_drawings(item, marks)
+    local placed = 0
+    pcall(function()
+        for frame, info in pairs(item:GetMarkers() or {}) do
+            if type(info) == "table" and info.customData == MARK_TAG then
+                item:DeleteMarkerAtFrame(tonumber(frame))
+            end
+        end
+        for f in marks:gmatch("%d+") do
+            if item:AddMarker(tonumber(f), "Yellow", "Eternal2x",
+                              "Delete this marker to leave the frame out.", 1, MARK_TAG) then
+                placed = placed + 1
+            end
+        end
+    end)
+    return placed
 end
 
 local function current_args(extra)
@@ -835,6 +903,10 @@ local function current_args(extra)
     if not items.UpscaleCB.Checked then args = args .. " --no-upscale" end
     if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
     if items.GrainCB.Checked then args = args .. " --grain" end
+    if THRESHOLD ~= 5 then
+        -- Each step doubles or halves how big a change counts, around the default.
+        args = args .. " --threshold " .. string.format("%.6f", 0.004 * 2 ^ ((THRESHOLD - 5) / 2)):gsub(",", ".")
+    end
     if OUTPUT_DIR ~= "" then args = args .. " --output-dir " .. shell_quote(OUTPUT_DIR) end
     args = args .. " --status-file " .. shell_quote(STATUS_PATH)
     return args .. (extra or "")
@@ -1151,8 +1223,15 @@ local function apply_status(st)
         set_progress(1.0, "Finished")
         if ANALYSING then
             ANALYSING = false
+            local placed = (st.marks ~= "" and ANALYSED_ITEM) and mark_drawings(ANALYSED_ITEM, st.marks) or 0
             if st.message ~= "" then items.AnalysisLabel.Text = st.message end
-            set_status("Analysis complete.")
+            if placed > 0 then
+                items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
+                    .. " frames on the clip."
+                set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
+            else
+                set_status("Analysis complete.")
+            end
             return true
         end
         if st.import_path ~= "" and not IMPORTED then
@@ -1296,7 +1375,7 @@ end
 function win.On.RefreshBtn.Clicked(ev)
     if refresh_source() then
         set_status("Ready.")
-        items.AnalysisLabel.Text = "Analyse to see how this clip is animated."
+        items.AnalysisLabel.Text = ANALYSIS_HINT
     else
         set_status(items.SourceLabel.Text)
     end
@@ -1307,11 +1386,13 @@ end
 local function pick_source()
     local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
                                           SOURCE_PLACE
+    local clip = SOURCE_ITEM
     if refresh_source() then return true end
     if previous then
         SOURCE_PATH = previous
         SOURCE_RANGE = range
         SOURCE_PLACE = place
+        SOURCE_ITEM = clip
         items.SourceLabel.Text = label
         return true
     end
@@ -1333,6 +1414,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     -- take tens of seconds on a long one, and Resolve must not freeze for it.
     clear_status()
     ANALYSING = true
+    ANALYSED_ITEM = SOURCE_ITEM
     IMPORTED = false
     STAGE.name = nil
     set_busy(true)
@@ -1361,8 +1443,14 @@ function win.On.SmoothBtn.Clicked(ev)
     items.CompareBtn.Enabled = false
     set_busy(true)
     set_progress(0.01, "Starting")
-    set_status("Working. Resolve stays usable while this runs.")
-    start_run(current_args(""))
+    local marks = clip_marks(SOURCE_ITEM)
+    if #marks > 0 then
+        set_status("Rendering from the " .. #marks .. " frames marked on the clip. Resolve stays usable.")
+        start_run(current_args(" --marks " .. table.concat(marks, ",")))
+    else
+        set_status("No markers on the clip, so Eternal2x finds the drawings. Resolve stays usable.")
+        start_run(current_args(""))
+    end
 end
 
 -- Switch the smoothed clip off and on, so the original under it shows through.
@@ -1438,6 +1526,12 @@ function win.On.CancelBtn.Clicked(ev)
     set_busy(false)
     set_progress(0, nil)
     set_status("Ready.")
+end
+
+function win.On.ThresholdSlider.ValueChanged(ev)
+    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(items.ThresholdSlider.Value) or 5) + 0.5)))
+    items.ThresholdValue.Text = tostring(THRESHOLD)
+    save_conf()
 end
 
 function win.On.HoldCombo.CurrentIndexChanged(ev)

@@ -171,6 +171,25 @@ function H.make_resolve(clip_file_path)
         local start = H.item_start or 86400
         H.src_span = { start, start + (H.item_duration or 48) }
     end
+    -- Markers on the clip, keyed by frame from its first frame, as Resolve
+    -- keeps them, with the __flags entry every Resolve table carries.
+    H.markers = H.markers or {}
+    item.GetMarkers = function(_self)
+        local out = { __flags = 4194304 }
+        for frame, info in pairs(H.markers) do out[frame] = info end
+        return out
+    end
+    item.AddMarker = function(_self, frame, color, name, note, duration, custom)
+        if H.markers[frame] then return false end
+        H.markers[frame] = { color = color, name = name, note = note,
+                             duration = duration, customData = custom or "" }
+        return true
+    end
+    item.DeleteMarkerAtFrame = function(_self, frame)
+        if not H.markers[frame] then return false end
+        H.markers[frame] = nil
+        return true
+    end
     if not H.no_place_api then
         item.GetStart = function(_self) return H.src_span[1] end
         item.GetEnd = function(_self) return H.src_span[2] end
@@ -456,6 +475,23 @@ function H.enabled(id)
 end
 
 function H.set_source_range(a, b) H.source_range = { a, b } end
+function H.add_marker(frame, custom)
+    H.markers = H.markers or {}
+    H.markers[frame] = { color = "Blue", name = "", note = "", duration = 1, customData = custom or "" }
+end
+function H.marker_frames()
+    local out = {}
+    for frame in pairs(H.markers or {}) do out[#out + 1] = frame end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+function H.tagged_markers()
+    local n = 0
+    for _, info in pairs(H.markers or {}) do
+        if info.customData == "eternal2x" then n = n + 1 end
+    end
+    return n
+end
 function H.imported_count() return #H.imported end
 function H.sequence_import_count() return H.sequence_imports or 0 end
 function H.last_sequence_field(k) return H.last_sequence and H.last_sequence[k] end
