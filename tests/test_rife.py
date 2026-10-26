@@ -220,11 +220,17 @@ def test_a_slow_pip_keeps_saying_it_is_working(monkeypatch):
 
 
 class _FakeSession:
-    def __init__(self, providers, fail_on_gpu_start=False, fail_on_gpu_run=False):
+    def __init__(self, providers, fail_on_gpu_start=False, fail_on_gpu_run=False,
+                 gpu_quietly_on_cpu=False):
         self.providers = providers
         self.fail_on_gpu_run = fail_on_gpu_run
         if fail_on_gpu_start and "DmlExecutionProvider" in providers:
             raise RuntimeError("D3D12 device could not be created")
+        if gpu_quietly_on_cpu:
+            self.providers = [p for p in providers if p != "DmlExecutionProvider"]
+
+    def get_providers(self):
+        return self.providers
 
     def get_inputs(self):
         return [type("Input", (), {"name": "input"})()]
@@ -270,6 +276,14 @@ def test_a_gpu_that_will_not_start_falls_back_to_the_cpu(monkeypatch):
     made = _fake_ort(monkeypatch, fail_on_gpu_start=True)
     net = rife.Rife()
     assert not net.on_gpu and made == [["CPUExecutionProvider"]]
+
+
+def test_a_gpu_that_onnx_runtime_quietly_swaps_for_the_cpu_is_not_taken_for_one(monkeypatch):
+    """ONNX Runtime 1.31 catches a DirectML start-up error and builds a CPU
+    session instead, which would then use every core."""
+    made = _fake_ort(monkeypatch, gpu_quietly_on_cpu=True)
+    net = rife.Rife()
+    assert not net.on_gpu and made[-1] == ["CPUExecutionProvider"]
 
 
 def test_a_gpu_that_runs_out_of_memory_finishes_on_the_cpu(monkeypatch):

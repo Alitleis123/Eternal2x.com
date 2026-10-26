@@ -172,6 +172,10 @@ class Rife:
         self.on_gpu = "DmlExecutionProvider" in ort.get_available_providers()
         try:
             self.session = self._session()
+            # ONNX Runtime can catch a DirectML start-up failure itself and
+            # hand back a CPU session, one without the core left for Resolve.
+            if self.on_gpu and "DmlExecutionProvider" not in self.session.get_providers():
+                raise RuntimeError("DirectML did not start")
         except Exception as exc:  # onnxruntime raises its own exception types
             if not self.on_gpu:
                 raise AIUnavailable(f"The AI model would not load ({exc}).") from exc
