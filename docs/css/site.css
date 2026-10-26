@@ -236,25 +236,18 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 }
 .player.playing .play { display: none; }
 
+/* Six short specs in two columns, spaced apart rather than ruled off. */
 .specs {
     margin: 0;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    background: var(--panel);
-    overflow: hidden;
-}
-.specs div {
     display: grid;
-    grid-template-columns: 180px minmax(0, 1fr);
-    gap: 4px 24px;
-    padding: 16px 22px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 48px;
 }
-.specs div + div { border-top: 1px solid var(--line); }
-.specs dt { font: 500 12px/1.9 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
-.specs dd { margin: 0; }
+.specs dt { font: 500 12px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.specs dd { margin: 6px 0 0; font-size: 17px; }
 .specs small { display: block; margin-top: 3px; color: var(--mute); font-size: 14.5px; line-height: 1.5; }
 .specs a { color: var(--soft); }
-@media (max-width: 560px) { .specs div { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .specs { grid-template-columns: 1fr; gap: 22px; } }
 
 .get {
     margin-top: clamp(72px, 10vw, 120px);

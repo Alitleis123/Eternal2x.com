@@ -105,17 +105,14 @@
 
     <section class="section" id="specs" aria-labelledby="specs-title">
         <h2 id="specs-title">Specs</h2>
-        <p class="lead">One installer sets up the Python packages, copies the panel into Resolve and writes its settings. <a href="help.html#windows">Step by step guide</a>.</p>
+        <p class="lead">One installer sets up the rest. The <a href="help.html">help page</a> has every detail.</p>
         <dl class="specs">
-            <div><dt>Resolve</dt><dd>DaVinci Resolve Studio 18 or newer<small>Since 19.1 the free edition blocks script panels like this one.</small></dd></div>
+            <div><dt>Resolve</dt><dd>DaVinci Resolve Studio 18 or newer<small>The free edition blocks script panels since 19.1.</small></dd></div>
             <div><dt>System</dt><dd>Windows 10 or 11, or macOS 12 or newer</dd></div>
-            <div><dt>Python</dt><dd>3.10 to 3.14, free from <a href="https://www.python.org/downloads/latest/python3.14/">python.org</a><small>3.15 is too new for the AI runtime. Older Macs need an older Python, see the <a href="help.html#macos">Mac guide</a>.</small></dd></div>
-            <div><dt>GPU</dt><dd>Any DirectX 12 card on Windows<small>The in-betweens are drawn on the GPU through DirectML. Macs draw them on the CPU, which is slower.</small></dd></div>
-            <div><dt>In-betweens</dt><dd>RIFE 4.25, run on your own machine<small>The first render downloads the model and its runtime, about 50 MB, once.</small></dd></div>
-            <div><dt>Upscale</dt><dd>2x with Resolve's own Super Scale<small>Shows on a timeline bigger than the clip, such as 4K for 1080p footage.</small></dd></div>
-            <div><dt>Output</dt><dd>Image sequence, MP4 or MKV<small>Lossless image sequence by default, 8-bit RGB. Same length and frame rate as the original.</small></dd></div>
-            <div><dt>Updates</dt><dd>Checked each time the panel opens<small>Every download is checked against its checksum before it's applied.</small></dd></div>
-            <div><dt>Price</dt><dd>Free</dd></div>
+            <div><dt>Python</dt><dd>3.10 to 3.14<small>Older Macs need an older one, see the <a href="help.html#macos">Mac guide</a>.</small></dd></div>
+            <div><dt>GPU</dt><dd>Any DirectX 12 card on Windows<small>Macs draw the frames on the CPU, which is slower.</small></dd></div>
+            <div><dt>Output</dt><dd>Image sequence, MP4 or MKV<small>Same length and frame rate as the original.</small></dd></div>
+            <div><dt>Price</dt><dd>Free<small>The AI model, about 50 MB, downloads on the first render.</small></dd></div>
         </dl>
     </section>
 
