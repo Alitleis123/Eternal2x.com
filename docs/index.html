@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eternal2x | Make choppy anime play smooth, in DaVinci Resolve</title>
-    <meta name="description" content="Eternal2x is a free DaVinci Resolve Studio plugin for hand-drawn animation. It finds the real drawings in a held shot, draws every missing in-between, and puts the result on the track above your clip.">
+    <title>Eternal2x | Smooth out choppy animation in DaVinci Resolve</title>
+    <meta name="description" content="Eternal2x is a free DaVinci Resolve Studio plugin that smooths out choppy hand-drawn animation. It draws the frames between the drawings, so anime and cartoons play smooth at the full frame rate.">
     <link rel="canonical" href="https://eternal2x.com/">
     <meta name="theme-color" content="#101013">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://eternal2x.com/">
-    <meta property="og:title" content="Eternal2x: make choppy anime play smooth">
-    <meta property="og:description" content="A free DaVinci Resolve Studio plugin that finds the real drawings in a held shot and draws the in-betweens that were never drawn.">
+    <meta property="og:title" content="Eternal2x: smooth out choppy animation">
+    <meta property="og:description" content="A free DaVinci Resolve Studio plugin that draws the frames between the drawings, so hand-drawn animation plays smooth.">
     <meta property="og:image" content="https://eternal2x.com/assets/og.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -44,8 +44,8 @@
 
     <section class="hero">
         <p class="label">For DaVinci Resolve Studio</p>
-        <h1>Make choppy anime <span>play smooth.</span></h1>
-        <p>Anime is usually drawn at 12 frames a second, with each drawing shown twice. Eternal2x draws the missing frames in between, so the motion plays smooth at the full frame rate, and puts the result on the track above your clip.</p>
+        <h1>Smooth out <span>choppy animation.</span></h1>
+        <p>Hand-drawn animation, from anime to cartoons, holds each drawing for two or three frames, so it moves in steps. Eternal2x draws the frames in between, right inside DaVinci Resolve, so it plays smooth at the full frame rate.</p>
         <div class="actions">
             <a class="btn btn-amber" href="download.html">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -75,35 +75,35 @@
 
     <section class="section" id="how" aria-labelledby="film-title">
         <h2 id="film-title">See it in Resolve</h2>
-        <p class="lead">Analyse the clip, press Smooth Clip, and the result lands on the track above, lined up with the original. 21 seconds, sound on.</p>
+        <p class="lead">Analyse the clip, press Smooth Clip, and the result lands on the track above, lined up with the original.</p>
         <figure class="panel film">
-            <video src="assets/demo/promo.mp4" poster="assets/demo/promo.jpg" controls playsinline preload="none"
-                   width="1920" height="1080"
-                   aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
+            <div class="player">
+                <video src="assets/demo/promo.mp4" poster="assets/demo/promo-resolve.jpg" controls playsinline preload="none"
+                       width="1920" height="1080"
+                       aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
+                <button class="play" type="button" aria-label="Play the 21 second film">
+                    <span class="play-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z"/></svg></span>
+                    <span class="play-label">Watch, 0:21, sound on</span>
+                </button>
+            </div>
             <figcaption>Footage from <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation, <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, edited. Sounds by <a href="https://kenney.nl/">Kenney</a>, CC0.</figcaption>
         </figure>
     </section>
 
-    <section class="section" aria-labelledby="needs-title">
-        <h2 id="needs-title">What you need</h2>
-        <p class="lead">One installer sets up the rest. The first render downloads the AI model, about 50 MB.</p>
-        <div class="needs">
-            <div>
-                <span class="label">Resolve</span>
-                <p>DaVinci Resolve Studio 18 or newer</p>
-                <small>The free edition blocks script panels since 19.1.</small>
-            </div>
-            <div>
-                <span class="label">System</span>
-                <p>Windows 10 or 11, or macOS 12 or newer</p>
-                <small>Windows draws the in-betweens on the GPU where it can.</small>
-            </div>
-            <div>
-                <span class="label">Python</span>
-                <p>3.10 to 3.14</p>
-                <small>Older Macs need an older one. See the <a href="help.html#macos">Mac guide</a>.</small>
-            </div>
-        </div>
+    <section class="section" id="specs" aria-labelledby="specs-title">
+        <h2 id="specs-title">Specs</h2>
+        <p class="lead">One installer sets up the Python packages, copies the panel into Resolve and writes its settings. <a href="help.html#windows">Step by step guide</a>.</p>
+        <dl class="specs">
+            <div><dt>Resolve</dt><dd>DaVinci Resolve Studio 18 or newer<small>Since 19.1 the free edition blocks script panels like this one.</small></dd></div>
+            <div><dt>System</dt><dd>Windows 10 or 11, or macOS 12 or newer</dd></div>
+            <div><dt>Python</dt><dd>3.10 to 3.14, free from <a href="https://www.python.org/downloads/latest/python3.14/">python.org</a><small>3.15 is too new for the AI runtime. Older Macs need an older Python, see the <a href="help.html#macos">Mac guide</a>.</small></dd></div>
+            <div><dt>GPU</dt><dd>Any DirectX 12 card on Windows<small>The in-betweens are drawn on the GPU through DirectML. Macs draw them on the CPU, which is slower.</small></dd></div>
+            <div><dt>In-betweens</dt><dd>RIFE 4.25, run on your own machine<small>The first render downloads the model and its runtime, about 50 MB, once.</small></dd></div>
+            <div><dt>Upscale</dt><dd>2x with Resolve's own Super Scale<small>Shows on a timeline bigger than the clip, such as 4K for 1080p footage.</small></dd></div>
+            <div><dt>Output</dt><dd>Image sequence, MP4 or MKV<small>Lossless image sequence by default, 8-bit RGB. Same length and frame rate as the original.</small></dd></div>
+            <div><dt>Updates</dt><dd>Checked each time the panel opens<small>Every download is checked against its checksum before it's applied.</small></dd></div>
+            <div><dt>Price</dt><dd>Free</dd></div>
+        </dl>
     </section>
 
     <section class="get" aria-labelledby="get-title">

@@ -163,3 +163,26 @@
         block.appendChild(button);
     });
 })();
+
+// The film starts on a frame inside Resolve under one big play button, so
+// nobody mistakes it for a picture. Pressing it plays with sound.
+(function () {
+    document.querySelectorAll('.player').forEach(function (player) {
+        var video = player.querySelector('video');
+        var play = player.querySelector('.play');
+        if (!video || !play) return;
+        player.classList.add('js');
+        video.controls = false;
+        function started() {
+            player.classList.add('playing');
+            video.controls = true;
+        }
+        play.addEventListener('click', function () {
+            started();
+            // A refused play leaves the controls up for a second try.
+            video.play().catch(function () {});
+            video.focus();
+        });
+        video.addEventListener('play', started);
+    });
+})();

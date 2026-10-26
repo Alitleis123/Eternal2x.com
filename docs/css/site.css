@@ -167,21 +167,67 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .section h2 { font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15; }
 .section .lead { margin: 10px 0 24px; color: var(--soft); max-width: 36em; }
 
-.needs {
+/* The film opens on a frame inside Resolve with one big play button, so it
+   reads as a video. Its own controls come back once it plays. */
+.player { position: relative; }
+.player .play { display: none; }
+.player.js .play {
+    position: absolute;
+    inset: 0;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(6, 6, 10, .28);
+    color: var(--text);
+    cursor: pointer;
+    transition: background-color .2s ease;
+}
+.player.js .play:hover { background: rgba(6, 6, 10, .12); }
+.play-dot {
+    display: grid;
+    place-items: center;
+    width: clamp(64px, 9vw, 92px);
+    height: clamp(64px, 9vw, 92px);
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 10px rgba(242, 169, 59, .22), 0 16px 40px rgba(0, 0, 0, .55);
+    transition: transform .2s ease;
+}
+.player.js .play:hover .play-dot { transform: scale(1.06); }
+.play-dot svg { width: 38%; height: 38%; margin-left: 6%; fill: var(--bg); }
+.play-label {
+    font: 500 13px/1 var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    padding: 8px 11px;
+    border-radius: 6px;
+    background: rgba(16, 16, 19, .82);
+    border: 1px solid var(--line-strong);
+}
+.player.playing .play { display: none; }
+
+.specs {
+    margin: 0;
     border: 1px solid var(--line);
     border-radius: 12px;
     background: var(--panel);
+    overflow: hidden;
 }
-.needs div { padding: 20px 22px; }
-.needs div + div { border-left: 1px solid var(--line); }
-.needs p { margin-top: 6px; }
-.needs small { display: block; margin-top: 4px; color: var(--mute); font-size: 14px; line-height: 1.5; }
-@media (max-width: 760px) {
-    .needs { grid-template-columns: 1fr; }
-    .needs div + div { border-left: 0; border-top: 1px solid var(--line); }
+.specs div {
+    display: grid;
+    grid-template-columns: 180px minmax(0, 1fr);
+    gap: 4px 24px;
+    padding: 16px 22px;
 }
+.specs div + div { border-top: 1px solid var(--line); }
+.specs dt { font: 500 12px/1.9 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.specs dd { margin: 0; }
+.specs small { display: block; margin-top: 3px; color: var(--mute); font-size: 14.5px; line-height: 1.5; }
+.specs a { color: var(--soft); }
+@media (max-width: 560px) { .specs div { grid-template-columns: 1fr; } }
 
 .get {
     margin-top: clamp(72px, 10vw, 120px);
