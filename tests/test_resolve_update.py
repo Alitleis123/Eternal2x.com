@@ -5,10 +5,12 @@ Served over a real local HTTP server so the network path is genuinely exercised.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import http.server
 import json
 import functools
+import shutil
 import socketserver
 import threading
 import zipfile
@@ -46,10 +48,16 @@ def http_server(tmp_path):
         httpd.server_close()
 
 
+# Stand-ins for the files the updater refuses to go without.
+RUNTIME = {rel: "# stub\n" for rel in ru.REQUIRED_FILES if rel != "VERSION"}
+
+
 def make_payload_zip(www: Path, name: str, version: str, extra_files=None) -> str:
     """Build an update zip shaped like a real release and return its sha256."""
     zip_path = www / name
     with zipfile.ZipFile(zip_path, "w") as zf:
+        for rel, content in RUNTIME.items():
+            zf.writestr(f"eternal2x/{rel}", content)
         zf.writestr("eternal2x/VERSION", version + "\n")
         zf.writestr("eternal2x/README.md", f"# Eternal2x {version}\n")
         zf.writestr("eternal2x/Pipeline/config.py", "# updated config\n")
@@ -213,6 +221,88 @@ def test_apply_payload_only_touches_allowed_paths(tmp_path):
     assert not (dest / "secrets.env").exists(), "payload escaped the allow-list"
 
 
+def _plugin(root: Path, tag: str) -> Path:
+    for folder in ("Installer", "Pipeline", "Stages"):
+        (root / folder).mkdir(parents=True)
+        (root / folder / "code.py").write_text(tag)
+    return root
+
+
+def _locked(monkeypatch, path: Path):
+    """Make every copy onto `path` fail, like a file another program holds."""
+    real = shutil.copy2
+
+    def copy2(src, dst, *args, **kwargs):
+        if Path(dst) == path:
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+
+
+def test_a_failed_update_puts_every_file_back(tmp_path, monkeypatch):
+    """A write refused halfway used to leave Installer new and Pipeline old."""
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    (payload / "Installer" / "added.py").write_text("new")
+    _locked(monkeypatch, live / "Pipeline" / "code.py")
+
+    with pytest.raises(PermissionError):
+        ru._apply_payload(payload, live)
+
+    for folder in ("Installer", "Pipeline", "Stages"):
+        assert (live / folder / "code.py").read_text() == "old", f"{folder} kept the new code"
+    assert not (live / "Installer" / "added.py").exists(), "a file the update added stayed"
+    assert sorted(p.name for p in live.iterdir()) == ["Installer", "Pipeline", "Stages"]
+
+
+def test_a_disk_that_fills_while_staging_changes_nothing(tmp_path, monkeypatch):
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    real = shutil.copy2
+
+    def copy2(src, dst, *args, **kwargs):
+        dst = Path(dst)
+        if dst.parts[-3].startswith(".eternal2x_update_") and dst.parent.name == "Stages":
+            raise OSError(errno.ENOSPC, "No space left on device")
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+    with pytest.raises(OSError):
+        ru._apply_payload(payload, live)
+
+    for folder in ("Installer", "Pipeline", "Stages"):
+        assert (live / folder / "code.py").read_text() == "old"
+    assert sorted(p.name for p in live.iterdir()) == ["Installer", "Pipeline", "Stages"]
+
+
+def test_an_update_that_cannot_be_undone_keeps_the_old_copies(tmp_path, monkeypatch):
+    """If putting a file back fails too, say which, and keep its old copy."""
+    live = _plugin(tmp_path / "live", "old")
+    payload = _plugin(tmp_path / "payload", "new")
+    real = shutil.copy2
+    failed = []
+
+    def copy2(src, dst, *args, **kwargs):
+        dst = Path(dst)
+        if dst == live / "Pipeline" / "code.py":
+            failed.append(dst)
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        if failed and dst == live / "Installer" / "code.py":
+            raise PermissionError(errno.EACCES, "Permission denied", str(dst))
+        return real(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(ru.shutil, "copy2", copy2)
+    with pytest.raises(ru.RollbackError) as info:
+        ru._apply_payload(payload, live)
+
+    message = str(info.value)
+    assert "Installer/code.py" in message
+    kept = [p for p in live.glob(".*/**/Installer/code.py") if p.read_text() == "old"]
+    assert len(kept) == 1, "the old copy of the file that could not be put back is gone"
+    assert str(kept[0].parents[1]) in message
+
+
 # --------------------------------------------------------------------------
 # end to end
 # --------------------------------------------------------------------------
@@ -260,6 +350,21 @@ def test_checksum_mismatch_aborts_without_touching_the_install(http_server, repo
     assert "checksum mismatch" in capsys.readouterr().out
     assert repo.joinpath("VERSION").read_text().strip() == "0.2.0", "install was modified"
     assert repo.joinpath("Stages/motion_score.py").read_text() == "# old stage\n"
+
+
+def test_an_update_that_fails_partway_says_nothing_changed(http_server, repo, monkeypatch, capsys):
+    """The panel shows the last line, so it has to say the old version is intact."""
+    base, www = http_server
+    sha = make_payload_zip(www, "pkg.zip", "0.3.0")
+    url = publish_meta(www, base, write_meta(www, "0.3.0", sha, "pkg.zip"))
+    _locked(monkeypatch, repo.resolve() / "Pipeline" / "config.py")
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    assert "nothing was changed" in capsys.readouterr().out.strip().splitlines()[-1]
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+    assert repo.joinpath("README.md").read_text() == "# old\n"
+    assert not repo.joinpath("Installer/install_eternal2x.py").exists()
 
 
 def test_missing_platform_package_is_reported(http_server, repo, capsys):
@@ -388,8 +493,91 @@ def test_a_finder_zip_with_a_macosx_folder_still_installs(http_server, repo):
         "__MACOSX/eternal2x-mac/._README.md": "junk",
         "eternal2x-mac/Stages/new.py": "# new\n",
         "eternal2x-mac/VERSION": "9.9.9\n",
+        **{f"eternal2x-mac/{rel}": text for rel, text in RUNTIME.items()},
     }))
     assert run(["--meta-url", url, "--repo-root", str(repo)]) == 0
     assert repo.joinpath("Stages/new.py").read_text() == "# new\n"
     assert repo.joinpath("VERSION").read_text().strip() == "9.9.9"
     assert not any(p.name.startswith(".eternal2x_update_") for p in repo.iterdir())
+
+
+def test_a_package_without_the_runtime_files_is_refused(http_server, repo, capsys):
+    """A checksum proves the archive is the one the feed named, not that it is whole.
+
+    A README-only archive used to report success and move VERSION on while
+    every line of code stayed old, so the real update was never offered again.
+    """
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({"plugin/README.md": "readme only"}))
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert "missing" in last and "VERSION" in last
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+    assert repo.joinpath("README.md").read_text() == "# old\n"
+
+
+def test_a_package_missing_a_module_its_code_imports_is_refused(http_server, repo, capsys):
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({
+        **{f"pkg/{rel}": text for rel, text in RUNTIME.items()},
+        "pkg/VERSION": "9.9.9\n",
+        "pkg/Stages/resolve_smooth.py": "from Pipeline import render\n",
+    }))
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    assert "Pipeline/render.py" in capsys.readouterr().out.strip().splitlines()[-1]
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+    assert not repo.joinpath("Stages/resolve_smooth.py").exists()
+
+
+def test_a_package_this_python_cannot_read_is_refused(http_server, repo, capsys):
+    """What code written for a newer Python looks like to an older one."""
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({
+        **{f"pkg/{rel}": text for rel, text in RUNTIME.items()},
+        "pkg/VERSION": "9.9.9\n",
+        "pkg/Pipeline/render.py": "def broken(:\n",
+    }))
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    assert "cannot read" in capsys.readouterr().out.strip().splitlines()[-1]
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+
+
+def test_a_package_of_another_version_is_refused(http_server, repo, capsys):
+    """Installing it would leave VERSION saying one thing and the code another."""
+    base, www = http_server
+    url = _feed_for(www, base, _zip_of({
+        **{f"pkg/{rel}": text for rel, text in RUNTIME.items()},
+        "pkg/VERSION": "9.9.8\n",
+    }))
+
+    assert run(["--meta-url", url, "--repo-root", str(repo)]) == 1
+
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert "9.9.8" in last and "9.9.9" in last
+    assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
+    assert not repo.joinpath("Stages/resolve_smooth.py").exists()
+
+
+def test_a_release_built_from_this_tree_passes_the_check(repo_root, tmp_path):
+    """Every updater from this one on judges a release by this same check, so
+    whatever this tree builds has to pass it, or users stop getting updates.
+
+    If this fails, change the release rather than the check. Updaters already
+    installed keep running the old one.
+    """
+    from Installer import build_release as builder
+
+    for item in builder.PAYLOAD:
+        builder._copy(repo_root / item, tmp_path / item)
+
+    assert ru._check_payload(tmp_path, ru._read_version(repo_root)) == ""
+    shipped = {f"Pipeline/{p.name}" for p in (tmp_path / "Pipeline").glob("*.py")}
+    assert shipped <= set(ru._required_files(tmp_path)), (
+        "a Pipeline module ships that nothing imports, so an update could arrive without it"
+    )

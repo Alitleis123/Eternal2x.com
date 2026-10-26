@@ -35,7 +35,7 @@ PAYLOAD = ["Pipeline", "Stages", "Installer", "VERSION", "README.md",
 SKIP_DIRS = {"__pycache__", ".pytest_cache"}
 SKIP_SUFFIXES = {".pyc", ".pyo"}
 
-REPO = "Alitleis123/Eternal2x.com"
+REPO = "sidebandstudio/Eternal2x.com"
 RELEASE_URL = "https://github.com/" + REPO + "/releases/download/{tag}/{name}.zip"
 
 
@@ -172,10 +172,16 @@ def zip_folder(folder: Path) -> Path:
         (f"{folder.name}/{path.relative_to(folder).as_posix()}", path)
         for path in folder.rglob("*") if path.is_file()
     )
-    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as zf:
+    # Stored, not deflated: deflate output depends on the zlib build, and
+    # Windows Python ships zlib-ng, so a compressed archive built there never
+    # matches one built by CI. The plugin is small enough not to mind.
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_STORED) as zf:
         for name, path in entries:
             info = zipfile.ZipInfo(name, date_time=ZIP_TIMESTAMP)
-            info.compress_type = zipfile.ZIP_DEFLATED
+            info.compress_type = zipfile.ZIP_STORED
+            # Made on Unix, whatever builds it. zipfile says MS-DOS on Windows,
+            # which changes the bytes and makes the mode below meaningless.
+            info.create_system = 3
             # Regular file, 0644, so the archive does not carry local umask.
             info.external_attr = (0o100644 & 0xFFFF) << 16
             zf.writestr(info, path.read_bytes())

@@ -58,7 +58,7 @@ GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 
 DEFAULT_UPDATE_URL = (
     "https://raw.githubusercontent.com/"
-    "Alitleis123/Eternal2x.com/main/update/latest.json"
+    "sidebandstudio/Eternal2x.com/main/update/latest.json"
 )
 
 # ---------------------------------------------------------------------------
@@ -79,6 +79,12 @@ BORDER = "#1e1e26"
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+# On Windows a windowed app that runs python or pip gets a console window
+# flashing up for each run unless it asks for none. The flag is Windows only.
+_NO_WINDOW = ({"creationflags": subprocess.CREATE_NO_WINDOW}
+              if sys.platform.startswith("win") else {})
+
 
 def _find_repo_root() -> Path:
     if getattr(sys, "frozen", False):
@@ -103,7 +109,7 @@ def _check_python(path: str) -> bool:
     try:
         result = subprocess.run(
             [path, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, **_NO_WINDOW,
         )
         return result.returncode == 0
     except Exception:
@@ -111,6 +117,11 @@ def _check_python(path: str) -> bool:
 
 
 def _find_system_python() -> str | None:
+    # Run as a script, the Python running this window is the one the user
+    # chose, such as `py Installer\gui_installer.py` with nothing on PATH.
+    if (not getattr(sys, "frozen", False) and sys.executable
+            and _check_python(sys.executable)):
+        return sys.executable
     candidates = (
         ["python", "python3"] if sys.platform.startswith("win")
         else ["python3", "python"]
@@ -122,6 +133,23 @@ def _find_system_python() -> str | None:
     return None
 
 
+def _patch_pth(text: str) -> str:
+    """Make the embeddable Python able to run the plugin.
+
+    A ._pth file replaces sys.path outright, so without the plugin folder in
+    it `python -m Stages.resolve_smooth` fails with No module named 'Stages'.
+    Entries are relative to the ._pth file, which sits in <plugin>/python.
+    """
+    lines = [("import site" if line.strip() == "#import site" else line)
+             for line in text.splitlines()]
+    stripped = [line.strip() for line in lines]
+    if ".." not in stripped:
+        lines.append("..")
+    if "import site" not in stripped:
+        lines.append("import site")
+    return "\n".join(lines) + "\n"
+
+
 def _embedded_python_exe(repo_root: Path) -> Path:
     if sys.platform.startswith("win"):
         return repo_root / "python" / "python.exe"
@@ -130,6 +158,13 @@ def _embedded_python_exe(repo_root: Path) -> Path:
 
 def _find_embedded_python(repo_root: Path) -> str | None:
     exe = _embedded_python_exe(repo_root)
+    # Older installers left the ._pth without the plugin folder. Repair it
+    # before reusing this Python, or the panel still cannot import Stages.
+    for pth in exe.parent.glob("python*._pth"):
+        try:
+            pth.write_text(_patch_pth(pth.read_text(encoding="utf-8")), encoding="utf-8")
+        except OSError:
+            pass
     if exe.exists() and _check_python(str(exe)):
         return str(exe)
     return None
@@ -139,7 +174,7 @@ def _python_version_str(python_path: str) -> str:
     try:
         r = subprocess.run(
             [python_path, "--version"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True, text=True, timeout=10, **_NO_WINDOW,
         )
         return (r.stdout + r.stderr).strip()
     except Exception:
@@ -174,6 +209,40 @@ def _download_with_progress(url: str, callback=None) -> bytes:
         if callback and total > 0:
             callback(downloaded, total)
     return data.getvalue()
+
+
+def _safe_extract(tf: tarfile.TarFile, dest: Path) -> None:
+    """Unpack a downloaded archive so no member can land outside dest.
+
+    filter="data" refuses paths and links that lead out of dest, and device
+    files. A Python too old to have it gets the same checks here, made one
+    member at a time, so a link unpacked earlier is followed when checking
+    the members after it.
+    """
+    if hasattr(tarfile, "data_filter"):
+        tf.extractall(dest, filter="data")
+        return
+    root = os.path.realpath(dest)
+
+    def inside(path: str) -> bool:
+        try:
+            return os.path.commonpath([root, os.path.realpath(path)]) == root
+        except ValueError:  # on another drive
+            return False
+
+    for member in tf.getmembers():
+        target = os.path.join(root, member.name)
+        if member.issym():
+            points_to = os.path.join(os.path.dirname(target), member.linkname)
+        elif member.islnk():
+            points_to = os.path.join(root, member.linkname)
+        elif member.isfile() or member.isdir():
+            points_to = target
+        else:
+            raise tarfile.TarError(f"{member.name} is not a file or folder.")
+        if not (inside(target) and inside(points_to)):
+            raise tarfile.TarError(f"{member.name} would land outside {dest}.")
+        tf.extract(member, dest)
 
 
 # ---------------------------------------------------------------------------
@@ -372,11 +441,8 @@ class InstallerApp:
             zf.extractall(python_dir)
 
         for pth in python_dir.glob("python*._pth"):
-            text = pth.read_text(encoding="utf-8")
-            text = text.replace("#import site", "import site")
-            if "import site" not in text:
-                text += "\nimport site\n"
-            pth.write_text(text, encoding="utf-8")
+            pth.write_text(_patch_pth(pth.read_text(encoding="utf-8")),
+                           encoding="utf-8")
 
         python_exe = str(python_dir / "python.exe")
         if not Path(python_exe).exists():
@@ -399,7 +465,7 @@ class InstallerApp:
             result = subprocess.run(
                 [python_exe, str(get_pip_path), "--no-warn-script-location"],
                 capture_output=True, text=True, timeout=120,
-                cwd=str(python_dir),
+                cwd=str(python_dir), **_NO_WINDOW,
             )
             if result.returncode != 0:
                 self.root.after(0, self._log,
@@ -453,7 +519,7 @@ class InstallerApp:
 
         try:
             with tarfile.open(fileobj=io.BytesIO(tar_data), mode="r:gz") as tf:
-                tf.extractall(temp_extract)
+                _safe_extract(tf, temp_extract)
         except Exception as exc:
             self.root.after(0, self._log, f"  Extraction failed: {exc}", "err")
             shutil.rmtree(temp_extract, ignore_errors=True)
@@ -507,7 +573,8 @@ class InstallerApp:
                        "numpy", "opencv-python", "--no-warn-script-location", "--quiet"]
 
         try:
-            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600)
+            result = subprocess.run(pip_cmd, capture_output=True, text=True, timeout=600,
+                                    **_NO_WINDOW)
             if result.returncode != 0:
                 stderr = result.stderr.strip()
                 self.root.after(0, self._log, f"  Failed: {stderr[:200]}", "err")

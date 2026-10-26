@@ -107,6 +107,8 @@ class FakeMediaPoolItem:
 # "Super Scale" is documented as 1 / 2 / 3 / 4 / Auto -- not "2x".
 _MEDIA_POOL_WRITABLE = {
     "Super Scale": {"1", "2", "3", "4", "Auto"},
+    # An image sequence's rate can be changed, as in Clip Attributes.
+    "FPS": None,
     "Clip Name": None,
     "Comments": None,
     "Keywords": None,
@@ -137,6 +139,8 @@ class FakeTimelineItem(_MarkerHost):
         self._properties: Dict[str, object] = {}
         self._strict = strict
         self.set_calls: List[tuple] = []
+        self.enabled = True
+        self.track = 1
 
         if not strict:
             # Methods the codebase probes for that Resolve does not provide.
@@ -165,6 +169,12 @@ class FakeTimelineItem(_MarkerHost):
 
     def GetMediaPoolItem(self) -> FakeMediaPoolItem:
         return self._mpi
+
+    def GetClipEnabled(self) -> bool:
+        return self.enabled
+
+    def GetTrackTypeAndIndex(self):
+        return ["video", self.track]
 
     def GetProperty(self, propertyName=None):
         if propertyName is None:
@@ -205,6 +215,9 @@ class FakeTimeline(_MarkerHost):
         self._selected: List[FakeTimelineItem] = []
         self._strict = strict
         self.split_calls: List[int] = []
+        self.playhead_tc: Optional[str] = None
+        self.frame_rate = "24"
+        self.tracks_off: set = set()
 
         if not strict:
             self.GetSelectedItems = self._get_selected_items  # type: ignore[attr-defined]
@@ -224,6 +237,15 @@ class FakeTimeline(_MarkerHost):
 
     def GetCurrentVideoItem(self) -> Optional[FakeTimelineItem]:
         return self._current_video_item
+
+    def GetCurrentTimecode(self) -> str:
+        return self.playhead_tc or ""
+
+    def GetIsTrackEnabled(self, trackType: str, index: int) -> bool:
+        return int(index) not in self.tracks_off
+
+    def GetSetting(self, name: str = ""):
+        return self.frame_rate if name == "timelineFrameRate" else ""
 
     def GetStartFrame(self) -> int:
         items = [i for t in self._tracks.values() for i in t]
@@ -261,6 +283,7 @@ class FakeTimeline(_MarkerHost):
 
     # --- test helpers -------------------------------------------------------
     def add_item(self, item: FakeTimelineItem, track: int = 1) -> FakeTimelineItem:
+        item.track = int(track)
         self._tracks.setdefault(int(track), []).append(item)
         self._tracks[int(track)].sort(key=lambda i: i.GetStart())
         if self._current_video_item is None:
@@ -370,7 +393,9 @@ class FakeResolve:
         return self._pm
 
     def GetVersionString(self) -> str:
-        return f"{self._version} {'Studio' if self._studio else 'Lite'}"
+        # Only the number, as on Resolve Studio 20.3.1, which reports
+        # "20.3.1.6". The edition is in the product name.
+        return self._version
 
     def GetProductName(self) -> str:
         return "DaVinci Resolve Studio" if self._studio else "DaVinci Resolve"

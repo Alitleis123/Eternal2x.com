@@ -15,6 +15,18 @@ if str(REPO_ROOT) not in sys.path:
 from tests.fake_resolve import FakeBmdModule, build_session  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _stand_in_for_the_network(request, monkeypatch):
+    """Renders draw in-betweens with a blend instead of the RIFE network, whose
+    model would otherwise be downloaded. tests/test_rife.py tests the real one."""
+    if request.module.__name__.endswith("test_rife"):
+        return
+    from Pipeline import rife
+    from tests.fake_rife import StandInRife
+
+    monkeypatch.setattr(rife, "Rife", StandInRife)
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT
@@ -109,9 +121,9 @@ def make_anime(tmp_path):
 
     `holds` gives the number of source frames each successive drawing is held
     for, so `[2] * 12` is twelve drawings on 2s. Each drawing is the same
-    texture translated a little further, which is what optical flow can
-    actually track -- a flat shape on a flat background gives it nothing to
-    lock onto.
+    texture translated a little further. The cut detector tracks that
+    texture to tell motion from a change of shot; a flat shape on a flat
+    background gives it nothing to lock onto.
     """
     import cv2
 

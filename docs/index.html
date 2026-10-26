@@ -4,7 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Eternal2x | Smooth 2x for hand-drawn animation for DaVinci Resolve</title>
-    <meta name="description" content="Eternal2x is a smooth 2x for hand-drawn animation plugin for DaVinci Resolve. It finds the real drawings in a held shot, rebuilds the missing in-betweens and upscales 2x, from one panel.">
+    <meta name="description" content="Eternal2x is a DaVinci Resolve plugin that smooths hand-drawn animation to 2x. It finds the real drawings in a held shot, rebuilds the missing in-betweens and upscales 2x, from one panel.">
+    <link rel="canonical" href="https://eternal2x.com/">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://eternal2x.com/">
+    <meta property="og:title" content="Eternal2x | Smooth 2x for hand-drawn animation">
+    <meta property="og:description" content="A DaVinci Resolve plugin that finds the real drawings in a held shot and rebuilds the in-betweens that were never drawn.">
+    <meta property="og:image" content="https://eternal2x.com/assets/demo/og.jpg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta name="twitter:card" content="summary_large_image">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -16,9 +25,9 @@
 <!-- Mobile Header -->
 <div class="mobile-header">
     <img src="assets/logo.png" alt="Eternal2x" class="mobile-logo-img">
-    <button class="hamburger" onclick="toggleSidebar()" aria-label="Menu">&#9776;</button>
+    <button class="hamburger" id="menu-button" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
 </div>
-<div class="sidebar-overlay" id="overlay" onclick="toggleSidebar()"></div>
+<div class="sidebar-overlay" id="overlay"></div>
 
 <!-- Sidebar -->
 <nav class="sidebar" id="sidebar">
@@ -89,17 +98,25 @@
         </div>
     </div>
 
-    <!-- Video -->
-    <div class="video-container">
-        <div class="video-placeholder">
-            <!-- Replace with your YouTube embed: -->
-            <!-- <iframe src="https://www.youtube.com/embed/YOUR_VIDEO_ID" allowfullscreen></iframe> -->
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            Demo video coming soon
+    <!-- Demo -->
+    <figure class="demo">
+        <div class="compare" id="compare">
+            <video class="compare-video" id="compare-video" src="assets/demo/compare.mp4"
+                   poster="assets/demo/poster.jpg" controls muted loop playsinline preload="metadata"
+                   width="960" height="804"
+                   aria-label="A shot from Hero, as drawn on 2s on top and rebuilt by Eternal2x below, at half speed"></video>
+            <canvas class="compare-canvas" id="compare-canvas" width="960" height="402" aria-hidden="true"></canvas>
+            <input class="compare-slider" id="compare-slider" type="range" min="0" max="100" value="50"
+                   aria-label="Divider position. Left of it is the original, right of it is Eternal2x">
+            <button class="compare-pause" id="compare-pause" type="button">Pause</button>
         </div>
-    </div>
+        <figcaption>
+            Drag across the picture. Left of the line is the shot as drawn, on 2s. Right of it is Eternal2x,
+            with every in-between it drew. Shown at half speed. From
+            <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation,
+            <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, rebuilt by Eternal2x.
+        </figcaption>
+    </figure>
 
     <!-- Stats -->
     <div class="stats-row">
@@ -125,13 +142,20 @@
         <p class="section-subtitle">Two buttons. Analyse first, then rebuild.</p>
     </div>
 
+    <figure class="frames">
+        <img src="assets/demo/frames.jpg" width="1200" height="760" loading="lazy"
+             alt="Six frames in a row from Hero. As drawn, each drawing repeats for two frames. From Eternal2x, each drawing stays on its own frame and every repeat is replaced by a new in-between.">
+        <figcaption>Six frames of a walk. As drawn, every drawing is held for two frames. Eternal2x keeps each
+            drawing where it was and replaces the repeat with an in-between it generates.</figcaption>
+    </figure>
+
     <div class="features">
         <div class="feature-card">
             <h3>
                 <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
                 Find the real drawings
             </h3>
-            <p>Animation drawn on 2s or 3s repeats each drawing two or three times. Eternal2x compares every frame to the one before it and works out which frames are genuinely new and which are held.</p>
+            <p>Animation drawn on 2s or 3s repeats each drawing two or three times. Eternal2x compares each frame with the last drawing it found and works out which frames are genuinely new and which are held.</p>
         </div>
         <div class="feature-card">
             <h3>
@@ -145,14 +169,14 @@
                 <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
                 Fill in the gaps
             </h3>
-            <p>The in-between frames that were never drawn are generated with optical flow. Where the motion is too fast to reconstruct cleanly, it holds a real drawing instead of inventing a smeared one.</p>
+            <p>The in-between frames that were never drawn are generated by the RIFE network, which keeps a fast-moving character in one piece. The real drawings are never resampled.</p>
         </div>
         <div class="feature-card">
             <h3>
                 <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
                 Upscale 2x
             </h3>
-            <p>The rebuilt clip comes back into your media pool with Resolve Super Scale applied, at the same length and frame rate as the original, ready to drop into your edit.</p>
+            <p>The rebuilt clip comes back with Resolve Super Scale applied and lands on the track above the original, lined up with it, at the same length and frame rate.</p>
         </div>
     </div>
 
@@ -192,15 +216,29 @@
             </h3>
             <p>Built for hand-drawn animation, not generic footage. If a clip has no duplicated frames it tells you and stops, rather than inventing motion that was never there.</p>
         </div>
+        <div class="feature-card">
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="5" rx="1"/><rect x="2" y="15" width="20" height="5" rx="1"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
+                Lined up with your edit
+            </h3>
+            <p>The result lands on the track above the original, starting on the same frame. Show Original flips between the two, so you judge it on your own timeline.</p>
+        </div>
+        <div class="feature-card">
+            <h3>
+                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.3L12 16.7l-6.2 4.5 2.4-7.3L2 9.4h7.6z"/></svg>
+                Drawn, not warped
+            </h3>
+            <p>Warping pixels along optical flow doubles lines and smears fast characters. The RIFE network draws each in-between instead. It runs on your own machine, on the GPU on Windows wherever DirectML loads and on the CPU otherwise, and its first use downloads about 50 MB.</p>
+        </div>
     </div>
 
     <!-- Requirements -->
     <div class="section">
         <h2 class="section-title">Requirements</h2>
         <div class="feature-card" style="max-width: 480px;">
-            <p><strong>DaVinci Resolve Studio 18+</strong>. The free edition runs everything except the 2x upscale.</p>
+            <p><strong>DaVinci Resolve Studio 18+</strong>. Since 19.1 the free edition blocks script panels like this one, so it cannot open Eternal2x.</p>
             <p class="mt-8"><strong>Windows 10/11</strong> or <strong>macOS 12+</strong></p>
-            <p class="mt-8"><strong>Python 3.8+</strong>, free from <a href="https://www.python.org/downloads/">python.org</a>. The installer adds the packages it needs.</p>
+            <p class="mt-8"><strong>Python 3.10 to 3.14</strong>, free from <a href="https://www.python.org/downloads/latest/python3.14/">python.org</a>. The installer adds the packages it needs.</p>
         </div>
     </div>
 
@@ -216,20 +254,7 @@
 
 </main>
 
-<script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-    document.getElementById('overlay').classList.toggle('open');
-}
-
-// On a phone the sidebar covers the page, so close it once a link is chosen.
-document.querySelectorAll('.sidebar a').forEach(function(link) {
-    link.addEventListener('click', function() {
-        document.getElementById('sidebar').classList.remove('open');
-        document.getElementById('overlay').classList.remove('open');
-    });
-});
-</script>
+<script src="js/site.js"></script>
 
 </body>
 </html>

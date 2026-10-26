@@ -111,37 +111,215 @@ H.imported = {}         -- paths handed to ImportMedia
 H.appended = 0          -- how many clips reached the timeline
 H.clip_properties = {}  -- properties set on imported clips
 H.import_works = true   -- flip to false to simulate a build that refuses
+H.sequence_import_works = true  -- false: refuse the clipInfo form only
+H.under_playhead = true  -- false: the playhead is not over a clip
+
+-- Every list Resolve 20.3 hands to Lua also has a number under __flags, so a
+-- loop over it with pairs meets that number as well as the items.
+local function resolve_list(t)
+    t.__flags = 4194304
+    return t
+end
+
+-- A frame rate as Resolve counts with it: 23.976 is 24000/1001, but 23.98
+-- is 23.98.
+local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
+               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
+local function exact_rate(text)
+    local r = tonumber(tostring(text or "24"):match("[%d%.]+"))
+    for _, pair in ipairs(NTSC) do
+        if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
+    end
+    return r
+end
 
 function H.make_resolve(clip_file_path)
     local mpi = {
         GetClipProperty = function(_self)
-            return { ["File Path"] = clip_file_path }
+            return { ["File Path"] = clip_file_path, FPS = H.clip_fps or "24" }
         end,
     }
     local item = { GetMediaPoolItem = function(_self) return mpi end }
+    -- H.item_off switches the source clip off, as Resolve's clip enable does.
+    item.GetClipEnabled = function(_self) return not H.item_off end
+    -- Where the clip sits in its media, given in seconds from the start of
+    -- the file. Resolve reports frames from the start of the file, the end
+    -- frame being the last one used, but seconds from the media's start
+    -- timecode, H.start_tc. Left unset, the item has no such methods, as on a
+    -- build that predates them, and the whole file is used.
+    if H.source_range then
+        local fps = tonumber(H.clip_fps or "24")
+        local tc = H.start_tc or 0
+        item.GetSourceStartTime = function(_self) return H.source_range[1] + tc end
+        item.GetSourceEndTime = function(_self) return H.source_range[2] + tc end
+        item.GetSourceStartFrame = function(_self)
+            return math.floor(H.source_range[1] * fps + 0.5)
+        end
+        item.GetSourceEndFrame = function(_self)
+            return math.floor(H.source_range[2] * fps + 0.5) - 1
+        end
+    end
+    if H.source_frames then
+        item.GetSourceStartFrame = function(_self) return H.source_frames[1] end
+        item.GetSourceEndFrame = function(_self) return H.source_frames[2] end
+    end
+    -- Where the clip sits on the timeline. H.no_place_api models a build
+    -- without these calls.
+    -- H.src_span is where the source clip sits, { start, end }. A test can
+    -- change it to move or re-trim the clip, or take it off its track.
+    if not H.src_span then
+        local start = H.item_start or 86400
+        H.src_span = { start, start + (H.item_duration or 48) }
+    end
+    if not H.no_place_api then
+        item.GetStart = function(_self) return H.src_span[1] end
+        item.GetEnd = function(_self) return H.src_span[2] end
+        item.GetDuration = function(_self) return H.src_span[2] - H.src_span[1] end
+        item.GetUniqueId = function(_self) return "source-item" end
+        item.GetTrackTypeAndIndex = function(_self)
+            return resolve_list({ "video", H.item_track or 1 })
+        end
+    end
+    -- H.tracks[n] lists the spans already on video track n. By default only
+    -- the source clip, on track 1.
+    if not H.tracks then
+        H.tracks = {}
+        for n = 1, (H.item_track or 1) do H.tracks[n] = {} end
+        table.insert(H.tracks[H.item_track or 1], H.src_span)
+    end
+    -- H.under_paths lists files lined up under the source clip on tracks 1,
+    -- 2 and up, as an original and earlier renders are under the newest
+    -- render. H.item_track should be the track above the last of them.
+    local under = {}
+    if H.under_paths and not H.no_place_api then
+        H.under_spans = H.under_spans or {}
+        for i, file in ipairs(H.under_paths) do
+            if not H.under_spans[i] then
+                H.under_spans[i] = { H.src_span[1], H.src_span[2] }
+                table.insert(H.tracks[i], H.under_spans[i])
+            end
+            local span = H.under_spans[i]
+            local file_mpi = {
+                GetClipProperty = function(_self)
+                    return { ["File Path"] = file, FPS = H.clip_fps or "24" }
+                end,
+            }
+            local it = {}
+            for k, v in pairs(item) do it[k] = v end
+            it.GetMediaPoolItem = function(_self) return file_mpi end
+            it.GetClipEnabled = function(_self) return true end
+            it.GetStart = function(_self) return span[1] end
+            it.GetEnd = function(_self) return span[2] end
+            it.GetDuration = function(_self) return span[2] - span[1] end
+            it.GetUniqueId = function(_self) return "under-" .. i end
+            it.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", i }) end
+            under[span] = it
+        end
+    end
+    H.track_names = H.track_names or {}
+    H.placements = H.placements or {}
+    local function span_item(span, n) return {
+        GetStart = function(_self) return span[1] end,
+        GetEnd = function(_self) return span[2] end,
+        GetDuration = function(_self) return span[2] - span[1] end,
+        GetUniqueId = function(_self) return "item-" .. n end,
+    } end
+    -- No GetSelectedItems: Resolve's API has no timeline selection.
     local timeline = {
-        GetCurrentVideoItem = function(_self) return item end,
-        GetSelectedItems = function(_self) return { item } end,
+        GetCurrentVideoItem = function(_self) return H.under_playhead and item or nil end,
+        GetUniqueId = function(_self) return H.timeline_id or "timeline-1" end,
+        -- H.playhead_tc is the playhead's timecode, nil until a test sets it.
+        -- H.tracks_off[n] switches video track n off.
+        GetCurrentTimecode = function(_self) return H.playhead_tc end,
+        GetIsTrackEnabled = function(_self, kind, n)
+            return not (H.tracks_off and H.tracks_off[n])
+        end,
+        GetTrackCount = function(_self, kind) return kind == "video" and #H.tracks or 0 end,
+        GetItemListInTrack = function(_self, kind, n)
+            local out = {}
+            for i, span in ipairs(H.tracks[n] or {}) do
+                table.insert(out, span == H.src_span and item or under[span]
+                                  or span_item(span, n * 100 + i))
+            end
+            return resolve_list(out)
+        end,
+        AddTrack = function(_self, kind)
+            if H.add_track_works == false then return false end
+            table.insert(H.tracks, {})
+            return true
+        end,
+        DeleteTrack = function(_self, kind, n) table.remove(H.tracks, n) return true end,
+        SetTrackName = function(_self, kind, n, name)
+            if H.rename_throws then error("SetTrackName failed") end
+            H.track_names[n] = name
+            return true
+        end,
+        GetSetting = function(_self, key)
+            if key == "timelineResolutionWidth" then return H.timeline_width or "1920" end
+            if key == "timelineFrameRate" then return H.timeline_fps or "24" end
+            return nil
+        end,
     }
     local pool = {
         ImportMedia = function(_self, paths)
-            if not H.import_works then return {} end
+            if not H.import_works then return resolve_list({}) end
             local made = {}
             for _, path in ipairs(paths) do
+                -- A clipInfo table imports a sequence, as Blackmagic documents.
+                if type(path) == "table" then
+                    if not H.sequence_import_works then return resolve_list({}) end
+                    H.sequence_imports = (H.sequence_imports or 0) + 1
+                    H.last_sequence = path
+                    path = path.FilePath
+                end
                 table.insert(H.imported, path)
                 table.insert(made, {
                     SetClipProperty = function(_s, k, v)
-                        if H.super_scale_works == false then return false end
+                        if k == "Super Scale" and H.super_scale_works == false then return false end
+                        -- Resolve can say yes to a frame rate and keep the old one.
+                        if k == "FPS" and H.fps_sticks == false then return true end
                         H.clip_properties[k] = v
                         return true
                     end,
+                    GetClipProperty = function(_s, k)
+                        if k == "FPS" and H.fps_read_throws then error("GetClipProperty failed") end
+                        if k == "FPS" then return H.clip_properties.FPS or "24" end
+                        if k == "Frames" then return H.media_frames or "48" end
+                        if k == "Resolution" then return H.media_resolution or "1920x1080" end
+                        return H.clip_properties[k]
+                    end,
                 })
             end
-            return made
+            return resolve_list(made)
         end,
         AppendToTimeline = function(_self, clips)
-            H.appended = H.appended + #clips
-            return clips
+            local out = {}
+            for _, clip in ipairs(clips) do
+                local placed = { enabled = true }
+                -- A clipInfo says where on the timeline it goes.
+                if clip.mediaPoolItem then
+                    if H.place_throws then error("AppendToTimeline failed") end
+                    if H.place_works == false then return resolve_list({}) end
+                    table.insert(H.placements, clip)
+                    local track = H.tracks[clip.trackIndex]
+                    -- Resolve 20.3 places frames startFrame to endFrame - 1, at
+                    -- the timeline's rate, and rounds the length down.
+                    -- H.place_rounds models a build that rounds to nearest.
+                    local raw = (clip.endFrame - clip.startFrame) * exact_rate(H.timeline_fps or "24")
+                        / exact_rate(clip.mediaPoolItem:GetClipProperty("FPS"))
+                    local length = H.place_rounds and math.floor(raw + 0.5) or math.floor(raw + 1e-9)
+                    local span = { clip.recordFrame, clip.recordFrame + length }
+                    table.insert(track, span)
+                    function placed:GetStart() return span[1] end
+                    function placed:GetEnd() return span[2] end
+                end
+                H.appended = H.appended + 1
+                function placed:GetClipEnabled() return self.enabled end
+                function placed:SetClipEnabled(on) self.enabled = on return true end
+                H.last_placed = placed
+                table.insert(out, placed)
+            end
+            return resolve_list(out)
         end,
     }
     local project = {
@@ -162,16 +340,21 @@ function H.make_execute(real_execute)
         -- On Windows the panel writes the real command to a script and starts
         -- that, so record the script too, or every check of the arguments
         -- would only see `start ... cmd /c "script"`.
-        local script = cmd:match('cmd /c "(.-%.cmd)"$')
+        local dir, name = cmd:match('/D "(.-)" /MIN cmd /c %.\\(.-%.cmd)$')
+        local script = dir and (dir .. "\\" .. name)
         local recorded = cmd
         if script then
-            local f = io.open(script, "rb")
+            -- A test can make the panel take its Windows path on macOS or
+            -- Linux, where the script is only found with forward slashes.
+            local f = io.open(script, "rb") or io.open((script:gsub("\\", "/")), "rb")
             if f then
                 recorded = cmd .. "\n" .. f:read("*a")
                 f:close()
             end
         end
         table.insert(H.commands, recorded)
+        -- Lets a test play the part of the command, such as writing its log.
+        if H.on_execute then H.on_execute(cmd) end
         if H.real_execute then
             return real_execute(cmd)
         end
@@ -188,12 +371,11 @@ function H.load(script_path, clip_file_path)
     _G.fu = { UIManager = ui }
     _G.bmd = bmd
 
-    package.preload["DaVinciResolveScript"] = function()
-        return { scriptapp = function(name)
-            if name == "Resolve" then return H.make_resolve(clip_file_path) end
-            return nil
-        end }
-    end
+    -- Resolve hands Lua scripts a Resolve() global, as in Blackmagic's
+    -- examples. There is no Lua DaVinciResolveScript module to require.
+    _G.Resolve = function() return H.make_resolve(clip_file_path) end
+    package.preload["DaVinciResolveScript"] = nil
+    package.loaded["DaVinciResolveScript"] = nil
 
     local real_execute = os.execute
     local real_print = print
@@ -273,7 +455,10 @@ function H.enabled(id)
     return w ~= nil and w.Enabled ~= false
 end
 
+function H.set_source_range(a, b) H.source_range = { a, b } end
 function H.imported_count() return #H.imported end
+function H.sequence_import_count() return H.sequence_imports or 0 end
+function H.last_sequence_field(k) return H.last_sequence and H.last_sequence[k] end
 function H.imported_at(i) return H.imported[i] end
 function H.property_of(key) return H.clip_properties[key] end
 function H.command_count() return #H.commands end
