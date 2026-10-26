@@ -75,7 +75,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     text-decoration: none;
 }
 .brand:hover { color: var(--text); }
-.brand img { width: 28px; height: 28px; }
+.brand img { width: 34px; height: 34px; }
 .brand span span { color: var(--amber); }
 .top nav { display: flex; align-items: center; gap: 6px; }
 .top nav a:not(.btn) { font-size: 15px; text-decoration: none; color: var(--soft); padding: 8px 10px; border-radius: 6px; }
