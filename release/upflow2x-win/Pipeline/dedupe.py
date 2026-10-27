@@ -206,9 +206,11 @@ def pose_base(base_hold: int, fps: float = 24.0) -> int:
     It is the clip's own, but never shorter than 2s at 24 fps lasts at the
     clip's rate: 2 frames at 24, 5 at 60. On a 60 fps file made from 24 fps
     animation a drawing on 2s lasts 5 frames, so measured against 2 every
-    one of them read as a pose and stayed partly still.
+    one of them read as a pose and stayed partly still. NTSC rates count as
+    their round rate: 29.97 / 12 is just under 2.5, and rounding it down
+    made 5-frame holds pauses at 29.97 but not at 30.
     """
-    return max(2, int(base_hold), int(fps / 12.0 + 0.5))
+    return max(2, int(base_hold), int(fps / 12.0 + 0.51))
 
 
 def hold_repeats(hold: Hold, base_hold: int, fps: float = 24.0) -> int:

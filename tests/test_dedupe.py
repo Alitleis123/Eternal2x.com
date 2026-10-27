@@ -14,6 +14,7 @@ from Pipeline.dedupe import (
     noise_threshold,
     output_time_map,
     plan_from_scores,
+    pose_base,
 )
 
 T = 0.004  # duplicate threshold
@@ -378,6 +379,12 @@ def test_the_pose_length_follows_the_frame_rate():
     holds = [Hold(0, 2), Hold(2, 2), Hold(4, 4), Hold(8, 5), Hold(13, 12), Hold(25, 2)]
     assert build_output_indices(holds, 2, 60.0) == [0, 2, 4, 8, 13, 13, 25]
     assert build_output_indices(holds, 2, 24.0) == [0, 2, 4, 8, 8, 8, 13, 13, 13, 13, 13, 13, 25]
+
+
+@pytest.mark.parametrize("ntsc, rate", [(24000 / 1001, 24.0), (30000 / 1001, 30.0),
+                                        (60000 / 1001, 60.0)])
+def test_an_ntsc_rate_measures_poses_like_its_round_rate(ntsc, rate):
+    assert pose_base(1, ntsc) == pose_base(1, rate)
 
 
 def test_analyse_marks_each_drawing_of_a_60fps_clip_once():
