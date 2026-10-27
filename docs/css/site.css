@@ -649,13 +649,14 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     font: 400 16px/1.5 var(--sans);
     color: var(--text);
     background: var(--bg);
-    border: 1px solid var(--line-strong);
+    /* At least 3:1 against the card, so an empty field can still be found. */
+    border: 1px solid #6f7074;
     border-radius: 8px;
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 .field textarea { resize: vertical; }
 .field ::placeholder { color: #707073; opacity: 1; }
-.field input:hover, .field textarea:hover { border-color: rgba(255, 255, 255, .24); }
+.field input:hover, .field textarea:hover { border-color: #8a8b8f; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(242, 169, 59, .2); }
 
 .hint { font-size: 14px; color: var(--mute); }

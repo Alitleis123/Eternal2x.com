@@ -173,6 +173,8 @@ def test_the_contact_page_sends_the_message_itself(repo_root):
     # Bots fill every field; people never see this one, and Formspree drops
     # anything that arrives with it filled.
     assert "_gotcha" in fields
+    # Formspree's documented subject field; the {{ topic }} works without script.
+    assert "{{ topic }}" in fields["subject"].get("value", "")
     # A bug report asks what the old checklist asked for.
     for question in ("resolve version", "plugin version", "computer", "panel said"):
         assert question in fields, f"the bug report never asks for {question!r}"

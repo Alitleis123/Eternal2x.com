@@ -238,7 +238,7 @@
     var sent = document.getElementById('contact-sent');
     var button = form.querySelector('button[type="submit"]');
     var LABELS = {
-        'Bug report': 'What did you press, and what happened?',
+        'Bug report': 'What did you press, what happened, and what did you expect?',
         'Question': 'Your question',
         'Idea': 'Your idea'
     };
@@ -257,29 +257,40 @@
     });
     show();
 
+    // Every field is locked while the message sends, so nothing typed in
+    // that time is lost to the reset afterwards. Locking each control rather
+    // than the bug fieldset leaves that fieldset's own setting alone.
+    function lock(busy) {
+        Array.prototype.forEach.call(form.elements, function (el) {
+            if (el.tagName !== 'FIELDSET') el.disabled = busy;
+        });
+        button.textContent = busy ? 'Sending...' : 'Send message';
+    }
+
     form.addEventListener('submit', function (e) {
         e.preventDefault();
+        // Read before locking, because disabled fields are left out.
+        var data = new FormData(form);
+        var replyTo = data.get('email');
         error.hidden = true;
-        button.disabled = true;
-        button.textContent = 'Sending...';
-        form.elements._subject.value = 'Upflow2x site: ' + topic();
+        lock(true);
         fetch(form.action, {
             method: 'POST',
-            body: new FormData(form),
+            body: data,
             headers: { Accept: 'application/json' }
         }).then(function (res) {
             if (!res.ok) throw new Error('Formspree answered ' + res.status);
-            document.getElementById('contact-sent-to').textContent = form.elements.email.value;
+            lock(false);
+            document.getElementById('contact-sent-to').textContent = replyTo;
             form.reset();
             show();
             form.hidden = true;
             sent.hidden = false;
             sent.querySelector('h2').focus();
         }).catch(function () {
+            lock(false);
             error.hidden = false;
-        }).then(function () {
-            button.disabled = false;
-            button.textContent = 'Send message';
+            button.focus();
         });
     });
 
