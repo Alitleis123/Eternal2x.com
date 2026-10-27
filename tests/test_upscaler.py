@@ -26,6 +26,7 @@ class _FakeSession:
                  gpu_quietly_on_cpu=False):
         self.providers = providers
         self.fail_on_gpu_run = fail_on_gpu_run
+        self.fallback = True
         if fail_on_gpu_start and "DmlExecutionProvider" in providers:
             raise RuntimeError("D3D12 device could not be created")
         if gpu_quietly_on_cpu:
@@ -33,6 +34,9 @@ class _FakeSession:
 
     def get_providers(self):
         return self.providers
+
+    def disable_fallback(self):
+        self.fallback = False
 
     def get_inputs(self):
         return [type("Input", (), {"name": "input"})()]
@@ -98,6 +102,13 @@ def test_a_first_frame_the_gpu_cannot_fit_leaves_it_to_super_scale(monkeypatch):
         upscaler.Upscaler().upscale(cel(120, 120))
 
 
+def test_onnx_runtime_never_moves_a_failed_gpu_frame_to_the_cpu_by_itself(monkeypatch):
+    """Its own fallback retried the first frame on the CPU, so a GPU that
+    failed at once left the whole clip to the CPU and not to Super Scale."""
+    _fake_ort(monkeypatch)
+    assert upscaler.Upscaler().session.fallback is False
+
+
 def test_a_gpu_that_runs_out_of_memory_mid_render_finishes_on_the_cpu(monkeypatch):
     """The frames so far are 2x, so the rest must be too."""
     made = _fake_ort(monkeypatch)
@@ -106,6 +117,20 @@ def test_a_gpu_that_runs_out_of_memory_mid_render_finishes_on_the_cpu(monkeypatc
     net.session.fail_on_gpu_run = True
     out = net.upscale(cel(130, 120))
     assert out.shape == (480, 640, 3) and not net.on_gpu and made[-1] == ["CPUExecutionProvider"]
+
+
+def test_a_cpu_that_fails_too_says_so(monkeypatch):
+    _fake_ort(monkeypatch)
+    net = upscaler.Upscaler()
+    net.upscale(cel(120, 120))
+    net.session.fail_on_gpu_run = True
+
+    def no_cpu():
+        raise RuntimeError("not enough memory")
+
+    monkeypatch.setattr(net, "_session", no_cpu)
+    with pytest.raises(AIUnavailable, match="then on the CPU"):
+        net.upscale(cel(130, 120))
 
 
 @pytest.mark.parametrize("broken", [
@@ -128,6 +153,7 @@ class _TwiceAsBig:
     """Stands in for the network: nearest-neighbour 2x, optionally failing."""
     fail_at = None
     made = 0
+    drawn = 0
 
     def __init__(self, progress=None):
         _TwiceAsBig.made += 1
@@ -137,12 +163,13 @@ class _TwiceAsBig:
         if self.frames == _TwiceAsBig.fail_at:
             raise AIUnavailable("E_OUTOFMEMORY")
         self.frames += 1
+        _TwiceAsBig.drawn += 1
         return cv2.resize(frame, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
 
 
 @pytest.fixture
 def twice_as_big(monkeypatch):
-    _TwiceAsBig.fail_at, _TwiceAsBig.made = None, 0
+    _TwiceAsBig.fail_at, _TwiceAsBig.made, _TwiceAsBig.drawn = None, 0, 0
     monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
     return _TwiceAsBig
 
@@ -172,6 +199,36 @@ def test_the_network_and_lanczos_never_both_scale(twice_as_big, monkeypatch, mak
 
     monkeypatch.setattr(upscaler, "Upscaler", no_gpu)
     assert _render(make_anime, tmp_path / "b", network_upscale=True).width == 200
+
+
+def test_a_held_drawing_is_drawn_at_2x_once(twice_as_big, make_anime, tmp_path, read_frames):
+    """With Interpolate off, a drawing on 2s comes through twice. The network
+    drew it twice, so an upscale-only render took twice as long."""
+    result = _render(make_anime, tmp_path, network_upscale=True, upscale_enabled=False,
+                     interpolate_enabled=False)
+    frames = read_frames(result.output)
+    assert twice_as_big.drawn == 6 and len(frames) == 12
+    assert all(f.shape == (240, 400, 3) for f in frames)
+    assert all((frames[i] == frames[i + 1]).all() for i in range(0, 12, 2))
+
+
+def test_the_progress_says_when_the_cpu_takes_over(monkeypatch, make_anime, tmp_path):
+    """A new stage name restarts the panel's time left at the CPU's pace."""
+    class GivesOut(_TwiceAsBig):
+        def upscale(self, frame):
+            out = super().upscale(frame)
+            self.on_gpu = self.frames < 4
+            return out
+
+    monkeypatch.setattr(upscaler, "Upscaler", GivesOut)
+    stages = []
+    src = make_anime(holds=(2,) * 6)
+    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
+                upscale_enabled=False), sequence=True,
+                progress=lambda stage, fraction: stages.append(stage))
+    assert stages[:3] == ["Rendering"] * 3
+    assert stages[-1] == "Rendering, upscaling on the CPU"
 
 
 def test_the_network_is_only_loaded_when_asked(twice_as_big, make_anime, tmp_path):

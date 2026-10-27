@@ -135,10 +135,15 @@ SEQUENCE_PATTERN = "frame_%06d.png"
 def _finished(plan, result) -> str:
     """The panel's message for a finished render."""
     if result.note:
-        return (f"Rendered {plan.unique_drawings} drawings into "
-                f"{result.frames_written} frames. {result.note}")
-    return (f"Rendered {plan.unique_drawings} drawings into "
-            f"{result.frames_written} smooth frames.")
+        message = (f"Rendered {plan.unique_drawings} drawings into "
+                   f"{result.frames_written} frames. {result.note}")
+    else:
+        message = (f"Rendered {plan.unique_drawings} drawings into "
+                   f"{result.frames_written} smooth frames.")
+    if result.upscale_note:
+        message += (f" Real-ESRGAN did not run, so the upscale is left to Super Scale. "
+                    f"{result.upscale_note}")
+    return message
 
 
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,

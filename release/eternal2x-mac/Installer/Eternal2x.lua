@@ -424,9 +424,14 @@ local function find_clip_path()
     end
     local rate = nil
     pcall(function() rate = tonumber(timeline:GetSetting("timelineFrameRate")) end)
+    local range = clip_range(item, props, rate)
     local clip = marked_clip(item, timeline, props)
+    -- Without the part of the file a trimmed clip uses, the stage reads the
+    -- whole file from its first frame, and every marker would land on the
+    -- wrong frame of it.
+    if not range and not clip.unreadable and clip.origin ~= 0 then clip.unreadable = true end
     clip.also = render
-    return path, nil, clip_range(item, props, rate), place, clip
+    return path, nil, range, place, clip
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an

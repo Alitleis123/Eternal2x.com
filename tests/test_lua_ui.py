@@ -1934,7 +1934,8 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
     """Resolve keys the markers from the media's start: M pressed 10 frames
     into a clip trimmed 20 frames in reads back as frame 30."""
     H = load(lua, ui_script(direct))
-    H.left_offset = 20
+    H.left_offset, H.source_frames = 20, lua.table(20, 67)
+    H.click("RefreshBtn")
     for key in (30, 20, 5, 75):
         H.add_marker(key)
     H.click("SmoothBtn")
@@ -1943,7 +1944,8 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
 
 def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
     H = load(lua, ui_script(direct))
-    H.left_offset = 20
+    H.left_offset, H.source_frames = 20, lua.table(20, 67)
+    H.click("RefreshBtn")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -1954,7 +1956,8 @@ def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
     """A 30 fps clip on a 23.976 timeline: markers sit on timeline frames."""
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
-    H.left_offset = 47
+    H.left_offset, H.source_frames = 47, lua.table(59, 118)
+    H.click("RefreshBtn")
     H.add_marker(47)
     H.add_marker(57)
     H.click("SmoothBtn")
@@ -2023,6 +2026,7 @@ def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
     the last frame of the drawing before it."""
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps, H.item_duration, H.left_offset = "30", "23.976", 200, 47
+    H.source_frames = lua.table(59, 308)
     lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
     H.click("RefreshBtn")
     H.click("AnalyseBtn")
@@ -2046,6 +2050,39 @@ def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, dire
     H.click("SmoothBtn")
     assert H.last_command() == before
     assert "Could not read the markers" in H.status()
+
+
+def test_markers_on_a_trimmed_clip_without_its_source_range_stop_the_render(lua, direct):
+    """The stage would read the whole file from its first frame, so markers
+    counted from the clip's left edge would keep the wrong frames."""
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    H.click("RefreshBtn")
+    H.add_marker(30)
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not read the markers" in H.status()
+
+
+def test_analyse_places_no_markers_on_a_trimmed_clip_without_its_source_range(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == ""
+    assert "no markers were placed" in H.status()
+
+
+def test_markers_on_an_untrimmed_clip_without_its_source_range_still_render(lua, direct):
+    """On a build without the source frame calls the whole file is used, and
+    an untrimmed clip's markers already count from its first frame."""
+    H = load(lua, ui_script(direct))
+    H.add_marker(10)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "10"
 
 
 def test_an_unmarked_clip_whose_bounds_cannot_be_read_still_renders(lua, direct):
