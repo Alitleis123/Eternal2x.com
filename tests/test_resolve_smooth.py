@@ -698,6 +698,7 @@ class _Plan:
 class _Result:
     frames_written = 24
     note = ""
+    upscale_note = ""
 
 
 def test_the_message_says_when_no_in_betweens_could_be_drawn():
@@ -710,6 +711,14 @@ def test_the_message_says_when_no_in_betweens_could_be_drawn():
 
 def test_a_clean_render_says_only_what_it_made():
     assert smooth._finished(_Plan(), _Result()) == "Rendered 12 drawings into 24 smooth frames."
+
+
+def test_the_message_says_when_super_scale_upscales_in_place_of_the_network():
+    result = _Result()
+    result.upscale_note = "The upscaler failed on the GPU (E_OUTOFMEMORY)."
+    message = smooth._finished(_Plan(), result)
+    assert message.startswith("Rendered 12 drawings into 24 smooth frames.")
+    assert "left to Super Scale" in message and "E_OUTOFMEMORY" in message
 
 
 # --------------------------------------------------------------------------
