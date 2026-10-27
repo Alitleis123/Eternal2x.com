@@ -376,14 +376,15 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 
    The home page sets .js-motion on <html> before this file loads, and
    site.js sets .js-reveal, so without script nothing waits hidden. A reader
-   who asks for less motion gets none of it and sees each part as it ends.
-   Only opacity and transform move, apart from the wire's own pulse. */
+   who asks for less motion gets none of it and sees each part as it ends,
+   and so does a printout, which would otherwise leave unscrolled sections
+   blank. Only opacity and transform move, apart from the wire's own pulse. */
 
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 @keyframes fade { from { opacity: 0; } }
 @keyframes node-pass { 25% { opacity: 1; } }
 
-@media (prefers-reduced-motion: no-preference) {
+@media screen and (prefers-reduced-motion: no-preference) {
     .btn:not(:disabled):active { transform: translateY(1px); }
 
     /* The logo's two drawn frames, then the amber one Upflow2x draws between them. */

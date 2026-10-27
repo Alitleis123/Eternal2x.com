@@ -237,6 +237,13 @@
     }
     window.addEventListener('pointerdown', input, true);
     window.addEventListener('keydown', input, true);
+    // Assistive tech can set the range with no press or key. Its value stays.
+    slider.addEventListener('input', function () { sweeping = false; stop(); });
+    // Asking for less motion later stops it too, and puts the divider back.
+    var less = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (less && less.addEventListener) {
+        less.addEventListener('change', function (e) { if (e.matches) stop(); });
+    }
     var seen = new IntersectionObserver(function (entries) {
         if (!entries[0].isIntersecting) return;
         seen.disconnect();
