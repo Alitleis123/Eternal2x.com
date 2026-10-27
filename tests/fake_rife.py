@@ -39,3 +39,15 @@ class Rife(_rife_real.Rife):
     def _run(self, a, b, t):
         return cv2.addWeighted(a, 1.0 - t, b, t, 0)
 '''
+
+# Written over Pipeline/upscaler.py in a copied plugin, which imports what the
+# stand-in rife.py above leaves out. It sees no GPU, as on a Mac, so the render
+# stays at the clip's size and Super Scale does the upscale.
+UPSCALER_MODULE = '''"""Test stand-in for the upscaler: there is no GPU here."""
+from Pipeline.rife import AIUnavailable
+
+
+class Upscaler:
+    def __init__(self, progress=None):
+        raise AIUnavailable("There is no GPU runtime here.")
+'''

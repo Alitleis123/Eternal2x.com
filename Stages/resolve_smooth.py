@@ -55,6 +55,8 @@ class StatusFile:
         # After an analysis, the frames found to be drawings, counted from the
         # clip's first frame, for the panel to mark on the clip.
         self.marks = ""
+        # The render is already 2x, so the panel must not add Super Scale.
+        self.upscaled = False
 
     def write(self, *, done: bool = False, ok: bool = False,
               message: Optional[str] = None) -> None:
@@ -73,6 +75,7 @@ class StatusFile:
             "sequence_frames": self.sequence_frames,
             "fps": round(self.fps, 3),
             "marks": self.marks,
+            "upscaled": self.upscaled,
             "done": done,
             "ok": ok,
             "updated": time.time(),
@@ -132,10 +135,15 @@ SEQUENCE_PATTERN = "frame_%06d.png"
 def _finished(plan, result) -> str:
     """The panel's message for a finished render."""
     if result.note:
-        return (f"Rendered {plan.unique_drawings} drawings into "
-                f"{result.frames_written} frames. {result.note}")
-    return (f"Rendered {plan.unique_drawings} drawings into "
-            f"{result.frames_written} smooth frames.")
+        message = (f"Rendered {plan.unique_drawings} drawings into "
+                   f"{result.frames_written} frames. {result.note}")
+    else:
+        message = (f"Rendered {plan.unique_drawings} drawings into "
+                   f"{result.frames_written} smooth frames.")
+    if result.upscale_note:
+        message += (f" Real-ESRGAN did not run, so the upscale is left to Super Scale. "
+                    f"{result.upscale_note}")
+    return message
 
 
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,
@@ -225,6 +233,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "Windows, and the first run downloads about 50 MB.")
     parser.add_argument("--no-upscale", action="store_true",
                         help="Skip the 2x upscale.")
+    parser.add_argument("--network-upscale", action="store_true",
+                        help="Draw the 2x upscale in the render with Real-ESRGAN, on a GPU. "
+                             "Without a GPU, or without this flag, the render stays at "
+                             "source resolution and Super Scale is applied on import.")
     parser.add_argument("--json", action="store_true",
                         help="Emit a machine-readable summary.")
     parser.add_argument("--status-file", default=None,
@@ -240,10 +252,15 @@ def config_from_args(args) -> Eternal2xConfig:
         cfg.force_base_hold = args.base_hold
     cfg.grain = bool(getattr(args, "grain", False))
     cfg.interpolate_enabled = not args.no_interpolate
-    # The upscale is Resolve's job when it can do it, so the renderer works at
-    # source resolution and Super Scale is applied to the imported clip.
+    # The network draws the 2x upscale on a GPU. Without one, the renderer
+    # works at source resolution and Super Scale is applied to the imported
+    # clip. Lanczos, the renderer's own upscale, is never used here.
+    # The panel has to ask for the network, since it must then leave Super
+    # Scale off. A panel from before the upscaler, still open while an update
+    # replaces this file, does not ask, and would scale a 2x render to 4x.
     cfg.upscale_enabled = False
     cfg.upscale_factor = 1 if args.no_upscale else 2
+    cfg.network_upscale = args.network_upscale and not args.no_upscale
     return cfg
 
 
@@ -394,6 +411,11 @@ def _run(args, summary: dict) -> int:
     print(f"Wrote {result.frames_written} frames at {result.fps:.3f} fps.")
     if result.note:
         print(result.note)
+    if result.upscaled:
+        print(f"Upscaled 2x to {result.width}x{result.height} with Real-ESRGAN.")
+    elif cfg.network_upscale:
+        print(f"Real-ESRGAN did not run, so Super Scale does the upscale. {result.upscale_note}")
+    status.upscaled = result.upscaled
     summary["render"] = result.to_dict()
 
     # Resolve imports an image sequence from its first frame, not its folder.
@@ -431,7 +453,9 @@ def _run(args, summary: dict) -> int:
                              f"Drag in {result.output.name} to finish.")
         return 0
 
-    if cfg.upscale_factor > 1:
+    if result.upscaled:
+        summary["upscale"] = {"ok": True, "detail": "Drawn 2x by Real-ESRGAN."}
+    elif cfg.upscale_factor > 1:
         studio = bridge.is_studio(resolve)
         if studio is False:
             print("Skipping upscale: Super Scale needs DaVinci Resolve Studio.")

@@ -38,9 +38,11 @@ def install(tmp_path, repo_root, make_anime, folder):
         shutil.copytree(repo_root / name, plugin / name)
     shutil.copy2(repo_root / "VERSION", plugin / "VERSION")
     # The stage runs in its own Python here, where the network would download
-    # its model. A blend stands in for it, as in the other tests.
+    # its model. A blend stands in for it, as in the other tests, and the
+    # upscaler finds no GPU.
     (plugin / "Pipeline" / "rife.py").rename(plugin / "Pipeline" / "_rife_real.py")
     (plugin / "Pipeline" / "rife.py").write_text(fake_rife.MODULE, encoding="utf-8")
+    (plugin / "Pipeline" / "upscaler.py").write_text(fake_rife.UPSCALER_MODULE, encoding="utf-8")
 
     comp = tmp_path / "Comp"
     comp.mkdir()

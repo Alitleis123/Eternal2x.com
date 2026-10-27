@@ -175,6 +175,67 @@ def test_no_upscale_flag_skips_super_scale(anime_in_resolve, monkeypatch, tmp_pa
     assert pool.imported[0].GetClipProperty("Super Scale") == ""
 
 
+class _TwiceAsBig:
+    """Stands in for Real-ESRGAN on a GPU."""
+    def __init__(self, progress=None):
+        pass
+
+    def upscale(self, frame):
+        import cv2
+        return cv2.resize(frame, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+
+
+def test_a_render_drawn_at_2x_gets_no_super_scale(anime_in_resolve, monkeypatch, capsys,
+                                                  tmp_path):
+    """Super Scale on top of the network's 2x would make it 4x."""
+    from Pipeline import upscaler
+    monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    assert run(monkeypatch, ["--network-upscale", "--output-dir", str(tmp_path / "out")]) == 0
+
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    assert pool.imported[0].GetClipProperty("Super Scale") == ""
+    assert "with Real-ESRGAN" in capsys.readouterr().out
+
+
+def test_the_panel_hears_the_render_is_already_2x(make_anime, monkeypatch, tmp_path):
+    from Pipeline import upscaler
+    monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
+    src, status = make_anime(), tmp_path / "status.json"
+    run(monkeypatch, ["--video", str(src), "--status-file", str(status), "--network-upscale",
+                      "--output-dir", str(tmp_path / "out")])
+    assert json.loads(status.read_text(encoding="utf-8"))["upscaled"] is True
+
+
+@pytest.mark.parametrize("flags", [
+    ["--network-upscale", "--no-upscale"],
+    # A panel from before the upscaler, still open while an update replaced
+    # this stage. It adds Super Scale to whatever comes back.
+    [],
+])
+def test_the_network_is_only_loaded_when_the_panel_asks(make_anime, monkeypatch, tmp_path,
+                                                        flags):
+    from Pipeline import upscaler
+
+    def refuse(progress=None):
+        raise AssertionError("the upscaler was loaded")
+
+    monkeypatch.setattr(upscaler, "Upscaler", refuse)
+    src, status = make_anime(), tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")] + flags) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["upscaled"] is False
+
+
+def test_without_a_gpu_super_scale_still_does_the_upscale(anime_in_resolve, monkeypatch,
+                                                          capsys, tmp_path):
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    run(monkeypatch, ["--network-upscale", "--output-dir", str(tmp_path / "out")])
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    assert pool.imported[0].GetClipProperty("Super Scale") == "2"
+    assert "Super Scale does the upscale" in capsys.readouterr().out
+
+
 def test_free_edition_skips_the_upscale_and_says_why(anime_in_resolve, monkeypatch,
                                                      capsys, tmp_path):
     anime_in_resolve(studio=False)
@@ -637,6 +698,7 @@ class _Plan:
 class _Result:
     frames_written = 24
     note = ""
+    upscale_note = ""
 
 
 def test_the_message_says_when_no_in_betweens_could_be_drawn():
@@ -649,6 +711,14 @@ def test_the_message_says_when_no_in_betweens_could_be_drawn():
 
 def test_a_clean_render_says_only_what_it_made():
     assert smooth._finished(_Plan(), _Result()) == "Rendered 12 drawings into 24 smooth frames."
+
+
+def test_the_message_says_when_super_scale_upscales_in_place_of_the_network():
+    result = _Result()
+    result.upscale_note = "The upscaler failed on the GPU (E_OUTOFMEMORY)."
+    message = smooth._finished(_Plan(), result)
+    assert message.startswith("Rendered 12 drawings into 24 smooth frames.")
+    assert "left to Super Scale" in message and "E_OUTOFMEMORY" in message
 
 
 # --------------------------------------------------------------------------
