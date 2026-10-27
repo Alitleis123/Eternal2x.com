@@ -27,7 +27,7 @@ import zipfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-PLATFORMS = {"eternal2x-mac": "macos", "eternal2x-win": "windows"}
+PLATFORMS = {"upflow2x-mac": "macos", "upflow2x-win": "windows"}
 
 # What ships to users. Tests, release artefacts and dev tooling stay behind.
 PAYLOAD = ["Pipeline", "Stages", "Installer", "VERSION", "README.md",
@@ -35,7 +35,7 @@ PAYLOAD = ["Pipeline", "Stages", "Installer", "VERSION", "README.md",
 SKIP_DIRS = {"__pycache__", ".pytest_cache"}
 SKIP_SUFFIXES = {".pyc", ".pyo"}
 
-REPO = "sidebandstudio/Eternal2x.com"
+REPO = "sidebandstudio/Upflow2x"
 RELEASE_URL = "https://github.com/" + REPO + "/releases/download/{tag}/{name}.zip"
 
 
@@ -115,8 +115,8 @@ def publish(version: str) -> bool:
     target = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True,
                             text=True, cwd=REPO_ROOT).stdout.strip()
     command = ["gh", "release", "create", tag, "--repo", REPO,
-               "--title", f"Eternal2x {version}",
-               "--notes", f"Eternal2x {version}.", *archives]
+               "--title", f"Upflow2x {version}",
+               "--notes", f"Upflow2x {version}.", *archives]
     if target:
         command[4:4] = ["--target", target]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -197,7 +197,7 @@ def sha256(path: Path) -> str:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Build the Eternal2x release.")
+    parser = argparse.ArgumentParser(description="Build the Upflow2x release.")
     parser.add_argument("--no-zip", action="store_true",
                         help="Refresh the release folders without zipping.")
     parser.add_argument("--publish", action="store_true",
@@ -219,7 +219,7 @@ def main() -> int:
         print(f"Verifying the feed for {meta['version']}")
         return 0 if verify_feed(meta) else 1
 
-    print(f"Building Eternal2x {version}, tag {tag}")
+    print(f"Building Upflow2x {version}, tag {tag}")
 
     checksums = {}
     for name in PLATFORMS:

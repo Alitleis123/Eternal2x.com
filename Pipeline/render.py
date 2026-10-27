@@ -233,7 +233,7 @@ def _require_constant_rate(cap: _ClipReader, fps: float, path: Path) -> None:
     """
     if cap.frames_off_schedule(fps) > 0.5:
         raise SourceError(
-            f"{path.name} has a variable frame rate, and Eternal2x needs every frame "
+            f"{path.name} has a variable frame rate, and Upflow2x needs every frame "
             "to last the same time or the result changes length. Convert it to a "
             "constant frame rate first, for example by rendering it from Resolve, or "
             f"with ffmpeg -i \"{path.name}\" -r 24 constant.mp4 using your timeline's "

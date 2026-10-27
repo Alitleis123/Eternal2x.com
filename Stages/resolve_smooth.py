@@ -143,7 +143,7 @@ def _finished(plan, result) -> str:
 
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,
                  frames: Optional[tuple] = None) -> Path:
-    base = Path(output_dir) if output_dir else source.parent / "Eternal2x"
+    base = Path(output_dir) if output_dir else source.parent / "Upflow2x"
     base.mkdir(parents=True, exist_ok=True)
     suffix = FORMATS.get(fmt, "")
     # Name a trimmed render after its range, so two cuts of one file differ.
@@ -197,7 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--end-time", type=float, default=None,
                         help="Seconds into the file where the clip ends.")
     parser.add_argument("--output-dir", default=None,
-                        help="Where to write the result (default: an Eternal2x "
+                        help="Where to write the result (default: an Upflow2x "
                              "folder beside the source).")
     parser.add_argument("--format", default="png", choices=sorted(FORMATS),
                         help="png: lossless image sequence (default). "
@@ -355,7 +355,7 @@ def _run(args, summary: dict) -> int:
     if plan.is_noop and plan.marked:
         if plan.unique_drawings <= 1:
             why = "Only the first frame is marked, so there is nothing to draw between."
-            short = "Mark at least one more frame on the clip, or delete the markers to let Eternal2x find the drawings."
+            short = "Mark at least one more frame on the clip, or delete the markers to let Upflow2x find the drawings."
         else:
             why = "Every frame is marked, so there is nothing to draw between."
             short = "Every frame is marked. Delete the markers on frames that should be drawn fresh."
@@ -473,7 +473,7 @@ def _run(args, summary: dict) -> int:
 def _run_reporting(args, summary: dict) -> int:
     """Run, and make sure the panel hears about any failure."""
     if IMPORT_ERROR is not None:
-        message = (f"This Python cannot load the packages Eternal2x needs "
+        message = (f"This Python cannot load the packages Upflow2x needs "
                    f"({IMPORT_ERROR}). Re-run the installer.")
         print(f"Error: {message}")
         print(f"Python: {sys.executable}")
@@ -484,7 +484,7 @@ def _run_reporting(args, summary: dict) -> int:
         return _run(args, summary)
     except Exception as exc:
         traceback.print_exc()
-        message = f"Eternal2x hit an unexpected error: {exc}"
+        message = f"Upflow2x hit an unexpected error: {exc}"
         summary["error"] = message
         StatusFile(args.status_file).write(done=True, ok=False, message=message)
         return 1

@@ -71,6 +71,26 @@ def test_a_reinstall_removes_the_old_comp_launcher(fake_home, monkeypatch):
     assert (comp / "Eternal2x.conf").exists(), "its settings went before they were saved"
 
 
+def test_a_reinstall_removes_the_launcher_from_before_the_rename(fake_home, monkeypatch):
+    """Resolve lists scripts by file name, so it would show Eternal2x too."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    utility = inst._resolve_scripts_root() / "Utility"
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.lua").write_text(
+        "-- Eternal2x launcher script installed into Resolve Scripts/Utility.\n")
+    inst.remove_old_install()
+    assert not (utility / "Eternal2x.lua").exists()
+
+
+def test_a_reinstall_keeps_a_script_that_only_shares_the_old_name(fake_home, monkeypatch):
+    monkeypatch.setattr(sys, "platform", "darwin")
+    utility = inst._resolve_scripts_root() / "Utility"
+    utility.mkdir(parents=True)
+    (utility / "Eternal2x.lua").write_text("-- not ours\n")
+    inst.remove_old_install()
+    assert (utility / "Eternal2x.lua").exists()
+
+
 def _comp_conf(text):
     comp = inst._resolve_scripts_root() / "Comp"
     comp.mkdir(parents=True)
@@ -245,7 +265,7 @@ def test_install_writes_launcher_and_config(fake_home, monkeypatch, capsys, repo
     assert inst.main() == 0
 
     comp = inst._resolve_scripts_dir()
-    assert (comp / "Eternal2x.lua").exists(), "launcher was not installed"
+    assert (comp / "Upflow2x.lua").exists(), "launcher was not installed"
     assert (comp / "Eternal2x.conf").exists(), "config was not written"
 
 
