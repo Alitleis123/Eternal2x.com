@@ -121,6 +121,7 @@
     var controls = document.getElementById('compare-controls');
     if (controls) {
         var choice = { speed: 'half', rate: '24' };
+        var pending = null;
         controls.hidden = false;
         controls.addEventListener('click', function (e) {
             var button = e.target.closest('button');
@@ -132,20 +133,26 @@
             controls.querySelectorAll('[data-' + key + ']').forEach(function (b) {
                 b.setAttribute('aria-pressed', String(b === button));
             });
-            var playing = !video.paused;
-            var at = video.duration ? video.currentTime / video.duration : 0;
+            // A second switch before the first render has loaded keeps the
+            // first one's moment. By then the video reads as paused at 0.
+            if (!pending) {
+                pending = { playing: !video.paused,
+                            at: video.duration ? video.currentTime / video.duration : 0 };
+            }
             // The page's ?v= on the first video carries over, so a browser
             // holding older renders fetches these.
             var version = (video.getAttribute('src').split('?')[1] || '');
             video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4'
                 + (version ? '?' + version : '');
-            video.addEventListener('loadedmetadata', function resume() {
-                video.removeEventListener('loadedmetadata', resume);
-                video.currentTime = at * video.duration;
-                restart();
-                if (playing) setPlaying(true);
-                else label();
-            });
+        });
+        video.addEventListener('loadedmetadata', function () {
+            if (!pending) return;
+            var resume = pending;
+            pending = null;
+            video.currentTime = resume.at * video.duration;
+            restart();
+            if (resume.playing) setPlaying(true);
+            else label();
         });
     }
 
