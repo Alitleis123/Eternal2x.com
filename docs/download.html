@@ -188,7 +188,10 @@ fetch('https://api.github.com/repos/' + REPO + '/releases')
         });
         document.querySelectorAll('[data-asset]').forEach(function (link) {
             var url = assetUrl(latest, link.getAttribute('data-asset'));
-            if (url) link.href = url;
+            if (!url) return;
+            link.href = url;
+            // The label is the file name, which may be the older one.
+            link.lastChild.nodeValue = ' ' + url.split('/').pop() + ' ';
         });
 
         var older = published.slice(1);
