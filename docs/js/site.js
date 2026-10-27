@@ -190,12 +190,14 @@
     label();
     setPlaying(!still);
 
-    // The first time the demo is on screen, the divider sweeps aside and back
-    // once to show it can be dragged. Touching the demo first skips that, and
-    // any press or key during it puts the divider straight back.
+    // The first time the demo is on screen, the divider shows off both sides
+    // once, in about three seconds: over to the right to show the original,
+    // all the way left to show Upflow2x, then back to the middle. Touching the
+    // demo first skips that, and any press or key during it puts the divider
+    // straight back.
     if (still || !window.IntersectionObserver) return;
     var figure = box.closest('figure') || box;
-    var sweeping = false, done = false, frame = 0, began = 0, from = pos;
+    var sweeping = false, done = false, frame = 0, began = 0, from = pos, path = [];
     function stop() {
         if (done) return;
         done = true;
@@ -209,11 +211,15 @@
     function input(e) {
         if (sweeping || figure.contains(e.target)) stop();
     }
+    // Eases from each [seconds, divider] stop in path to the next.
     function step(now) {
         if (!began) began = now;
-        var t = Math.min(1, (now - began) / 1100);
-        setPos(from - .12 * (1 - Math.cos(2 * Math.PI * t)) / 2);
-        if (t < 1) frame = requestAnimationFrame(step);
+        var s = (now - began) / 1000, i = 1;
+        while (i < path.length - 1 && s >= path[i][0]) i++;
+        var a = path[i - 1], b = path[i];
+        var t = Math.min(1, (s - a[0]) / (b[0] - a[0]));
+        setPos(a[1] + (b[1] - a[1]) * (1 - Math.cos(Math.PI * t)) / 2);
+        if (s < b[0]) frame = requestAnimationFrame(step);
         else stop();
     }
     function sweep() {
@@ -224,6 +230,8 @@
             return;
         }
         from = pos;
+        // 5% and 95% keep the grip whole on screen.
+        path = [[0, from], [.7, .95], [.9, .95], [2.1, .05], [2.3, .05], [3, from]];
         sweeping = true;
         frame = requestAnimationFrame(step);
     }
