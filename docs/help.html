@@ -174,7 +174,7 @@ python3 Installer/gui_installer.py</code></div>
                 <h3>Held poses stay still</h3>
                 <p>A drawing held on purpose keeps its full length instead of drifting. Only the timing between drawings is smoothed.</p>
                 <h3>Cuts stay hard</h3>
-                <p>Upflow2x never blends across a scene change, which would show both shots at once.</p>
+                <p>Where two drawings look like different shots, Upflow2x snaps instead of blending, which would show both shots at once. A cut right beside another cut or very fast motion can still blend for a frame, so check montages.</p>
                 <h3>Nothing was smoothed</h3>
                 <p>The first render installs the network's runtime and downloads its model, so it needs a connection once. Without one, every drawing is kept as drawn rather than filled in some other way, since warping pixels doubles lines on drawn animation. The status says why. Render again once you're online.</p>
             </section>
