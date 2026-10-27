@@ -144,6 +144,40 @@ def test_the_site_only_promises_files_the_release_ships(repo_root, name):
         )
 
 
+class Form(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.form: dict = {}
+        self.fields: dict[str, dict] = {}
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if tag == "form":
+            self.form = a
+        elif tag in ("input", "textarea", "select") and a.get("name"):
+            self.fields[a["name"]] = a
+
+
+def test_the_contact_page_sends_the_message_itself(repo_root):
+    """Visitors write to us on the page and it lands in the inbox. The page
+    used to hand them an address and a list of what to put in the email."""
+    parsed = Form()
+    parsed.feed(page(repo_root, "contact.html"))
+    form, fields = parsed.form, parsed.fields
+
+    assert form.get("action", "").startswith("https://formspree.io/f/")
+    assert form.get("method", "").lower() == "post"
+    # Formspree replies to the field called email.
+    assert fields["email"].get("type") == "email" and "required" in fields["email"]
+    assert "required" in fields["message"]
+    # Bots fill every field; people never see this one, and Formspree drops
+    # anything that arrives with it filled.
+    assert "_gotcha" in fields
+    # A bug report asks what the old checklist asked for.
+    for question in ("resolve version", "plugin version", "computer", "panel said"):
+        assert question in fields, f"the bug report never asks for {question!r}"
+
+
 @pytest.mark.parametrize("name", PAGES)
 def test_pages_use_no_em_dashes(repo_root, name):
     text = page(repo_root, name)

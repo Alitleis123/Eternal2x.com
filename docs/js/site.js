@@ -225,3 +225,67 @@
         video.addEventListener('play', started);
     });
 })();
+
+// The contact card posts to Formspree, which emails the message to us.
+// Without script the form still posts there, and Formspree shows its own
+// thank-you page.
+(function () {
+    var form = document.getElementById('contact-form');
+    if (!form || !window.fetch || !window.FormData) return;
+    var bug = document.getElementById('contact-bug');
+    var messageLabel = document.getElementById('contact-message-label');
+    var error = document.getElementById('contact-error');
+    var sent = document.getElementById('contact-sent');
+    var button = form.querySelector('button[type="submit"]');
+    var LABELS = {
+        'Bug report': 'What did you press, and what happened?',
+        'Question': 'Your question',
+        'Idea': 'Your idea'
+    };
+
+    // Only a bug report asks about Resolve and the computer. A disabled
+    // fieldset leaves its answers out of the message.
+    function topic() { return form.elements.topic.value; }
+    function show() {
+        var isBug = topic() === 'Bug report';
+        bug.hidden = !isBug;
+        bug.disabled = !isBug;
+        messageLabel.textContent = LABELS[topic()] || 'Message';
+    }
+    form.addEventListener('change', function (e) {
+        if (e.target.name === 'topic') show();
+    });
+    show();
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        error.hidden = true;
+        button.disabled = true;
+        button.textContent = 'Sending...';
+        form.elements._subject.value = 'Upflow2x site: ' + topic();
+        fetch(form.action, {
+            method: 'POST',
+            body: new FormData(form),
+            headers: { Accept: 'application/json' }
+        }).then(function (res) {
+            if (!res.ok) throw new Error('Formspree answered ' + res.status);
+            document.getElementById('contact-sent-to').textContent = form.elements.email.value;
+            form.reset();
+            show();
+            form.hidden = true;
+            sent.hidden = false;
+            sent.querySelector('h2').focus();
+        }).catch(function () {
+            error.hidden = false;
+        }).then(function () {
+            button.disabled = false;
+            button.textContent = 'Send message';
+        });
+    });
+
+    document.getElementById('contact-again').addEventListener('click', function () {
+        sent.hidden = true;
+        form.hidden = false;
+        form.querySelector('input[name="topic"]:checked').focus();
+    });
+})();

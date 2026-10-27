@@ -4,13 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Contact | Upflow2x</title>
-    <meta name="description" content="Questions, bug reports and ideas for Upflow2x go to hello@sideband.studio.">
+    <meta name="description" content="Send a question, bug report or idea about Upflow2x to Sideband Studio.">
     <link rel="canonical" href="https://eternal2x.com/contact.html">
     <meta name="theme-color" content="#101013">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://eternal2x.com/contact.html">
     <meta property="og:title" content="Contact Upflow2x">
-    <meta property="og:description" content="Questions, bug reports and ideas go to hello@sideband.studio.">
+    <meta property="og:description" content="Send a question, bug report or idea to Sideband Studio.">
     <meta property="og:image" content="https://eternal2x.com/assets/og.jpg">
     <meta name="twitter:card" content="summary_large_image">
     <link rel="icon" href="assets/icon.svg?v=20261027d" type="image/svg+xml">
@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/site.css?v=20261027d">
+    <link rel="stylesheet" href="css/site.css?v=20261027e">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -43,32 +43,57 @@
     <section class="page-head">
         <div class="wrap">
             <h1>Contact</h1>
-            <p class="lede">Questions, bug reports and ideas all go to one inbox at Sideband Studio, the people who make Upflow2x.</p>
+            <p class="lede">Ask a question, report a bug or send an idea. It goes to Sideband Studio, the people who make Upflow2x, and we answer by email.</p>
         </div>
     </section>
 
     <div class="wrap">
-        <div class="letter">
-            <div class="envelope">
-                <p class="label">Email</p>
-                <a class="address" href="mailto:hello@sideband.studio?subject=Upflow2x%20question">hello@sideband.studio</a>
-                <a class="btn btn-amber" href="mailto:hello@sideband.studio?subject=Upflow2x%20question">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>
-                    Send an email
-                </a>
-            </div>
-            <div class="envelope">
-                <p class="label">For a bug, include</p>
-                <ul class="checklist">
-                    <li>Your Resolve version, and whether it's Studio</li>
-                    <li>Windows or macOS, and which version</li>
-                    <li>The text the panel showed</li>
-                    <li>The <code>.eternal2x_last_run.log</code> file from the plugin folder</li>
-                    <li>What you pressed, and what you expected to happen</li>
-                </ul>
+        <div class="contact">
+            <form class="contact-form" id="contact-form" action="https://formspree.io/f/xkoperoj" method="POST">
+                <fieldset>
+                    <legend class="label">What's it about?</legend>
+                    <div class="choices">
+                        <label><input type="radio" name="topic" value="Bug report"><span>Bug report</span></label>
+                        <label><input type="radio" name="topic" value="Question" checked><span>Question</span></label>
+                        <label><input type="radio" name="topic" value="Idea"><span>Idea</span></label>
+                        <label><input type="radio" name="topic" value="Something else"><span>Something else</span></label>
+                    </div>
+                </fieldset>
+
+                <div class="pair">
+                    <label class="field"><span>Name</span><input type="text" name="name" autocomplete="name"></label>
+                    <label class="field"><span>Email</span><input type="email" name="email" autocomplete="email" required></label>
+                </div>
+
+                <fieldset class="bug" id="contact-bug">
+                    <legend class="label">About the bug</legend>
+                    <p class="hint">Many errors already have a fix under <a href="help.html#troubleshooting">Troubleshooting</a>.</p>
+                    <div class="pair">
+                        <label class="field"><span>Resolve version</span><input type="text" name="resolve version" placeholder="20.2 Studio"></label>
+                        <label class="field"><span>Upflow2x version</span><input type="text" name="plugin version" placeholder="0.4.0"></label>
+                    </div>
+                    <label class="field"><span>Computer and graphics card</span><input type="text" name="computer" placeholder="Windows 11, RTX 4070"></label>
+                    <label class="field"><span>What the panel said</span><textarea name="panel said" rows="2"></textarea></label>
+                </fieldset>
+
+                <label class="field"><span id="contact-message-label">Message</span><textarea name="message" rows="6" required></textarea></label>
+
+                <input type="hidden" name="_subject" value="Upflow2x site: message">
+                <input type="text" name="_gotcha" autocomplete="off" tabindex="-1" hidden>
+
+                <div class="send">
+                    <button class="btn btn-amber" type="submit">Send message</button>
+                    <p class="form-error" id="contact-error" role="alert" hidden>That didn't send. Try again in a minute, or email <a href="mailto:hello@sideband.studio">hello@sideband.studio</a>.</p>
+                </div>
+            </form>
+
+            <div class="sent" id="contact-sent" hidden>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
+                <h2 tabindex="-1">Message sent</h2>
+                <p>We'll answer at <strong id="contact-sent-to"></strong>.</p>
+                <button class="btn" type="button" id="contact-again">Send another</button>
             </div>
         </div>
-        <p class="note">Most problems have a fix on the <a href="help.html#troubleshooting">help page</a> already.</p>
     </div>
 
 </main>
@@ -86,5 +111,6 @@
     </div>
 </footer>
 
+<script src="js/site.js?v=20261027e"></script>
 </body>
 </html>
