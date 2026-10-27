@@ -421,7 +421,9 @@ def render_plan(
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
 
-    factor = cfg.upscale_factor if cfg.upscale_enabled else 1
+    # The network's 2x and Lanczos never both apply, or the render would be 4x.
+    # Where the network cannot run, the upscale is left to Super Scale.
+    factor = cfg.upscale_factor if cfg.upscale_enabled and not cfg.network_upscale else 1
     positions = output_time_map(plan)
 
     # Set up before the source is opened, since the first render installs the

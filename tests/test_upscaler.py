@@ -160,6 +160,20 @@ def test_the_render_comes_out_at_2x(twice_as_big, make_anime, tmp_path, read_fra
     assert len(frames) == 12 and all(f.shape == (240, 400, 3) for f in frames)
 
 
+def test_the_network_and_lanczos_never_both_scale(twice_as_big, monkeypatch, make_anime,
+                                                tmp_path):
+    """Lanczos is on by default, and on top of the network it made 4x. Where
+    the network cannot run, the render stays 1x for Super Scale."""
+    assert Eternal2xConfig().upscale_enabled
+    assert _render(make_anime, tmp_path / "a", network_upscale=True).width == 400
+
+    def no_gpu(progress=None):
+        raise AIUnavailable("There is no GPU runtime here.")
+
+    monkeypatch.setattr(upscaler, "Upscaler", no_gpu)
+    assert _render(make_anime, tmp_path / "b", network_upscale=True).width == 200
+
+
 def test_the_network_is_only_loaded_when_asked(twice_as_big, make_anime, tmp_path):
     result = _render(make_anime, tmp_path, upscale_enabled=False)
     assert twice_as_big.made == 0 and not result.upscaled and result.width == 200

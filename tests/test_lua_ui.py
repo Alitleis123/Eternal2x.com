@@ -1045,6 +1045,16 @@ def test_super_scale_is_applied_with_a_value_resolve_accepts(lua, direct):
     assert H.property_of("Super Scale") == "2"
 
 
+def test_the_panel_asks_for_the_network_upscale_only_when_ticked(lua, direct):
+    """The stage only draws at 2x for a panel that then leaves Super Scale off."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert "--network-upscale" in H.last_command()
+    H.set_checkbox("UpscaleCB", False)
+    H.click("SmoothBtn")
+    assert "--network-upscale" not in H.last_command()
+
+
 def test_a_render_drawn_at_2x_gets_no_super_scale(lua, direct):
     """Real-ESRGAN drew it at 2x. Super Scale on top would make it 4x."""
     H = load(lua, ui_script(direct))

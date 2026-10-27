@@ -228,6 +228,10 @@ def build_parser() -> argparse.ArgumentParser:
                              "Windows, and the first run downloads about 50 MB.")
     parser.add_argument("--no-upscale", action="store_true",
                         help="Skip the 2x upscale.")
+    parser.add_argument("--network-upscale", action="store_true",
+                        help="Draw the 2x upscale in the render with Real-ESRGAN, on a GPU. "
+                             "Without a GPU, or without this flag, the render stays at "
+                             "source resolution and Super Scale is applied on import.")
     parser.add_argument("--json", action="store_true",
                         help="Emit a machine-readable summary.")
     parser.add_argument("--status-file", default=None,
@@ -246,9 +250,12 @@ def config_from_args(args) -> Eternal2xConfig:
     # The network draws the 2x upscale on a GPU. Without one, the renderer
     # works at source resolution and Super Scale is applied to the imported
     # clip. Lanczos, the renderer's own upscale, is never used here.
+    # The panel has to ask for the network, since it must then leave Super
+    # Scale off. A panel from before the upscaler, still open while an update
+    # replaces this file, does not ask, and would scale a 2x render to 4x.
     cfg.upscale_enabled = False
     cfg.upscale_factor = 1 if args.no_upscale else 2
-    cfg.network_upscale = not args.no_upscale
+    cfg.network_upscale = args.network_upscale and not args.no_upscale
     return cfg
 
 

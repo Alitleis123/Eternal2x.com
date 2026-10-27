@@ -1011,7 +1011,13 @@ local function current_args(extra)
     end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
-    if not items.UpscaleCB.Checked then args = args .. " --no-upscale" end
+    -- --network-upscale tells the stage this panel skips Super Scale for a
+    -- render that comes back already 2x.
+    if items.UpscaleCB.Checked then
+        args = args .. " --network-upscale"
+    else
+        args = args .. " --no-upscale"
+    end
     if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
     if items.GrainCB.Checked then args = args .. " --grain" end
     if THRESHOLD ~= 5 then

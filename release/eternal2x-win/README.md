@@ -185,10 +185,10 @@ python -m Stages.resolve_smooth --video grainy.mov --grain
 ```
 
 `--video` skips Resolve entirely and writes the result to an `Eternal2x` folder
-beside the source, or to `--output-dir`. Where Real-ESRGAN runs on a GPU, the
-render is 2x unless you add `--no-upscale`. Without one, the 2x upscale is
-Resolve's Super Scale, applied when the panel imports the result, so that
-`--video` run stays at source resolution.
+beside the source, or to `--output-dir`. Add `--network-upscale` and, where
+Real-ESRGAN runs on a GPU, the render is 2x. Without it, or without a GPU, the
+2x upscale is Resolve's Super Scale, applied when the panel imports the result,
+so a `--video` run stays at source resolution.
 
 Add `--json` and stdout carries a single JSON summary, errors included, while
 progress goes to stderr.
