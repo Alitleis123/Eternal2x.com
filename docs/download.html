@@ -80,9 +80,8 @@
     </div>
     <noscript>
         <div class="compat-note">
-            Download the latest release for
-            <a href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-win.zip">Windows</a> or
-            <a href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-mac.zip">macOS</a>.
+            Download the Windows or macOS zip from the
+            <a href="https://github.com/sidebandstudio/Upflow2x/releases/latest">latest release on GitHub</a>.
         </div>
     </noscript>
 
@@ -118,7 +117,7 @@
 <script src="js/site.js"></script>
 <script>
 var DOWNLOAD_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
-var REPO = 'sidebandstudio/Eternal2x.com';
+var REPO = 'sidebandstudio/Upflow2x';
 
 function findAsset(assets, name) {
     for (var i = 0; i < assets.length; i++) {
@@ -133,8 +132,9 @@ function versionFromTag(tag) {
 
 function buildCard(release, isLatest) {
     var version = versionFromTag(release.tag_name);
-    var winUrl = findAsset(release.assets, 'eternal2x-win.zip');
-    var macUrl = findAsset(release.assets, 'eternal2x-mac.zip');
+    // Releases before the rename to Upflow2x carry eternal2x-*.zip.
+    var winUrl = findAsset(release.assets, 'upflow2x-win.zip') || findAsset(release.assets, 'eternal2x-win.zip');
+    var macUrl = findAsset(release.assets, 'upflow2x-mac.zip') || findAsset(release.assets, 'eternal2x-mac.zip');
 
     var card = document.createElement('div');
     card.className = 'download-card' + (isLatest ? ' latest' : '');
@@ -204,12 +204,12 @@ fetch('https://api.github.com/repos/' + REPO + '/releases')
         }
     })
     .catch(function() {
-        // The API is down or rate limited. These links always point at the newest release.
+        // The API is down or rate limited. The newest release's page works
+        // whether its zips are named eternal2x-* or upflow2x-*.
         document.getElementById('loading-state').innerHTML =
-            'Could not load the release list. Download the latest for ' +
-            '<a href="https://github.com/' + REPO + '/releases/latest/download/eternal2x-win.zip">Windows</a> or ' +
-            '<a href="https://github.com/' + REPO + '/releases/latest/download/eternal2x-mac.zip">macOS</a>, ' +
-            'or see <a href="https://github.com/' + REPO + '/releases">every release on GitHub</a>.';
+            'Could not load the release list. Download the Windows or macOS zip from the ' +
+            '<a href="https://github.com/' + REPO + '/releases/latest">latest release on GitHub</a>, ' +
+            'or see <a href="https://github.com/' + REPO + '/releases">every release</a>.';
     });
 </script>
 

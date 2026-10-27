@@ -1,4 +1,4 @@
--- Eternal2x launcher script installed into Resolve Scripts/Utility.
+-- Upflow2x launcher script installed into Resolve Scripts/Utility.
 -- It forwards execution to the main UI script at repo_root/Installer/Eternal2x.lua.
 
 local function script_dir()
@@ -74,14 +74,14 @@ local conf = read_conf(conf_path)
 local repo_root = trim_trailing_sep(conf["repo_root"] or "")
 
 if repo_root == "" then
-    print("[Eternal2x] Missing repo_root in Eternal2x.conf. Re-run installer.")
+    print("[Upflow2x] Missing repo_root in Eternal2x.conf. Re-run installer.")
     return
 end
 
 local ui_script = join_path(repo_root:gsub("\\", "/"), "Installer/Eternal2x.lua")
 if not file_exists(ui_script) then
-    print("[Eternal2x] UI script not found: " .. ui_script)
-    print("[Eternal2x] Re-run installer to repair.")
+    print("[Upflow2x] UI script not found: " .. ui_script)
+    print("[Upflow2x] Re-run installer to repair.")
     return
 end
 
@@ -93,5 +93,5 @@ _G.ETERNAL2X_ROOT = repo_root
 
 local ok, err = pcall(dofile, ui_script)
 if not ok then
-    print("[Eternal2x] Failed to launch UI: " .. tostring(err))
+    print("[Upflow2x] Failed to launch UI: " .. tostring(err))
 end

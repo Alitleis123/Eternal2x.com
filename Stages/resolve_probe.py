@@ -17,7 +17,7 @@ from Pipeline import resolve_bridge as bridge
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Eternal2x Resolve API probe.")
+    parser = argparse.ArgumentParser(description="Upflow2x Resolve API probe.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args()
 

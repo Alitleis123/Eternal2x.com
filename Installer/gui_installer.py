@@ -1,5 +1,5 @@
 """
-Eternal2x GUI Installer
+Upflow2x GUI Installer
 
 Run it with `python Installer/gui_installer.py`, or compile it with
 Installer/build_installer.py. When it runs as a compiled app and finds no
@@ -58,7 +58,7 @@ GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
 
 DEFAULT_UPDATE_URL = (
     "https://raw.githubusercontent.com/"
-    "sidebandstudio/Eternal2x.com/main/update/latest.json"
+    "sidebandstudio/Upflow2x/main/update/latest.json"
 )
 
 # ---------------------------------------------------------------------------
@@ -89,7 +89,7 @@ _NO_WINDOW = ({"creationflags": subprocess.CREATE_NO_WINDOW}
 def _find_repo_root() -> Path:
     if getattr(sys, "frozen", False):
         here = Path(sys.executable).resolve().parent
-        # A macOS app runs from Eternal2xInstaller.app/Contents/MacOS, so the
+        # A macOS app runs from Upflow2xInstaller.app/Contents/MacOS, so the
         # plugin folder is the one holding the bundle, not the bundle itself.
         for parent in (here, *here.parents):
             if parent.suffix == ".app":
@@ -195,7 +195,7 @@ def _get_python_download_url() -> str | None:
 
 
 def _download_with_progress(url: str, callback=None) -> bytes:
-    req = urllib.request.Request(url, headers={"User-Agent": "Eternal2x-Installer/1.0"})
+    req = urllib.request.Request(url, headers={"User-Agent": "Upflow2x-Installer/1.0"})
     resp = urllib.request.urlopen(req, timeout=120)
     total = int(resp.headers.get("Content-Length", 0))
     data = io.BytesIO()
@@ -252,7 +252,7 @@ def _safe_extract(tf: tarfile.TarFile, dest: Path) -> None:
 class InstallerApp:
     def __init__(self):
         self.root = tk.Tk()
-        self.root.title("Install Eternal2x")
+        self.root.title("Install Upflow2x")
         self.root.configure(bg=BG)
         self.root.resizable(False, False)
 
@@ -275,13 +275,13 @@ class InstallerApp:
         font_family = "Segoe UI" if sys.platform.startswith("win") else "Helvetica Neue"
 
         tk.Label(
-            self.root, text="Eternal2x", font=(font_family, 26, "bold"),
+            self.root, text="Upflow2x", font=(font_family, 26, "bold"),
             bg=BG, fg=FG,
         ).pack(pady=(24, 0))
 
         tk.Label(
             self.root,
-            text=f"Smart Upscale for DaVinci Resolve  \u00b7  v{self.version}",
+            text=f"Upscale and smooth anime in DaVinci Resolve  \u00b7  v{self.version}",
             font=(font_family, 10), bg=BG, fg=FG_DIM,
         ).pack(pady=(2, 18))
 
@@ -363,7 +363,7 @@ class InstallerApp:
         )
         self.close_btn.pack(side="left", padx=8)
 
-        self._log("Ready to install Eternal2x.", "accent")
+        self._log("Ready to install Upflow2x.", "accent")
         self._log("Click Install to begin.\n", "dim")
 
     # ---- Logging / progress -----------------------------------------------
@@ -665,11 +665,11 @@ class InstallerApp:
             return
 
         dest_dir.mkdir(parents=True, exist_ok=True)
-        remove_old_install()
-
         src_launcher = self.repo_root / "Installer" / "Eternal2xLauncher.lua"
-        dest_lua = dest_dir / "Eternal2x.lua"
+        dest_lua = dest_dir / "Upflow2x.lua"
         shutil.copy2(src_launcher, dest_lua)
+        # Only once the new launcher is in, so a failed copy keeps the old.
+        remove_old_install()
 
         self.root.after(0, self._set_progress, 90, "Writing config...")
         self.root.after(0, self._log, f"  Launcher: {dest_lua}", "ok")
@@ -685,7 +685,7 @@ class InstallerApp:
         self.root.after(0, self._log, "\u2714  Installation complete!", "accent")
         self.root.after(0, self._log, "")
         self.root.after(0, self._log, "Restart DaVinci Resolve, then open:", "ok")
-        self.root.after(0, self._log, "  Workspace \u2192 Scripts \u2192 Eternal2x", "ok")
+        self.root.after(0, self._log, "  Workspace \u2192 Scripts \u2192 Upflow2x", "ok")
 
         if python_source == "embedded":
             self.root.after(0, self._log, "")

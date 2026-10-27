@@ -207,7 +207,7 @@ def _apply_payload(payload_root: Path, repo_root: Path) -> int:
                 keep_staging = True
                 raise RollbackError(
                     f"{exc}. Could not put back {', '.join(stuck)}. The old "
-                    f"copies are in {backup}, or reinstall Eternal2x."
+                    f"copies are in {backup}, or reinstall Upflow2x."
                 ) from exc
             raise
         return len(files)
@@ -217,12 +217,12 @@ def _apply_payload(payload_root: Path, repo_root: Path) -> int:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Eternal2x cloud update checker.")
+    parser = argparse.ArgumentParser(description="Upflow2x cloud update checker.")
     parser.add_argument("--meta-url", required=True, help="URL to latest.json metadata.")
     parser.add_argument(
         "--repo-root",
         default=".",
-        help="Repo root where Eternal2x files are installed (default: current directory).",
+        help="Repo root where Upflow2x files are installed (default: current directory).",
     )
     parser.add_argument(
         "--timeout",
@@ -273,7 +273,7 @@ def main() -> int:
         print("Update package has no checksum, so it was not applied.")
         return 1
 
-    print(f"Updating Eternal2x: {current_version} -> {latest_version}")
+    print(f"Updating Upflow2x: {current_version} -> {latest_version}")
     with tempfile.TemporaryDirectory(prefix="eternal2x_update_") as td:
         temp_dir = Path(td)
         zip_path = temp_dir / "update.zip"
