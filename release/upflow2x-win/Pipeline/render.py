@@ -7,7 +7,7 @@ Two passes over the source:
                    build a plan. A grainy clip is measured a second time.
   render_plan()    decodes again and writes the output, holding only the two
                    drawings currently being interpolated between and the
-                   next one, which tells a cut from fast motion.
+                   next new one, which tells a cut from fast motion.
 
 Nothing loads the whole clip into memory, so length is limited by disk rather
 than by RAM.
@@ -16,9 +16,10 @@ than by RAM.
 from __future__ import annotations
 
 import sys
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Deque, Iterator, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -524,24 +525,43 @@ def render_plan(
                      min(1.0, state["written"] / float(plan.source_frames)))
 
     try:
-        frames = _iter_plan_frames(cap, plan.output_indices)
-        prev = next(frames, None)
-        if prev is None:
-            raise SourceError(f"Could not read frames from: {source}")
-
-        # One drawing is read ahead, so each pair can be judged against the
-        # pairs on both sides of it before it is drawn.
-        curr = next(frames, None)
-        before: Optional[float] = None
-        here = shot_change(prev, curr) if pair is not None and curr is not None else None
+        indices = plan.output_indices
+        frames = _iter_plan_frames(cap, indices)
+        # The frames from slot `index` on. A pose fills several slots with the
+        # same drawing, so the window reads on past them to the next new one,
+        # and each change is judged against the changes on both sides of it.
+        window: Deque[np.ndarray] = deque()
         index = 0
-        while curr is not None:
-            following = next(frames, None)
-            after = (shot_change(curr, following)
-                     if pair is not None and following is not None else None)
+
+        def frame_at(slot: int) -> Optional[np.ndarray]:
+            while slot - index >= len(window):
+                frame = next(frames, None)
+                if frame is None:
+                    return None
+                window.append(frame)
+            return window[slot - index]
+
+        def change_from(slot: int) -> Optional[float]:
+            """shot_change from the drawing at `slot` to the next new one."""
+            if pair is None:
+                return None
+            new = slot + 1
+            while new < len(indices) and indices[new] == indices[slot]:
+                new += 1
+            a, b = frame_at(slot), frame_at(new)
+            return None if a is None or b is None else shot_change(a, b)
+
+        if frame_at(0) is None:
+            raise SourceError(f"Could not read frames from: {source}")
+        before: Optional[float] = None
+        here = change_from(0)
+        while frame_at(index + 1) is not None:
+            prev, curr = frame_at(index), frame_at(index + 1)
+            moves = indices[index + 1] != indices[index]
+            after = change_from(index + 1) if moves else None
             times = buckets[index] if index < len(buckets) else []
             unrelated = (is_a_cut(prev, curr, here, before, after)
-                         if pair is not None and times else None)
+                         if pair is not None and times and moves else None)
             # A few at a time. Between two markers there can be hundreds of
             # frames, and drawn all at once a minute's pause at 4K held over
             # 30 GB before the first was written.
@@ -555,11 +575,13 @@ def render_plan(
                     produced = [(prev if t < 1.0 else curr).copy() for t in part]
                 for frame in produced:
                     emit(frame)
-            before, here = here, after
-            prev, curr = curr, following
+            if moves:
+                before, here = here, after
+            window.popleft()
             index += 1
 
         # A single-drawing plan, or the trailing hold the buckets do not cover.
+        prev = frame_at(index)
         while state["written"] < plan.source_frames:
             emit(prev)
     finally:
