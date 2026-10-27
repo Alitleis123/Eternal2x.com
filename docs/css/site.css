@@ -334,10 +334,18 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 /* footer */
 
 .foot { padding: 56px 0 48px; color: var(--mute); font-size: 14px; }
-.foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px 32px; }
-.foot nav { display: flex; flex-wrap: wrap; gap: 6px 20px; }
+.foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px 32px; }
+.foot nav { display: flex; flex-wrap: wrap; gap: 4px; margin-right: -10px; }
 .foot a { color: var(--soft); text-decoration: none; }
 .foot a:hover { color: var(--amber); }
+.foot nav a { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px;
+              transition: color .15s, background-color .15s; }
+.foot nav a:hover { background: var(--panel); }
+.foot nav a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.foot nav svg { width: 20px; height: 20px; }
+@media (pointer: coarse) { .foot nav a { width: 44px; height: 44px; } }
+/* Wrapped under the maker line, the first icon lines up with its text. */
+@media (max-width: 520px) { .foot nav { margin: 0 0 0 -12px; } }
 .foot .credit { flex-basis: 100%; font-size: 13px; line-height: 1.6; }
 .foot .credit a { text-decoration: underline; text-decoration-color: var(--line-strong); }
 
