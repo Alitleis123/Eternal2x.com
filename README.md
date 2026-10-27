@@ -74,6 +74,9 @@ which is where retimers tear, melt and double lines.
    scripts folder and writes the config.
 4. Restart Resolve and open **Workspace → Scripts → Upflow2x**.
 
+Up to v0.4.0 the plugin was called Eternal2x, and those releases list it as
+**Workspace → Scripts → Eternal2x**.
+
 If the window does not open, your Python was built without Tk. Use the manual
 install below, which does the same job.
 
