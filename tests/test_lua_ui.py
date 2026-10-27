@@ -39,7 +39,7 @@ def installed(tmp_path, repo_root):
     plugin_root = _plugin_tree(tmp_path / "Eternal2x", repo_root)
     comp = tmp_path / "Comp"
     comp.mkdir()
-    shutil.copy2(plugin_root / "Installer" / "Eternal2xLauncher.lua", comp / "Eternal2x.lua")
+    shutil.copy2(plugin_root / "Installer" / "Eternal2xLauncher.lua", comp / "Upflow2x.lua")
     (comp / "Eternal2x.conf").write_text(
         f"repo_root={plugin_root}\n"
         f"python={sys.executable}\n"
@@ -166,7 +166,7 @@ def test_a_byte_order_mark_in_version_does_not_leak_into_the_title(lua, direct):
 
 def test_launcher_reaches_the_panel(lua, installed):
     comp, _ = installed
-    assert load(lua, comp / "Eternal2x.lua").window is not None
+    assert load(lua, comp / "Upflow2x.lua").window is not None
 
 
 @pytest.fixture
@@ -181,8 +181,8 @@ def no_real_install(tmp_path, monkeypatch):
 def test_launcher_reports_a_missing_config(lua, tmp_path, repo_root, no_real_install):
     comp = tmp_path / "Comp"
     comp.mkdir()
-    shutil.copy2(repo_root / "Installer" / "Eternal2xLauncher.lua", comp / "Eternal2x.lua")
-    H = load(lua, comp / "Eternal2x.lua")
+    shutil.copy2(repo_root / "Installer" / "Eternal2xLauncher.lua", comp / "Upflow2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     assert "Missing repo_root" in " ".join(str(v) for v in dict(H.prints).values())
 
 
@@ -201,7 +201,7 @@ def test_launcher_finds_the_installed_config_when_its_own_path_is_mapped(
     utility.mkdir(parents=True)
     shutil.move(str(comp / "Eternal2x.conf"), str(utility / "Eternal2x.conf"))
 
-    H = load(lua, comp / "Eternal2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     assert H.window is not None, "the launcher did not fall back to the installed config"
     H.click("AnalyseBtn")
     assert f"cd '{plugin_root}'" in H.last_command() or f'"{plugin_root}"' in H.last_command()
@@ -210,7 +210,7 @@ def test_launcher_finds_the_installed_config_when_its_own_path_is_mapped(
 def test_buttons_run_from_the_folder_that_holds_the_code(lua, installed):
     """The whole install chain: config in Comp, code elsewhere, cd to the code."""
     comp, plugin_root = installed
-    H = load(lua, comp / "Eternal2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     H.click("AnalyseBtn")
 
     cmd = H.last_command()
@@ -221,20 +221,20 @@ def test_buttons_run_from_the_folder_that_holds_the_code(lua, installed):
 
 def test_the_configured_interpreter_is_used(lua, installed):
     comp, _ = installed
-    H = load(lua, comp / "Eternal2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     H.click("AnalyseBtn")
     assert sys.executable in H.last_command()
 
 
 def test_the_version_survives_the_launcher(lua, installed):
     comp, _ = installed
-    H = load(lua, comp / "Eternal2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     assert "0.3.0" in H.widgets["SubTitle"].Text
 
 
 def test_the_update_url_survives_the_launcher(lua, installed):
     comp, _ = installed
-    H = load(lua, comp / "Eternal2x.lua")
+    H = load(lua, comp / "Upflow2x.lua")
     H.click("UpdateBtn")
     assert "example.com/latest.json" in (H.last_command() or "")
 
@@ -642,7 +642,7 @@ def test_the_render_lines_up_on_a_new_track_above_the_original(lua, direct):
     # all 48 frames. 0 to 47 left the original showing on the last one.
     assert (placed.startFrame, placed.endFrame) == (0, 48)
     assert placed.mediaType == 1
-    assert H.track_names[2] == "Eternal2x"
+    assert H.track_names[2] == "Upflow2x"
     assert "V2 above the original" in H.status()
 
 
@@ -951,7 +951,7 @@ def test_compare_switches_the_smoothed_clip_off_and_on(lua, direct):
 
     H.click("CompareBtn")
     assert H.last_placed.enabled is False
-    assert H.widgets["CompareBtn"].Text == "Show Eternal2x"
+    assert H.widgets["CompareBtn"].Text == "Show Upflow2x"
     assert "original" in H.status()
     H.click("CompareBtn")
     assert H.last_placed.enabled is True
@@ -1219,7 +1219,7 @@ def test_windows_commands_start_without_a_console_window(lua, direct):
     created = lua.eval("CREATED")
     last = created[len(created)]
     assert last.flags == 0x08000000
-    assert ' /c start "Eternal2x" /D ' in last.line
+    assert ' /c start "Upflow2x" /D ' in last.line
     assert last.line.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd")
     assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
 
@@ -1240,7 +1240,7 @@ def test_without_create_process_the_command_still_runs(lua, direct):
     lua.execute(FAKE_FFI + "\nREFUSE = true")
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
-    assert H.last_command().startswith('start "Eternal2x" /D ')
+    assert H.last_command().startswith('start "Upflow2x" /D ')
 
 
 def test_the_windows_background_run_goes_through_a_script(lua, direct):
@@ -1254,7 +1254,7 @@ def test_the_windows_background_run_goes_through_a_script(lua, direct):
     H.click("SmoothBtn")
     cmd = H.last_command()
     outer = cmd.split("\n")[0]
-    assert outer.startswith('start "Eternal2x" /D "'), outer
+    assert outer.startswith('start "Upflow2x" /D "'), outer
     assert outer.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd"), outer
     assert "/" not in outer.split("/D ")[1].split(" /MIN")[0], outer
     assert "Tom & Jerry" not in outer, "the clip path must not be on the outer command line"
@@ -1458,16 +1458,102 @@ def test_opening_the_panel_keeps_the_render_log(lua, direct):
     assert ".eternal2x_update.log" in cmd and ".eternal2x_last_run.log" not in cmd
 
 
-def test_an_install_set_up_with_the_old_feed_checks_the_new_one(lua, direct):
+@pytest.mark.parametrize("old", [
+    "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json",
+    "https://raw.githubusercontent.com/sidebandstudio/Eternal2x.com/main/update/latest.json",
+])
+def test_an_install_set_up_with_an_old_feed_checks_the_new_one(lua, direct, old):
     """Installs keep the feed they were set up with through every update."""
     import re
     conf = direct / "Installer" / "Eternal2x.conf"
-    old = "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json"
     conf.write_text(re.sub(r"update_url=.*", "update_url=" + old, conf.read_text()))
     H = load(lua, ui_script(direct))
     H.click("UpdateBtn")
-    assert "sidebandstudio/Eternal2x.com/main/update/latest.json" in H.last_command()
-    assert "Alitleis123" not in H.last_command()
+    assert "sidebandstudio/Upflow2x/main/update/latest.json" in H.last_command()
+    assert "Eternal2x.com/main" not in H.last_command()
+
+
+def _old_install(tmp_path, repo_root):
+    """A launcher from before the rename, Eternal2x.lua, beside its config."""
+    plugin_root = _plugin_tree(tmp_path / "Eternal2x", repo_root)
+    utility = tmp_path / "Utility"
+    utility.mkdir()
+    old = utility / "Eternal2x.lua"
+    launcher = (repo_root / "Installer" / "Eternal2xLauncher.lua").read_text(encoding="utf-8")
+    old.write_text(launcher.replace("-- Upflow2x launcher", "-- Eternal2x launcher", 1),
+                   encoding="utf-8")
+    (utility / "Eternal2x.conf").write_text(f"repo_root={plugin_root}\nauto_update=false\n",
+                                            encoding="utf-8")
+    return utility, old
+
+
+def test_an_old_launcher_is_renamed_so_the_menu_says_upflow2x(lua, tmp_path, repo_root):
+    """Updates never touch the launcher, so the panel renames it once."""
+    utility, old = _old_install(tmp_path, repo_root)
+    assert load(lua, old).window is not None
+    assert not old.exists() and (utility / "Upflow2x.lua").exists()
+    assert not list(utility.glob("*.part")), "the temporary copy was left behind"
+    assert load(lua, utility / "Upflow2x.lua").window is not None
+
+
+@pytest.mark.parametrize("there", ["-- someone else's script\n", ""])
+def test_a_script_already_called_upflow2x_keeps_the_old_launcher(lua, tmp_path, repo_root, there):
+    """Unrelated, or cut short: deleting the old one would leave no menu entry."""
+    utility, old = _old_install(tmp_path, repo_root)
+    (utility / "Upflow2x.lua").write_text(there, encoding="utf-8")
+    load(lua, old)
+    assert old.exists()
+    assert (utility / "Upflow2x.lua").read_text(encoding="utf-8") == there
+
+
+def test_a_launcher_cut_short_keeps_the_old_one(lua, tmp_path, repo_root):
+    """Header and call intact, the last line missing: it would not compile."""
+    utility, old = _old_install(tmp_path, repo_root)
+    launcher = (repo_root / "Installer" / "Eternal2xLauncher.lua").read_text(encoding="utf-8")
+    cut = launcher.rstrip()
+    assert cut.endswith("end")
+    (utility / "Upflow2x.lua").write_text(cut[:-3], encoding="utf-8")
+    load(lua, old)
+    assert old.exists()
+
+
+def test_a_launcher_that_cannot_be_written_keeps_the_old_one(lua, tmp_path, repo_root):
+    """A full disk: the write reports failure through its return value."""
+    utility, old = _old_install(tmp_path, repo_root)
+    lua.execute("""
+        local real = io.open
+        io.open = function(path, mode)
+            if tostring(path):find("%.part$") then
+                return { write = function() return nil, "No space left on device" end,
+                         close = function() return true end }
+            end
+            return real(path, mode)
+        end
+    """)
+    load(lua, old)
+    assert old.exists() and not (utility / "Upflow2x.lua").exists()
+
+
+def test_the_launcher_run_beside_the_panel_never_deletes_the_panel(lua, direct):
+    """There, Eternal2x.lua beside the config is the panel itself."""
+    H = load(lua, direct / "Installer" / "Eternal2xLauncher.lua")
+    assert H.window is not None
+    assert ui_script(direct).exists()
+    assert not (direct / "Installer" / "Upflow2x.lua").exists()
+
+
+def test_a_panel_run_from_its_own_folder_never_renames_itself(lua, direct):
+    """There, the config sits beside the panel, which is also Eternal2x.lua."""
+    load(lua, ui_script(direct))
+    assert ui_script(direct).exists()
+    assert not (direct / "Installer" / "Upflow2x.lua").exists()
+
+
+def test_a_file_that_is_not_a_launcher_is_left_alone(lua, installed):
+    comp, _ = installed
+    (comp / "Eternal2x.lua").write_text("-- someone else's script\n", encoding="utf-8")
+    load(lua, comp / "Upflow2x.lua")
+    assert (comp / "Eternal2x.lua").exists()
 
 
 def test_an_update_check_that_never_ran_does_not_repeat_the_last_verdict(lua, direct):

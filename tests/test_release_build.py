@@ -67,13 +67,13 @@ def test_every_platform_is_listed():
 
 def test_building_twice_gives_identical_archives(built):
     """Otherwise the checksum in the feed is only meaningful on one machine."""
-    first = builder.sha256(builder.zip_folder(builder.build_folder("eternal2x-mac")))
-    second = builder.sha256(builder.zip_folder(builder.build_folder("eternal2x-mac")))
+    first = builder.sha256(builder.zip_folder(builder.build_folder("upflow2x-mac")))
+    second = builder.sha256(builder.zip_folder(builder.build_folder("upflow2x-mac")))
     assert first == second
 
 
 def test_archive_entries_have_a_fixed_timestamp(built):
-    archive = builder.zip_folder(builder.build_folder("eternal2x-mac"))
+    archive = builder.zip_folder(builder.build_folder("upflow2x-mac"))
     with zipfile.ZipFile(archive) as zf:
         stamps = {info.date_time for info in zf.infolist()}
     assert stamps == {builder.ZIP_TIMESTAMP}
@@ -86,9 +86,9 @@ def test_windows_and_linux_build_the_same_archive(built, monkeypatch):
     shas = []
     for platform in ("win32", "linux"):
         monkeypatch.setattr("sys.platform", platform)
-        shas.append(builder.sha256(builder.zip_folder(builder.build_folder("eternal2x-win"))))
+        shas.append(builder.sha256(builder.zip_folder(builder.build_folder("upflow2x-win"))))
     assert shas[0] == shas[1]
-    with zipfile.ZipFile(built / "release" / "eternal2x-win.zip") as zf:
+    with zipfile.ZipFile(built / "release" / "upflow2x-win.zip") as zf:
         assert {i.compress_type for i in zf.infolist()} == {zipfile.ZIP_STORED}
 
 
@@ -100,14 +100,14 @@ def test_archive_entries_are_sorted_the_same_way_everywhere(built):
     depending on the machine, and the archives stopped matching across
     platforms.
     """
-    archive = builder.zip_folder(builder.build_folder("eternal2x-win"))
+    archive = builder.zip_folder(builder.build_folder("upflow2x-win"))
     with zipfile.ZipFile(archive) as zf:
         names = zf.namelist()
     assert names == sorted(names), "entries are not in case-sensitive order"
     # An explicit pin: uppercase sorts before lowercase.
-    installer = [n for n in names if n.startswith("eternal2x-win/Installer/")]
-    assert installer.index("eternal2x-win/Installer/Eternal2x.lua") < \
-        installer.index("eternal2x-win/Installer/build_release.py")
+    installer = [n for n in names if n.startswith("upflow2x-win/Installer/")]
+    assert installer.index("upflow2x-win/Installer/Eternal2x.lua") < \
+        installer.index("upflow2x-win/Installer/build_release.py")
 
 
 # --------------------------------------------------------------------------
@@ -115,7 +115,7 @@ def test_archive_entries_are_sorted_the_same_way_everywhere(built):
 # --------------------------------------------------------------------------
 
 def test_the_payload_carries_what_the_plugin_needs(built):
-    folder = builder.build_folder("eternal2x-mac")
+    folder = builder.build_folder("upflow2x-mac")
     for needed in ("Stages/resolve_smooth.py", "Stages/resolve_probe.py",
                    "Pipeline/dedupe.py", "Pipeline/interpolate.py",
                    "Pipeline/render.py", "Pipeline/resolve_bridge.py",
@@ -125,7 +125,7 @@ def test_the_payload_carries_what_the_plugin_needs(built):
 
 
 def test_the_payload_does_not_ship_tests_or_build_junk(built):
-    folder = builder.build_folder("eternal2x-mac")
+    folder = builder.build_folder("upflow2x-mac")
     shipped = [p.as_posix() for p in
                (item.relative_to(folder) for item in folder.rglob("*") if item.is_file())]
     for path in shipped:
@@ -136,10 +136,10 @@ def test_the_payload_does_not_ship_tests_or_build_junk(built):
 
 def test_a_rebuild_clears_files_that_left_the_repo(built):
     """A stale module must not linger in the release folder forever."""
-    folder = builder.build_folder("eternal2x-mac")
+    folder = builder.build_folder("upflow2x-mac")
     stale = folder / "Stages" / "gone_module.py"
     stale.write_text("# removed upstream\n")
-    assert not (builder.build_folder("eternal2x-mac") / "Stages" / "gone_module.py").exists()
+    assert not (builder.build_folder("upflow2x-mac") / "Stages" / "gone_module.py").exists()
 
 
 # --------------------------------------------------------------------------

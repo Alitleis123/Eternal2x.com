@@ -1,4 +1,4 @@
-"""Settings for the Eternal2x pipeline."""
+"""Settings for the Upflow2x pipeline."""
 
 from __future__ import annotations
 

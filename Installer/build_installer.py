@@ -1,13 +1,13 @@
 """
-Compile the Eternal2x GUI installer into a standalone executable.
+Compile the Upflow2x GUI installer into a standalone executable.
 
 Usage:
     pip install pyinstaller
     python Installer/build_installer.py
 
 Produces:
-    dist/Eternal2xInstaller.exe  (Windows)
-    dist/Eternal2xInstaller      (macOS/Linux)
+    dist/Upflow2xInstaller.exe  (Windows)
+    dist/Upflow2xInstaller      (macOS/Linux)
 
 The compiled exe should be placed in the root of the release zip
 so buyers can double-click it alongside the plugin folder contents.
@@ -42,7 +42,7 @@ def main() -> int:
     if icon.exists():
         icon_arg = ["--icon", str(icon)]
 
-    name = "Eternal2xInstaller"
+    name = "Upflow2xInstaller"
 
     cmd = [
         sys.executable, "-m", "PyInstaller",
