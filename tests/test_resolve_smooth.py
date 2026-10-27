@@ -175,6 +175,58 @@ def test_no_upscale_flag_skips_super_scale(anime_in_resolve, monkeypatch, tmp_pa
     assert pool.imported[0].GetClipProperty("Super Scale") == ""
 
 
+class _TwiceAsBig:
+    """Stands in for Real-ESRGAN on a GPU."""
+    def __init__(self, progress=None):
+        pass
+
+    def upscale(self, frame):
+        import cv2
+        return cv2.resize(frame, None, fx=2, fy=2, interpolation=cv2.INTER_NEAREST)
+
+
+def test_a_render_drawn_at_2x_gets_no_super_scale(anime_in_resolve, monkeypatch, capsys,
+                                                  tmp_path):
+    """Super Scale on top of the network's 2x would make it 4x."""
+    from Pipeline import upscaler
+    monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    assert run(monkeypatch, ["--output-dir", str(tmp_path / "out")]) == 0
+
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    assert pool.imported[0].GetClipProperty("Super Scale") == ""
+    assert "with Real-ESRGAN" in capsys.readouterr().out
+
+
+def test_the_panel_hears_the_render_is_already_2x(make_anime, monkeypatch, tmp_path):
+    from Pipeline import upscaler
+    monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
+    src, status = make_anime(), tmp_path / "status.json"
+    run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                      "--output-dir", str(tmp_path / "out")])
+    assert json.loads(status.read_text(encoding="utf-8"))["upscaled"] is True
+
+
+def test_no_upscale_flag_never_loads_the_network(anime_in_resolve, monkeypatch, tmp_path):
+    from Pipeline import upscaler
+
+    def refuse(progress=None):
+        raise AssertionError("the upscaler was loaded")
+
+    monkeypatch.setattr(upscaler, "Upscaler", refuse)
+    anime_in_resolve()
+    assert run(monkeypatch, ["--no-upscale", "--output-dir", str(tmp_path / "out")]) == 0
+
+
+def test_without_a_gpu_super_scale_still_does_the_upscale(anime_in_resolve, monkeypatch,
+                                                          capsys, tmp_path):
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    run(monkeypatch, ["--output-dir", str(tmp_path / "out")])
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    assert pool.imported[0].GetClipProperty("Super Scale") == "2"
+    assert "Super Scale does the upscale" in capsys.readouterr().out
+
+
 def test_free_edition_skips_the_upscale_and_says_why(anime_in_resolve, monkeypatch,
                                                      capsys, tmp_path):
     anime_in_resolve(studio=False)

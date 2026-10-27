@@ -660,6 +660,7 @@ local function read_status()
         sequence_pattern = json_string(s, "sequence_pattern") or "",
         sequence_frames = tonumber(s:match('"sequence_frames"%s*:%s*(%d+)')) or 0,
         marks    = json_string(s, "marks") or "",
+        upscaled = s:match('"upscaled"%s*:%s*(%a+)') == "true",
         updated  = tonumber(s:match('"updated"%s*:%s*([%d%.eE]+)')),
         fps      = tonumber(s:match('"fps"%s*:%s*([%d%.]+)')) or 0,
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
@@ -798,7 +799,7 @@ local win = disp:AddWindow({
     },
     ui:HGroup{ Spacing = 6,
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
-                     ToolTip = "Apply Super Scale 2x. It shows on a timeline bigger than the clip." },
+                     ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
                      ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nOff keeps every drawing on its frame and draws nothing, to upscale only." },
         ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
@@ -1174,16 +1175,17 @@ local function place_above(pool, project, mpi, frames)
     return track, item, over
 end
 
--- Super Scale makes the clip bigger than its file, which only shows on a
--- timeline bigger than the clip. On one the same size it is scaled back down.
-local function upscale_hint(project, mpi)
+-- The upscale only shows on a timeline bigger than the original clip. On one
+-- the same size it is scaled back down. `factor` is how much bigger than its
+-- file the clip plays: 2 with Super Scale, 1 for a render already drawn at 2x.
+local function upscale_hint(project, mpi, factor)
     local ok, width = pcall(function()
         return project:GetCurrentTimeline():GetSetting("timelineResolutionWidth")
     end)
     local w, h = tostring(clip_property(mpi, "Resolution") or ""):match("(%d+)%s*[xX]%s*(%d+)")
     w, h, width = tonumber(w), tonumber(h), ok and tonumber(width) or nil
-    if not (w and h and width) or width > w then return nil end
-    return string.format("To see the 2x upscale, set the timeline to %dx%d.", w * 2, h * 2)
+    if not (w and h and width) or width * 2 > w * factor then return nil end
+    return string.format("To see the 2x upscale, set the timeline to %dx%d.", w * factor, h * factor)
 end
 
 local function import_result(st)
@@ -1232,7 +1234,12 @@ local function import_result(st)
         said, rate_ok = set_sequence_fps(mpi, st.fps)
         notes = notes .. said
     end
-    if DO_UPSCALE and mpi.SetClipProperty then
+    if st.upscaled then
+        -- Drawn at 2x already, even if Upscale was unticked since. Super
+        -- Scale on top would make it 4x.
+        notes = notes .. ", upscaled 2x"
+        hint = upscale_hint(project, mpi, 1)
+    elseif DO_UPSCALE and mpi.SetClipProperty then
         -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected. The
         -- README calls the value an integer, so try a number if text is refused.
         -- pcall's first value only says nothing raised. Resolve reports a
@@ -1243,7 +1250,7 @@ local function import_result(st)
         end
         notes = notes .. ((called and scaled) and ", upscaled 2x"
                           or ", upscale not applied (Super Scale needs Resolve Studio)")
-        if called and scaled then hint = upscale_hint(project, mpi) end
+        if called and scaled then hint = upscale_hint(project, mpi, 2) end
     end
     -- At the wrong rate it would play at the wrong speed and cover more of
     -- the timeline than the original, so it stays in the media pool.

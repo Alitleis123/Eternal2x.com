@@ -1045,6 +1045,28 @@ def test_super_scale_is_applied_with_a_value_resolve_accepts(lua, direct):
     assert H.property_of("Super Scale") == "2"
 
 
+def test_a_render_drawn_at_2x_gets_no_super_scale(lua, direct):
+    """Real-ESRGAN drew it at 2x. Super Scale on top would make it 4x."""
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, upscaled=True)
+    assert H.property_of("Super Scale") is None
+    assert "upscaled 2x" in H.status()
+
+
+def test_a_render_drawn_at_2x_asks_for_a_timeline_its_own_size(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_resolution = "3840x2160"
+    finish_render(H, direct, upscaled=True)
+    assert "set the timeline to 3840x2160" in H.widgets["Meta"].Text
+
+
+def test_a_render_drawn_at_2x_on_a_timeline_its_size_gets_no_tip(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_resolution, H.timeline_width = "3840x2160", "3840"
+    finish_render(H, direct, upscaled=True)
+    assert "set the timeline" not in H.widgets["Meta"].Text
+
+
 def test_upscale_unchecked_leaves_super_scale_alone(lua, direct):
     H = load(lua, ui_script(direct))
     H.set_checkbox("UpscaleCB", False)

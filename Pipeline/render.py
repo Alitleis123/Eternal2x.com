@@ -43,6 +43,10 @@ class RenderResult:
     is_sequence: bool
     # Why no in-betweens were drawn, if Interpolate was on and none were.
     note: str = ""
+    # Whether the network drew every frame at 2x, and if it was asked to and
+    # did not, why.
+    upscaled: bool = False
+    upscale_note: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -53,6 +57,8 @@ class RenderResult:
             "fps": self.fps,
             "is_sequence": self.is_sequence,
             "note": self.note,
+            "upscaled": self.upscaled,
+            "upscale_note": self.upscale_note,
         }
 
 
@@ -430,6 +436,15 @@ def render_plan(
             pair = Rife(progress).interpolate_pair
         except AIUnavailable as exc:
             note = f"No in-betweens were drawn, so every drawing is kept as drawn. {exc}"
+    upscaler = None
+    upscale_note = ""
+    if cfg.network_upscale:
+        from Pipeline.rife import AIUnavailable
+        from Pipeline.upscaler import Upscaler  # needs onnxruntime
+        try:
+            upscaler = Upscaler(progress)
+        except AIUnavailable as exc:
+            upscale_note = str(exc)
 
     # Which in-between times belong to each pair of consecutive drawings.
     last_pair = plan.output_frames - 2
@@ -439,10 +454,20 @@ def render_plan(
         buckets[i].append(p - i)
 
     cap = _open(source, frames, progress)
-    state = {"writer": None, "written": 0, "width": 0, "height": 0}
+    state = {"writer": None, "written": 0, "width": 0, "height": 0, "upscaler": upscaler,
+             "upscale_note": upscale_note}
 
     def emit(frame: np.ndarray) -> None:
         """Upscale if asked, then write one output frame."""
+        if state["upscaler"] is not None:
+            try:
+                frame = state["upscaler"].upscale(frame)
+            except AIUnavailable as exc:
+                # Past the first frame, the frames so far are 2x and the rest
+                # cannot be left at 1x, so the render stops and says why.
+                if state["written"]:
+                    raise
+                state["upscaler"], state["upscale_note"] = None, str(exc)
         if factor > 1:
             frame = upscale(frame, factor)
         if state["written"] and frame.shape[:2] != (state["height"], state["width"]):
@@ -518,4 +543,6 @@ def render_plan(
         fps=plan.fps,
         is_sequence=is_sequence,
         note=note,
+        upscaled=state["upscaler"] is not None,
+        upscale_note=state["upscale_note"],
     )

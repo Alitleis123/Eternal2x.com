@@ -168,8 +168,9 @@
                 <span class="faq-chevron" aria-hidden="true">&#9660;</span>
             </summary>
             <div class="faq-answer">
-                Super Scale is a DaVinci Resolve Studio feature. If the panel says the upscale was not applied,
-                check that Studio is activated. De-duplication and smoothing still run.
+                On Windows the upscale is drawn on the GPU. Without a GPU, Eternal2x hands it to Super Scale, a
+                DaVinci Resolve Studio feature. If the panel says the upscale was not applied, check that Studio
+                is activated. De-duplication and smoothing still run.
             </div>
         </details>
 
@@ -408,7 +409,8 @@
                    run downloads about 50 MB.
                    Leave <strong>Hold pattern</strong> on <code>Auto detect</code> unless a clip has unusual
                    timing. <strong>Output</strong> defaults to a lossless image sequence, which Resolve imports
-                   most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> applies Super Scale to the result, which only shows on a
+                   most reliably. Renders are 8-bit RGB, so transparency and 10-bit colour are not kept. <strong>Upscale 2x</strong> draws every frame at 2x with Real-ESRGAN's anime model on the
+                   GPU, or applies Super Scale where there is no GPU. It only shows on a
                    timeline bigger than the clip, such as 3840x2160 for 1080p footage. Turning off
                    <strong>Interpolate</strong> skips the in-betweens and keeps every drawing on its original frame.
                    Tick <strong>Grainy source</strong> for film grain, which otherwise makes every held frame
@@ -429,7 +431,7 @@
                 <p>Click <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame
                    between two markers fresh. With no markers on the clip, it uses the drawings Eternal2x finds. The render runs in the background with a progress bar
                    and the time left, so Resolve stays usable. When it finishes, the rebuilt clip is imported
-                   with 2x Super Scale applied and placed on the track above the original, starting on the same
+                   at 2x and placed on the track above the original, starting on the same
                    frame, at the same length and frame rate. It uses the lowest track that is empty there, or a
                    new track named Eternal2x, so none of your clips are covered. Only the part of the file you
                    trimmed is rebuilt.</p>
