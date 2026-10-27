@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eternal2x | Smooth out choppy animation in DaVinci Resolve</title>
-    <meta name="description" content="Eternal2x is a free DaVinci Resolve Studio plugin that smooths out choppy hand-drawn animation. It draws the frames between the drawings, so anime and cartoons play smooth at the full frame rate.">
+    <title>Eternal2x | Upscale and smooth anime in DaVinci Resolve</title>
+    <meta name="description" content="Eternal2x is a free DaVinci Resolve Studio plugin for anime. It draws the frames between the drawings, so animation plays smooth at the full frame rate, and redraws every frame at 2x with an upscaler trained on anime.">
     <link rel="canonical" href="https://eternal2x.com/">
     <meta name="theme-color" content="#101013">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://eternal2x.com/">
-    <meta property="og:title" content="Eternal2x: smooth out choppy animation">
-    <meta property="og:description" content="A free DaVinci Resolve Studio plugin that draws the frames between the drawings, so hand-drawn animation plays smooth.">
+    <meta property="og:title" content="Eternal2x: upscale and smooth anime">
+    <meta property="og:description" content="A free DaVinci Resolve Studio plugin that draws the frames between the drawings and redraws every frame at 2x, so anime plays smooth and sharp.">
     <meta property="og:image" content="https://eternal2x.com/assets/og.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
@@ -44,8 +44,8 @@
 
     <section class="hero">
         <div class="hero-text">
-            <h1>Smooth out <span>choppy animation.</span></h1>
-            <p>Hand-drawn animation, from anime to cartoons, often holds each drawing for two or three frames, so it moves in steps. Eternal2x draws the frames in between, right inside DaVinci Resolve, so it plays smooth at the full frame rate.</p>
+            <h1>Upscale and smooth <span>anime in Resolve.</span></h1>
+            <p>Anime holds each drawing for two or three frames, so it moves in steps, and most of it reaches you as compressed 1080p. Eternal2x draws the frames in between and redraws every frame at 2x, right inside DaVinci Resolve, so it plays smooth and stays sharp on a 4K timeline.</p>
             <div class="actions">
                 <a class="btn btn-amber" href="download.html">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
@@ -101,13 +101,13 @@
                 </li>
                 <li class="node">
                     <span class="node-kind">Analyse</span>
-                    <strong>Finds the real drawings</strong>
-                    <span>Tells you how it's animated before it changes a thing</span>
+                    <strong>Marks the real drawings</strong>
+                    <span>Puts a marker on each one. Move or add markers to choose</span>
                 </li>
                 <li class="node node-on">
-                    <span class="node-kind">Smooth Clip</span>
-                    <strong>Draws every in-between</strong>
-                    <span>RIFE 4.25 on your own machine, Resolve stays usable</span>
+                    <span class="node-kind">Render</span>
+                    <strong>Draws every in-between, then 2x</strong>
+                    <span>RIFE 4.25 and Real-ESRGAN on your own GPU. Resolve stays usable</span>
                 </li>
                 <li class="node">
                     <span class="node-kind">Output</span>
@@ -125,7 +125,7 @@
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="11" rx="2"/><path d="M3 18h18M7 21h4M13 21h4"/></svg><strong>Studio 18+</strong><span>DaVinci Resolve Studio. The free edition blocks script panels.</span></li>
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg><strong>Windows and Mac</strong><span>Windows 10 or 11, or macOS 12 or newer</span></li>
             <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg><strong>Python 3.10 to 3.14</strong><span>Older Macs need an older one, see the <a href="help.html#macos">Mac guide</a></span></li>
-            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg><strong>Any DirectX 12 GPU</strong><span>Draws on the GPU on Windows, on the CPU on a Mac</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg><strong>Any DirectX 12 GPU</strong><span>Draws and upscales on the GPU on Windows. A Mac draws on the CPU and upscales with Super Scale</span></li>
         </ul>
         <div class="actions">
             <a class="btn btn-amber" href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-win.zip">
