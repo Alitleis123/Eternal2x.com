@@ -59,7 +59,7 @@
                     <span class="tag pending" data-version>Latest</span>
                 </div>
                 <a class="btn btn-amber" data-asset="upflow2x-win.zip"
-                   href="https://github.com/sidebandstudio/Upflow2x/releases/latest/download/upflow2x-win.zip">
+                   href="https://github.com/sidebandstudio/Upflow2x/releases/latest">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     upflow2x-win.zip
                 </a>
@@ -74,7 +74,7 @@
                     <span class="tag pending" data-version>Latest</span>
                 </div>
                 <a class="btn btn-amber" data-asset="upflow2x-mac.zip"
-                   href="https://github.com/sidebandstudio/Upflow2x/releases/latest/download/upflow2x-mac.zip">
+                   href="https://github.com/sidebandstudio/Upflow2x/releases/latest">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     upflow2x-mac.zip
                 </a>
@@ -138,13 +138,17 @@
 </footer>
 
 <script>
-// The buttons work without this: GitHub's latest/download links always point
-// at the newest release. With the release list, they also say which version.
+// The buttons work without this: they open the newest release on GitHub.
+// With the release list, they download its zip and say which version.
 var REPO = 'sidebandstudio/Upflow2x';
 
 function assetUrl(release, name) {
-    for (var i = 0; i < release.assets.length; i++) {
-        if (release.assets[i].name === name) return release.assets[i].browser_download_url;
+    // Releases before the rename to Upflow2x carry eternal2x-*.zip.
+    var names = [name, name.replace('upflow2x', 'eternal2x')];
+    for (var n = 0; n < names.length; n++) {
+        for (var i = 0; i < release.assets.length; i++) {
+            if (release.assets[i].name === names[n]) return release.assets[i].browser_download_url;
+        }
     }
     return null;
 }
