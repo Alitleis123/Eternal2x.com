@@ -44,7 +44,7 @@
         <div class="wrap">
             <p class="label">Free, for Windows and macOS</p>
             <h1>Download</h1>
-            <p class="lede">Each zip holds the panel, the Python pipeline and the installer. The AI model isn't in it. The first render downloads it and checks it against its SHA-256.</p>
+            <p class="lede">Each zip holds the panel, the Python pipeline, the upscaler and the installer. The in-between model isn't in it. The first render downloads it, about 50 MB, and checks it against its SHA-256.</p>
         </div>
     </section>
 
@@ -63,7 +63,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     eternal2x-win.zip
                 </a>
-                <p class="size">Draws the in-betweens on the GPU through DirectML where the card supports it, and on the CPU otherwise.</p>
+                <p class="size">Draws the in-betweens and the 2x upscale on the GPU through DirectML where the card supports it. Without one, the in-betweens run on the CPU and Super Scale upscales.</p>
             </article>
             <article class="platform" id="macos">
                 <div class="platform-top">
@@ -78,7 +78,7 @@
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
                     eternal2x-mac.zip
                 </a>
-                <p class="size">In-betweens on the CPU. Python 3.14 needs macOS 14 and Apple Silicon. The <a href="help.html#macos">Mac guide</a> lists the rest.</p>
+                <p class="size">In-betweens on the CPU, upscale with Super Scale. Python 3.14 needs macOS 14 and Apple Silicon. The <a href="help.html#macos">Mac guide</a> lists the rest.</p>
             </article>
         </div>
 

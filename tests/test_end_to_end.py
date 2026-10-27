@@ -38,9 +38,11 @@ def install(tmp_path, repo_root, make_anime, folder):
         shutil.copytree(repo_root / name, plugin / name)
     shutil.copy2(repo_root / "VERSION", plugin / "VERSION")
     # The stage runs in its own Python here, where the network would download
-    # its model. A blend stands in for it, as in the other tests.
+    # its model. A blend stands in for it, as in the other tests, and the
+    # upscaler finds no GPU.
     (plugin / "Pipeline" / "rife.py").rename(plugin / "Pipeline" / "_rife_real.py")
     (plugin / "Pipeline" / "rife.py").write_text(fake_rife.MODULE, encoding="utf-8")
+    (plugin / "Pipeline" / "upscaler.py").write_text(fake_rife.UPSCALER_MODULE, encoding="utf-8")
 
     comp = tmp_path / "Comp"
     comp.mkdir()
@@ -128,7 +130,10 @@ def test_analyse_reports_the_real_pattern(installation):
     summary = H.widgets["AnalysisLabel"].Text
     assert "12 unique drawings" in summary, f"panel showed: {summary!r}"
     assert "on 2s" in summary
-    assert "Analysis complete" in H.status()
+    # The drawings it found are marked on the clip, ready to edit.
+    assert "Marked 12 frames on the clip" in summary
+    assert H.marker_frames() == ",".join(str(f) for f in range(0, 24, 2))
+    assert "press Render" in H.status()
 
 
 def test_analyse_detects_threes(installation):

@@ -72,6 +72,34 @@ local function basename(path)
     return (path:gsub("\\", "/")):match("([^/]+)$") or path
 end
 
+-- A file name cut to one line of the Source card, keeping its start and end.
+-- Long scene pack names wrapped and pushed the clip's range out of the card.
+-- CJK characters count double, and the cut never splits a character.
+local function short_name(name, width)
+    width = width or 64
+    local chars, total = {}, 0
+    for ch in name:gmatch("[\1-\127\194-\244][\128-\191]*") do
+        chars[#chars + 1] = ch
+        total = total + (#ch >= 3 and 2 or 1)
+    end
+    if total <= width then return name end
+    local function take(from, to, step, room)
+        local out, used = {}, 0
+        for k = from, to, step do
+            local w = #chars[k] >= 3 and 2 or 1
+            if used + w > room then break end
+            used = used + w
+            out[#out + 1] = chars[k]
+        end
+        return out
+    end
+    local tail = take(#chars, 1, -1, 20)
+    local head = take(1, #chars - #tail, 1, width - 23)
+    local rest = {}
+    for k = #tail, 1, -1 do rest[#rest + 1] = tail[k] end
+    return table.concat(head) .. "..." .. table.concat(rest)
+end
+
 local root = trim_trailing_sep(script_dir() or "")
 -- Launched through Eternal2xLauncher.lua the config lives in Resolve's Utility
 -- folder rather than beside this file, so the launcher passes its path down.
@@ -92,9 +120,14 @@ local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
 local GRAINY = parse_bool(conf["grain"], false)
 local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
+-- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
+local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
+-- The frames marked on the clip go to the stage in this file. A long clip's
+-- list does not fit on a Windows command line.
+local MARKS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_marks.txt")
 local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
 -- The update check runs each time the panel opens, so it logs apart from
 -- renders. Sharing a log wiped the render's, the one worth sending in.
@@ -119,6 +152,7 @@ local function save_conf()
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
     f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
+    f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
@@ -183,7 +217,7 @@ end
 -- 20.3.1 a 119 frame cut from 1200 reported 1318. Where the timeline's rate
 -- differs from the media's, the end time fell short of it, and a render from
 -- the times came out a timeline frame short of the cut.
-local function clip_range(item, props)
+local function clip_range(item, props, rate)
     local function call(name)
         local ok, value = pcall(function() return item[name](item) end)
         return ok and tonumber(value) or nil
@@ -193,6 +227,13 @@ local function clip_range(item, props)
     if not (fps and fps > 0 and f0) then return nil end
     local start = f0 / fps
     local f1 = call("GetSourceEndFrame")
+    -- At the timeline's own rate Resolve reports the end frame as the last one
+    -- used at 60 fps but one past it at 23.976 (20.3.1), so the clip's length
+    -- settles it. A retimed clip's length is no guide and keeps the end frame.
+    local length = call("GetDuration")
+    if f1 and length and rate and math.abs(rate - fps) < 0.001 and math.abs(f1 - f0 - length) <= 1 then
+        return { start = start, finish = (f0 + length) / fps }
+    end
     if f1 and f1 >= f0 then return { start = start, finish = (f1 + 1) / fps } end
     local t0, t1 = call("GetSourceStartTime"), call("GetSourceEndTime")
     if t0 and t1 and t1 > t0 then return { start = start, finish = start + (t1 - t0) } end
@@ -286,6 +327,45 @@ local function shown_item(timeline, top)
     return top
 end
 
+-- The rates Resolve shows for 24000/1001 and its kin. It counts with the
+-- exact rate, which over a long clip comes out a frame different. Any other
+-- rate, 23.98 say, is what it says.
+local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
+               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
+
+local function exact_rate(text)
+    local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
+    if not r then return nil end
+    for _, pair in ipairs(NTSC) do
+        if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
+    end
+    return r
+end
+
+-- How the clip's markers line up with its frames. Resolve counts them in
+-- timeline frames from the start of the media, not from the clip's left edge,
+-- so a trimmed clip's first frame is at its left offset. A clip at another
+-- rate than the timeline has `per` source frames to each timeline frame.
+-- Measured on Resolve 20.3.1. Guessed bounds would read every marker as the
+-- wrong frame, so a clip whose bounds Resolve will not give is `unreadable`.
+local function marked_clip(item, timeline, props)
+    local ok, clip = pcall(function()
+        local fps, rate = exact_rate(props["FPS"]), exact_rate(timeline:GetSetting("timelineFrameRate"))
+        if not (fps and rate and fps > 0 and rate > 0) then error("no frame rates") end
+        local per = fps / rate
+        local origin
+        if item.GetLeftOffset then
+            origin = tonumber(item:GetLeftOffset())
+        else
+            origin = tonumber(item:GetSourceStartFrame()) / per
+        end
+        local length = tonumber(item:GetDuration())
+        if not (origin and length) then error("no clip bounds") end
+        return { item = item, origin = math.floor(origin + 0.5), per = per, length = length }
+    end)
+    return ok and clip or { item = item, unreadable = true }
+end
+
 local function find_clip_path()
     local resolve, err = get_resolve()
     if not resolve then return nil, err end
@@ -318,7 +398,10 @@ local function find_clip_path()
     -- again, so the clip it was made from is used instead.
     local name = render_name(path)
     local below = name and original_under(timeline, item, name)
+    local render = nil
     if below then
+        -- Markers an editor puts on the render, the clip they see, count too.
+        render = marked_clip(item, timeline, props)
         item = below
         props = below:GetMediaPoolItem():GetClipProperty() or {}
         path = props["File Path"]
@@ -339,15 +422,19 @@ local function find_clip_path()
                       and place.item) then
         place = nil
     end
-    return path, nil, clip_range(item, props), place
+    local rate = nil
+    pcall(function() rate = tonumber(timeline:GetSetting("timelineFrameRate")) end)
+    local clip = marked_clip(item, timeline, props)
+    clip.also = render
+    return path, nil, clip_range(item, props, rate), place, clip
 end
 
 -- Any API call above can raise, and this runs while the panel opens, where an
 -- error would stop the window from ever appearing.
 local function selected_clip_path()
-    local ok, path, err, range, place = pcall(find_clip_path)
+    local ok, path, err, range, place, item = pcall(find_clip_path)
     if not ok then return nil, "Could not read the clip from Resolve: " .. tostring(path) end
-    return path, err, range, place
+    return path, err, range, place, item
 end
 
 -- ---------------------------------------------------------------------------
@@ -572,6 +659,8 @@ local function read_status()
         import_path = json_string(s, "import_path") or "",
         sequence_pattern = json_string(s, "sequence_pattern") or "",
         sequence_frames = tonumber(s:match('"sequence_frames"%s*:%s*(%d+)')) or 0,
+        marks    = json_string(s, "marks") or "",
+        upscaled = s:match('"upscaled"%s*:%s*(%a+)') == "true",
         updated  = tonumber(s:match('"updated"%s*:%s*([%d%.eE]+)')),
         fps      = tonumber(s:match('"fps"%s*:%s*([%d%.]+)')) or 0,
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
@@ -639,6 +728,9 @@ local GHOST = [[
     QPushButton:disabled { background-color: #0f0f13; border-color: #18181f; color: #4a4a5a; }
 ]]
 
+local RENDER_LABEL = "\xE2\x96\xB2  Render"
+local ANALYSIS_HINT = "Analyse marks the drawings on the clip. Or mark the frames yourself with M. Render uses the marked frames."
+
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
@@ -682,12 +774,19 @@ local win = disp:AddWindow({
         ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = GHOST,
                    ToolTip = "Read the clip under the playhead. Resolve does not tell scripts which clip is selected." },
         ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = GHOST,
-                   ToolTip = "Count the drawings and read the timing. Changes nothing." },
+                   ToolTip = "Find the drawings and mark them on the clip. Delete a marker to leave a frame out, or add your own with M." },
     },
-    ui:Label{ ID = "AnalysisLabel", Text = "Analyse to see how this clip is animated.",
+    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT,
               StyleSheet = CARD, WordWrap = true, MinimumSize = { 0, 46 } },
 
     ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
+    ui:HGroup{ Spacing = 6,
+        ui:Label{ Text = "Threshold", Weight = 0.4 },
+        ui:Slider{ ID = "ThresholdSlider", Weight = 0.5, Minimum = 1, Maximum = 9,
+                   Value = THRESHOLD, Orientation = "Horizontal",
+                   ToolTip = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones." },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), Weight = 0.1 },
+    },
     ui:HGroup{ Spacing = 6,
         ui:Label{ Text = "Hold pattern", Weight = 0.4 },
         ui:ComboBox{ ID = "HoldCombo", Weight = 0.6,
@@ -700,7 +799,7 @@ local win = disp:AddWindow({
     },
     ui:HGroup{ Spacing = 6,
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
-                     ToolTip = "Apply Super Scale 2x. It shows on a timeline bigger than the clip." },
+                     ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
                      ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nOff keeps every drawing on its frame and draws nothing, to upscale only." },
         ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
@@ -708,7 +807,7 @@ local win = disp:AddWindow({
     },
 
     ui:Label{ ID = "RunSection", Text = "RUN", StyleSheet = SECTION },
-    ui:Button{ ID = "SmoothBtn", Text = "\xE2\x96\xB2  Smooth Clip", StyleSheet = START,
+    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START,
                MinimumSize = { 0, 38 }, MaximumSize = { 16777215, 38 } },
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = CARD, WordWrap = true,
@@ -745,6 +844,10 @@ items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 local SOURCE_PATH = nil
 local SOURCE_RANGE = nil
+-- The clip on the timeline, whose markers say which frames count, and the one
+-- the running analysis will mark, as marked_clip describes them.
+local SOURCE_ITEM = nil
+local ANALYSED_ITEM = nil
 -- Where the source clip sits on the timeline, and where the running render's
 -- clip sat when it started, since the playhead can move while it renders.
 local SOURCE_PLACE = nil
@@ -785,7 +888,7 @@ local function set_busy(busy)
     items.AnalyseBtn.Enabled = not busy
     items.RefreshBtn.Enabled = not busy
     items.UpdateBtn.Enabled = not busy
-    items.SmoothBtn.Text = busy and "Working..." or "\xE2\x96\xB2  Smooth Clip"
+    items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
 end
 
 -- Seconds as text that Python's float() reads, whatever the locale.
@@ -801,20 +904,96 @@ local function range_text(range)
 end
 
 local function refresh_source()
-    local path, err, range, place = selected_clip_path()
+    local path, err, range, place, item = selected_clip_path()
     if not path then
         SOURCE_PATH = nil
         SOURCE_RANGE = nil
         SOURCE_PLACE = nil
+        SOURCE_ITEM = nil
         items.SourceLabel.Text = err or "No clip under the playhead."
         return false
     end
     SOURCE_PATH = path
     SOURCE_RANGE = range
     SOURCE_PLACE = place
-    items.SourceLabel.Text = basename(path) .. "\n" .. range_text(range)
+    SOURCE_ITEM = item
+    items.SourceLabel.Text = short_name(basename(path)) .. "\n" .. range_text(range)
     items.Meta.Text = short_path(path, 68)
     return true
+end
+
+-- Eternal2x's own markers carry this, so analysing again replaces them and
+-- leaves every marker the editor placed.
+local MARK_TAG = "eternal2x"
+
+-- The frames marked on the clip, as source frames from its first frame,
+-- sorted, with those marked on a render of it stacked above. Every marker on
+-- the clip counts, whatever its colour. Markers on the timeline's ruler do
+-- not, since editors keep beat markers there. A marker reads as the source
+-- frame its timeline frame shows. nil if Resolve would not say where they are.
+local function clip_marks(clip)
+    if not clip then return {} end
+    local out, seen = {}, {}
+    for _, c in ipairs({ clip, clip.also }) do
+        local ok = pcall(function()
+            local markers = c.item:GetMarkers()
+            if type(markers) ~= "table" then error("no markers table") end
+            for key in pairs(markers) do
+                local t = tonumber(key)
+                if t then
+                    if clip.unreadable or c.unreadable then error("no clip bounds") end
+                    -- In timeline frames from the clip's first frame, which the
+                    -- render shares with its original, then in the original's frames.
+                    t = math.floor(t + 0.5) - c.origin
+                    if t >= 0 and t < clip.length then
+                        local f = math.floor(t * clip.per + 1e-6)
+                        if not seen[f] then
+                            seen[f] = true
+                            out[#out + 1] = f
+                        end
+                    end
+                end
+            end
+        end)
+        if not ok then return nil end
+    end
+    table.sort(out)
+    return out
+end
+
+-- Put a marker on each frame Analyse found, given as source frames from the
+-- clip's first frame, after taking down the ones it put there last time. Each
+-- goes on the first timeline frame that shows it, so it reads back as that
+-- frame or a later one of the same drawing, never the drawing before. On a
+-- timeline slower than the clip, two found frames can fall on one timeline
+-- frame, which then reads as the later one. The earlier is counted instead of
+-- marked. Returns how many it placed and how many shared a frame.
+local function mark_drawings(clip, marks)
+    local placed, shared, used = 0, 0, {}
+    if clip.unreadable then return placed, shared end
+    pcall(function()
+        local item = clip.item
+        local markers = item:GetMarkers()
+        if type(markers) ~= "table" then return end
+        for key, info in pairs(markers) do
+            if type(info) == "table" and info.customData == MARK_TAG then
+                item:DeleteMarkerAtFrame(tonumber(key))
+            end
+        end
+        for f in marks:gmatch("%d+") do
+            local t = math.ceil(tonumber(f) / clip.per - 1e-6)
+            if used[t] then
+                shared = shared + 1
+            elseif t < clip.length then
+                used[t] = true
+                if item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
+                                  "Delete this marker to leave the frame out.", 1, MARK_TAG) then
+                    placed = placed + 1
+                end
+            end
+        end
+    end)
+    return placed, shared
 end
 
 local function current_args(extra)
@@ -832,9 +1011,19 @@ local function current_args(extra)
     end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
-    if not items.UpscaleCB.Checked then args = args .. " --no-upscale" end
+    -- --network-upscale tells the stage this panel skips Super Scale for a
+    -- render that comes back already 2x.
+    if items.UpscaleCB.Checked then
+        args = args .. " --network-upscale"
+    else
+        args = args .. " --no-upscale"
+    end
     if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
     if items.GrainCB.Checked then args = args .. " --grain" end
+    if THRESHOLD ~= 5 then
+        -- Each step doubles or halves how big a change counts, around the default.
+        args = args .. " --threshold " .. string.format("%.6f", 0.004 * 2 ^ ((THRESHOLD - 5) / 2)):gsub(",", ".")
+    end
     if OUTPUT_DIR ~= "" then args = args .. " --output-dir " .. shell_quote(OUTPUT_DIR) end
     args = args .. " --status-file " .. shell_quote(STATUS_PATH)
     return args .. (extra or "")
@@ -925,23 +1114,9 @@ local function find_source(timeline, place)
     return nil
 end
 
--- The rates Resolve shows for 24000/1001 and its kin. It counts with the
--- exact rate, which over a long clip comes out a frame different. Any other
--- rate, 23.98 say, is what it says.
-local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
-               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
-
 -- The timeline's frame rate and the clip's. nil when either is unknown.
 local function rates(timeline, mpi)
-    local function rate(text)
-        local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
-        if not r then return nil end
-        for _, pair in ipairs(NTSC) do
-            if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
-        end
-        return r
-    end
-    local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
+    local ours, theirs = exact_rate(timeline:GetSetting("timelineFrameRate")), exact_rate(clip_property(mpi, "FPS"))
     if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
     return ours, theirs
 end
@@ -1006,16 +1181,17 @@ local function place_above(pool, project, mpi, frames)
     return track, item, over
 end
 
--- Super Scale makes the clip bigger than its file, which only shows on a
--- timeline bigger than the clip. On one the same size it is scaled back down.
-local function upscale_hint(project, mpi)
+-- The upscale only shows on a timeline bigger than the original clip. On one
+-- the same size it is scaled back down. `factor` is how much bigger than its
+-- file the clip plays: 2 with Super Scale, 1 for a render already drawn at 2x.
+local function upscale_hint(project, mpi, factor)
     local ok, width = pcall(function()
         return project:GetCurrentTimeline():GetSetting("timelineResolutionWidth")
     end)
     local w, h = tostring(clip_property(mpi, "Resolution") or ""):match("(%d+)%s*[xX]%s*(%d+)")
     w, h, width = tonumber(w), tonumber(h), ok and tonumber(width) or nil
-    if not (w and h and width) or width > w then return nil end
-    return string.format("To see the 2x upscale, set the timeline to %dx%d.", w * 2, h * 2)
+    if not (w and h and width) or width * 2 > w * factor then return nil end
+    return string.format("To see the 2x upscale, set the timeline to %dx%d.", w * factor, h * factor)
 end
 
 local function import_result(st)
@@ -1064,7 +1240,12 @@ local function import_result(st)
         said, rate_ok = set_sequence_fps(mpi, st.fps)
         notes = notes .. said
     end
-    if DO_UPSCALE and mpi.SetClipProperty then
+    if st.upscaled then
+        -- Drawn at 2x already, even if Upscale was unticked since. Super
+        -- Scale on top would make it 4x.
+        notes = notes .. ", upscaled 2x"
+        hint = upscale_hint(project, mpi, 1)
+    elseif DO_UPSCALE and mpi.SetClipProperty then
         -- Resolve accepts 1, 2, 3, 4 or Auto here. "2x" is rejected. The
         -- README calls the value an integer, so try a number if text is refused.
         -- pcall's first value only says nothing raised. Resolve reports a
@@ -1075,7 +1256,7 @@ local function import_result(st)
         end
         notes = notes .. ((called and scaled) and ", upscaled 2x"
                           or ", upscale not applied (Super Scale needs Resolve Studio)")
-        if called and scaled then hint = upscale_hint(project, mpi) end
+        if called and scaled then hint = upscale_hint(project, mpi, 2) end
     end
     -- At the wrong rate it would play at the wrong speed and cover more of
     -- the timeline than the original, so it stays in the media pool.
@@ -1151,8 +1332,24 @@ local function apply_status(st)
         set_progress(1.0, "Finished")
         if ANALYSING then
             ANALYSING = false
+            local placed, shared = 0, 0
+            if ANALYSED_ITEM then placed, shared = mark_drawings(ANALYSED_ITEM, st.marks) end
             if st.message ~= "" then items.AnalysisLabel.Text = st.message end
-            set_status("Analysis complete.")
+            if placed > 0 then
+                items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
+                    .. " frames on the clip."
+                if shared > 0 then
+                    items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " " .. shared
+                        .. (shared == 1 and " more found frame shares a timeline frame with another"
+                            or " more found frames share timeline frames with others")
+                        .. ", as the clip runs faster than the timeline."
+                end
+                set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
+            elseif st.marks ~= "" and ANALYSED_ITEM and ANALYSED_ITEM.unreadable then
+                set_status("Analysis complete. Resolve would not say where the clip's frames are, so no markers were placed.")
+            else
+                set_status("Analysis complete.")
+            end
             return true
         end
         if st.import_path ~= "" and not IMPORTED then
@@ -1296,7 +1493,7 @@ end
 function win.On.RefreshBtn.Clicked(ev)
     if refresh_source() then
         set_status("Ready.")
-        items.AnalysisLabel.Text = "Analyse to see how this clip is animated."
+        items.AnalysisLabel.Text = ANALYSIS_HINT
     else
         set_status(items.SourceLabel.Text)
     end
@@ -1307,11 +1504,13 @@ end
 local function pick_source()
     local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
                                           SOURCE_PLACE
+    local clip = SOURCE_ITEM
     if refresh_source() then return true end
     if previous then
         SOURCE_PATH = previous
         SOURCE_RANGE = range
         SOURCE_PLACE = place
+        SOURCE_ITEM = clip
         items.SourceLabel.Text = label
         return true
     end
@@ -1333,6 +1532,7 @@ function win.On.AnalyseBtn.Clicked(ev)
     -- take tens of seconds on a long one, and Resolve must not freeze for it.
     clear_status()
     ANALYSING = true
+    ANALYSED_ITEM = SOURCE_ITEM
     IMPORTED = false
     STAGE.name = nil
     set_busy(true)
@@ -1352,6 +1552,23 @@ function win.On.SmoothBtn.Clicked(ev)
         return
     end
     if not pick_source() then return end
+    -- Read before anything starts. Rendering as if unmarked would throw away
+    -- the frames the editor chose.
+    local marks = clip_marks(SOURCE_ITEM)
+    if not marks then
+        set_status("Could not read the markers on the clip from Resolve, so nothing was rendered.")
+        return
+    end
+    if #marks > 0 then
+        -- A write can look fine and still fail as the file closes.
+        local f = io.open(MARKS_PATH, "w")
+        local wrote = f and f:write(table.concat(marks, ","))
+        local closed = f and f:close()
+        if not (wrote and closed) then
+            set_status("Could not write the marked frames to " .. MARKS_PATH .. ".")
+            return
+        end
+    end
     clear_status()
     IMPORTED = false
     ANALYSING = false
@@ -1361,8 +1578,13 @@ function win.On.SmoothBtn.Clicked(ev)
     items.CompareBtn.Enabled = false
     set_busy(true)
     set_progress(0.01, "Starting")
-    set_status("Working. Resolve stays usable while this runs.")
-    start_run(current_args(""))
+    if #marks > 0 then
+        set_status("Rendering from the " .. #marks .. " frames marked on the clip. Resolve stays usable.")
+        start_run(current_args(" --marks-file " .. shell_quote(MARKS_PATH)))
+    else
+        set_status("No markers on the clip, so Eternal2x finds the drawings. Resolve stays usable.")
+        start_run(current_args(""))
+    end
 end
 
 -- Switch the smoothed clip off and on, so the original under it shows through.
@@ -1438,6 +1660,12 @@ function win.On.CancelBtn.Clicked(ev)
     set_busy(false)
     set_progress(0, nil)
     set_status("Ready.")
+end
+
+function win.On.ThresholdSlider.ValueChanged(ev)
+    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(items.ThresholdSlider.Value) or 5) + 0.5)))
+    items.ThresholdValue.Text = tostring(THRESHOLD)
+    save_conf()
 end
 
 function win.On.HoldCombo.CurrentIndexChanged(ev)

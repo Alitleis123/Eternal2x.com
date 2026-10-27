@@ -1045,6 +1045,38 @@ def test_super_scale_is_applied_with_a_value_resolve_accepts(lua, direct):
     assert H.property_of("Super Scale") == "2"
 
 
+def test_the_panel_asks_for_the_network_upscale_only_when_ticked(lua, direct):
+    """The stage only draws at 2x for a panel that then leaves Super Scale off."""
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert "--network-upscale" in H.last_command()
+    H.set_checkbox("UpscaleCB", False)
+    H.click("SmoothBtn")
+    assert "--network-upscale" not in H.last_command()
+
+
+def test_a_render_drawn_at_2x_gets_no_super_scale(lua, direct):
+    """Real-ESRGAN drew it at 2x. Super Scale on top would make it 4x."""
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, upscaled=True)
+    assert H.property_of("Super Scale") is None
+    assert "upscaled 2x" in H.status()
+
+
+def test_a_render_drawn_at_2x_asks_for_a_timeline_its_own_size(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_resolution = "3840x2160"
+    finish_render(H, direct, upscaled=True)
+    assert "set the timeline to 3840x2160" in H.widgets["Meta"].Text
+
+
+def test_a_render_drawn_at_2x_on_a_timeline_its_size_gets_no_tip(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.media_resolution, H.timeline_width = "3840x2160", "3840"
+    finish_render(H, direct, upscaled=True)
+    assert "set the timeline" not in H.widgets["Meta"].Text
+
+
 def test_upscale_unchecked_leaves_super_scale_alone(lua, direct):
     H = load(lua, ui_script(direct))
     H.set_checkbox("UpscaleCB", False)
@@ -1659,6 +1691,29 @@ def test_the_end_frame_wins_over_the_end_time(lua, direct):
     assert "--start-time 20.000000 --end-time 21.966667" in H.last_command()
 
 
+def test_a_cut_at_the_timeline_rate_ends_where_the_clip_does(lua, direct):
+    """Measured on Resolve Studio 20.3.1: at 23.976 fps a 40 frame cut from
+    frame 20 reports end frame 60, one past its last, so the render read a
+    frame past the cut, which can be the next shot."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_frames = lua.table(20, 60)
+    H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "23.976", 40
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 0.834168 --end-time 2.502503" in H.last_command()
+
+
+def test_a_cut_whose_end_frame_is_its_last_keeps_it(lua, direct):
+    """At 60 fps the same build reports the last frame used: 119 frames
+    from 1200 end at 1318."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_frames = lua.table(1200, 1318)
+    H.clip_fps, H.timeline_fps, H.item_duration = "60", "60", 119
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "--start-time 20.000000 --end-time 21.983333" in H.last_command()
+
+
 def test_moving_to_another_cut_of_the_same_file_picks_up_its_range(lua, direct):
     H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
     H.source_range = lua.table(1.0, 2.0)
@@ -1797,3 +1852,297 @@ def test_a_saved_quality_from_an_older_version_is_dropped(lua, direct):
     assert "quality=" not in conf.read_text()
     H.click("SmoothBtn")
     assert "--quality" not in H.last_command()
+
+
+# --------------------------------------------------------------------------
+# frames marked on the clip
+# --------------------------------------------------------------------------
+
+def marks_sent(direct):
+    """The frames Render handed the stage, from the file it wrote them to."""
+    return (direct / ".eternal2x_marks.txt").read_text()
+
+
+def test_the_run_button_says_render(lua, direct):
+    """It smooths and upscales, so Smooth Clip undersold it."""
+    H = load(lua, ui_script(direct))
+    assert "Render" in H.widgets["SmoothBtn"].Text
+
+
+def test_render_hands_over_the_frames_marked_on_the_clip(lua, direct):
+    H = load(lua, ui_script(direct))
+    for frame in (12, 0, 6):
+        H.add_marker(frame)
+    H.click("SmoothBtn")
+    assert "--marks-file" in H.last_command()
+    assert marks_sent(direct) == "0,6,12"
+    assert "3 frames marked" in H.status()
+
+
+def test_render_without_markers_finds_the_drawings_itself(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert "--marks" not in H.last_command()
+    assert "No markers" in H.status()
+
+
+def test_markers_past_the_end_of_the_clip_do_not_count(lua, direct):
+    """The clip may be trimmed shorter than the media its markers sit on."""
+    H = load(lua, ui_script(direct))
+    H.add_marker(2)
+    H.add_marker(400)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "2"
+
+
+def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,8",
+                 message="12 frames, 4 unique drawings. Animated on 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,4,8"
+    assert H.tagged_markers() == 4
+    assert "Marked 4 frames" in H.widgets["AnalysisLabel"].Text
+    assert "Render" in H.status()
+
+
+def test_analysing_again_replaces_only_its_own_markers(lua, direct):
+    """The editor's markers stay. Eternal2x's from last time go."""
+    H = load(lua, ui_script(direct))
+    H.add_marker(5)
+    H.add_marker(9, "eternal2x")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,5"
+
+
+def test_the_threshold_slider_sets_how_big_a_change_counts(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    assert "--threshold" not in H.last_command(), "the default should send nothing"
+    H.set_slider("ThresholdSlider", 7)
+    assert H.widgets["ThresholdValue"].Text == "7"
+    H.click("AnalyseBtn")
+    assert "--threshold 0.008000" in H.last_command()
+    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
+    assert "threshold=7" in conf
+
+
+def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
+    """Resolve keys the markers from the media's start: M pressed 10 frames
+    into a clip trimmed 20 frames in reads back as frame 30."""
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    for key in (30, 20, 5, 75):
+        H.add_marker(key)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "0,10", "the trimmed-off frames count for nothing"
+
+
+def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.left_offset = 20
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "20,22,24"
+
+
+def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
+    """A 30 fps clip on a 23.976 timeline: markers sit on timeline frames."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "30", "23.976"
+    H.left_offset = 47
+    H.add_marker(47)
+    H.add_marker(57)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "0,12", "timeline frame 10 shows source frame 12"
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,13,25", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "47,57,58,67"
+
+
+def test_markers_that_cannot_be_read_stop_the_render(lua, direct):
+    """Rendering as if the clip were unmarked would undo the editor's choice."""
+    H = load(lua, ui_script(direct))
+    H.markers_fail = True
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before, "it should not have started"
+    assert "Could not read the markers" in H.status()
+
+
+def test_an_analysis_with_nothing_to_mark_clears_its_old_markers(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.add_marker(5)
+    H.add_marker(9, "eternal2x")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="",
+                 message="Every frame is a new drawing, so there is nothing to rebuild.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "5"
+
+
+def test_markers_on_a_render_above_its_original_count_too(lua, direct):
+    """The editor sees the render on top and may mark that instead."""
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_markers[1][0] = {}; H.under_markers[1][12] = {}", H)
+    H.click("RefreshBtn")
+    H.add_marker(6)
+    H.click("SmoothBtn")
+    assert "shot.mov" in H.last_command()
+    assert marks_sent(direct) == "0,6,12"
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3", message="On 3s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "6", "Analyse marks the original, not the render"
+
+
+def test_a_long_clip_name_leaves_room_for_its_range(lua, direct):
+    """Scene pack names run long, and wrapped they hid the range line."""
+    name = ("『葬送のフリーレン』第2期ノンクレジットオープニング映像／OPテーマ：「lulu.」"
+            "Mrs. GREEN APPLE／フリーレンOP - TOHO animation チャンネル (1080p, h264).mp4")
+    H = load(lua, ui_script(direct), clip="/media/" + name)
+    first, second = H.text_of("SourceLabel").split("\n")
+    assert first.startswith("『葬送のフリーレン』") and first.endswith("(1080p, h264).mp4")
+    assert "..." in first and len(first) < len(name)
+    assert "\ufffd" not in first
+    assert second.startswith("Whole file") or "of the file" in second
+
+
+def test_a_short_clip_name_is_left_whole(lua, direct):
+    H = load(lua, ui_script(direct), clip="/media/Gojo s laughter.mp4")
+    assert H.text_of("SourceLabel").startswith("Gojo s laughter.mp4\n")
+
+
+def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
+    """30 fps on 23.976: rounded both ways, a drawing at 127 read back as 126,
+    the last frame of the drawing before it."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps, H.item_duration, H.left_offset = "30", "23.976", 200, 47
+    lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,125,127,129", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    H.click("SmoothBtn")
+    sent = [int(m) for m in marks_sent(direct).split(",")]
+    assert sent == [0, 125, 127, 130]
+    drawn = (0, 125, 127, 129, 10 ** 6)
+    assert all(drawn[i] <= f < drawn[i + 1] for i, f in enumerate(sent)), \
+        "each mark reads as its own drawing, not the one before or after"
+
+
+def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, direct):
+    """Guessing the left offset would read every marker as the wrong frame."""
+    H = load(lua, ui_script(direct))
+    H.left_offset_fails = True
+    H.click("RefreshBtn")
+    H.add_marker(30)
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not read the markers" in H.status()
+
+
+def test_an_unmarked_clip_whose_bounds_cannot_be_read_still_renders(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.left_offset_fails = True
+    H.click("RefreshBtn")
+    H.click("SmoothBtn")
+    assert "--marks-file" not in H.last_command()
+    assert "No markers" in H.status()
+
+
+def test_no_marker_list_from_resolve_stops_the_render(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.markers_nil = True
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not read the markers" in H.status()
+
+
+def test_a_marks_file_that_fails_to_close_stops_the_render(lua, direct):
+    """A buffered write can succeed and the close still lose its end."""
+    H = load(lua, ui_script(direct))
+    lua.execute("""
+        local real = io.open
+        io.open = function(path, mode)
+            if tostring(path):find(".eternal2x_marks", 1, true) and mode == "w" then
+                return { write = function(self) return self end,
+                         close = function() return nil, "disk full" end }
+            end
+            return real(path, mode)
+        end""")
+    H.add_marker(0)
+    H.add_marker(6)
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not write the marked frames" in H.status()
+
+
+def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, direct):
+    """A 30 fps original under a 24 fps render on a 24 fps timeline: the
+    render's marker 12 timeline frames in is the original's frame 15."""
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_fps = '30'; H.under_markers[1][0] = {}", H)
+    H.click("RefreshBtn")
+    H.add_marker(12)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "0,15"
+
+
+def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_spans[1][2] = H.under_spans[1][1] + 24", H)
+    H.click("RefreshBtn")
+    H.add_marker(30)
+    H.click("SmoothBtn")
+    assert "--marks-file" not in H.last_command()
+    assert "No markers" in H.status()
+
+
+def test_found_frames_that_share_a_timeline_frame_are_reported(lua, direct):
+    """30 fps on 23.976: source frame 4 is never shown, so frames 4 and 5
+    share timeline frame 4. The panel says so rather than dropping one."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "30", "23.976"
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,4,6"
+    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].Text
+
+
+def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
+    """23.976 is 24000/1001. Rounded, frame 1001 of a 24 fps timeline read
+    as 999, the drawing before the 1000 it shows."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "24", 1200
+    lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
+    H.click("RefreshBtn")
+    H.add_marker(1001)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "1000"
+    H.clip_fps, H.timeline_fps = "30", "29.97"
+    lua.execute("local H = ...; H.markers = {}", H)
+    H.add_marker(999)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "999", "rounded, 999 timeline frames came out as 1000"
+
+
+def test_several_shared_frames_read_as_a_plural(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "60", "24"
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3,5,6,7", message="On 1s.")
+    H.click("RefreshStatusBtn")
+    text = H.widgets["AnalysisLabel"].Text
+    assert "2 more found frames share timeline frames with others, as the clip runs faster" in text

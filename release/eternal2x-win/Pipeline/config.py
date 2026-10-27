@@ -41,6 +41,9 @@ class Eternal2xConfig:
     interpolate_enabled: bool = True
     upscale_enabled: bool = True
     upscale_factor: int = 2
+    # Upscale 2x with the network in Pipeline/upscaler.py. Where it cannot run,
+    # the render stays at the clip's size and Resolve's Super Scale does it.
+    network_upscale: bool = False
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -122,6 +122,18 @@ def test_release_code_matches_the_repo_source(repo_root, release):
 
 
 @pytest.mark.parametrize("release", RELEASES)
+def test_release_ships_the_upscalers_network_and_its_licence(repo_root, release):
+    base = repo_root / "release" / release
+    if not base.exists():
+        pytest.skip(f"{release} not built")
+    for name in ("realesr-animevideov3-2x.onnx", "LICENSE-Real-ESRGAN.txt"):
+        shipped = base / "Pipeline" / "networks" / name
+        source = repo_root / "Pipeline" / "networks" / name
+        assert shipped.exists(), f"{release} is missing Pipeline/networks/{name}"
+        assert shipped.read_bytes() == source.read_bytes(), f"{release} has a stale {name}"
+
+
+@pytest.mark.parametrize("release", RELEASES)
 def test_release_ships_every_module_the_ui_invokes(repo_root, release):
     base = repo_root / "release" / release
     if not base.exists():
