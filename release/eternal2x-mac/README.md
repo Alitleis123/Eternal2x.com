@@ -18,9 +18,9 @@ drawings   A   B   C     D          4 unique drawings
 rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer hold
 ```
 
-![Six frames of hair blowing in the wind, drawn on 3s. As drawn, each drawing is held for three frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
+![Six frames of hair blowing in the wind, drawn on 3s. As drawn, each drawing is held for three frames. From Eternal2x, each repeat is replaced by a new in-between.](https://upflow2x.com/assets/demo/frames.jpg)
 
-*Six frames of hair in the wind, drawn on 3s. The [site](https://eternal2x.com)
+*Six frames of hair in the wind, drawn on 3s. The [site](https://upflow2x.com)
 has the moving version, with a divider to drag between the two.*
 
 Every drawing starts on the same frame it did in the source, so cuts and lip
@@ -122,7 +122,7 @@ Markers on the timeline's ruler do not, so beat markers are safe there. You can
 skip Analyse and mark the frames yourself. A clip with no markers at all is
 rendered from the drawings Eternal2x finds on its own.
 
-![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://eternal2x.com/assets/demo/resolve.jpg)
+![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://upflow2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
@@ -275,7 +275,7 @@ by Xintao Wang, under the BSD 3-Clause licence
 `Pipeline/networks` is built from the published weights by
 `tools/make_upscaler_model.py`, and ships with its licence beside it.
 
-The film on the site, [promo.mp4](https://eternal2x.com/assets/demo/promo.mp4),
+The film on the site, [promo.mp4](https://upflow2x.com/assets/demo/promo.mp4),
 uses footage from [Hero](https://studio.blender.org/projects/hero/) by the
 Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
 edited, and footsteps, clicks and paper sounds by [Kenney](https://kenney.nl/),
