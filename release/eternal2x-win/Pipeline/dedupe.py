@@ -200,26 +200,41 @@ def detect_base_hold(holds: Sequence[Hold], *, max_pattern: int = 4) -> int:
     return min(length for length, count in counts.items() if count == best)
 
 
-def hold_repeats(hold: Hold, base_hold: int) -> int:
+def pose_base(base_hold: int, fps: float = 24.0) -> int:
+    """The pattern a hold is measured against to tell a pose from a drawing.
+
+    It is the clip's own, but never shorter than 2s at 24 fps lasts at the
+    clip's rate: 2 frames at 24, 5 at 60. On a 60 fps file made from 24 fps
+    animation a drawing on 2s lasts 5 frames, so measured against 2 every
+    one of them read as a pose and stayed partly still.
+    """
+    return max(2, int(base_hold), int(fps / 12.0 + 0.5))
+
+
+def hold_repeats(hold: Hold, base_hold: int, fps: float = 24.0) -> int:
     """How many intermediate frames one drawing occupies.
 
-    A drawing held for the base pattern appears once, and one held for six
-    times the base appears six times, so deliberate holds stay still instead
-    of melting into motion. The base is at least 2 here: planning on 1s would
-    give every frame its own slot and leave the held frames of a mostly-1s
-    clip exactly as stepped as they were. A single-frame drawing still gets
-    exactly one slot, so it is never touched. Halves round up, not to even,
-    so equal holds always get equal treatment.
+    A hold up to twice the pattern is an ordinary drawing and appears once,
+    so everything up to the next one is drawn fresh: 3s in a clip on 2s, or
+    the uneven holds a frame rate conversion leaves, like 2, 2, 2, 4 on a
+    60 fps file. Kept partly still, they stuttered. A longer hold is a pose
+    and keeps its length, one held for six times the pattern appearing six
+    times, so it stays still instead of melting into motion. A single-frame
+    drawing still gets exactly one slot, so it is never touched. Halves
+    round up, not to even, so equal holds always get equal treatment.
     """
-    base = max(2, int(base_hold))
+    base = pose_base(base_hold, fps)
+    if hold.length <= 2 * base:
+        return 1
     return max(1, int(hold.length / float(base) + 0.5))
 
 
-def build_output_indices(holds: Sequence[Hold], base_hold: int) -> List[int]:
+def build_output_indices(holds: Sequence[Hold], base_hold: int,
+                         fps: float = 24.0) -> List[int]:
     """Choose which source frames make up the intermediate clip."""
     indices: List[int] = []
     for hold in holds:
-        indices.extend([hold.index] * hold_repeats(hold, base_hold))
+        indices.extend([hold.index] * hold_repeats(hold, base_hold, fps))
     return indices
 
 
@@ -240,7 +255,7 @@ def plan_from_scores(
         fps=fps,
         holds=holds,
         base_hold=base,
-        output_indices=build_output_indices(holds, base),
+        output_indices=build_output_indices(holds, base, fps),
     )
 
 
@@ -293,7 +308,7 @@ def output_time_map(plan: DedupePlan) -> List[float]:
     positions: List[float] = []
     slot = 0
     for hold in plan.holds:
-        repeats = 1 if plan.marked else hold_repeats(hold, plan.base_hold)
+        repeats = 1 if plan.marked else hold_repeats(hold, plan.base_hold, plan.fps)
         step = repeats / float(hold.length)
         positions.extend(min(last, slot + k * step) for k in range(hold.length))
         slot += repeats

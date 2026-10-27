@@ -217,8 +217,9 @@ def test_plan_survives_mixed_timing():
     plan = plan_from_scores(scores_for([2, 2, 3, 2, 8, 2, 2]), 24.0, threshold=T)
     assert plan.base_hold == 2
     assert plan.unique_drawings == 7
-    # 8-frame hold -> 4 frames, 3-frame hold -> 2, the five 2-frame holds -> 1 each
-    assert plan.output_frames == 11
+    # The 8-frame hold is a pose and keeps 4 frames. The 3-frame hold is
+    # under twice the pattern, so it is drawn through like the five on 2s.
+    assert plan.output_frames == 10
 
 
 def test_plan_serialises():
@@ -362,3 +363,24 @@ def test_marking_every_frame_or_only_the_first_leaves_nothing_to_do():
     from Pipeline.dedupe import plan_from_marks
     assert plan_from_marks(range(6), 6, 24.0).is_noop
     assert plan_from_marks([], 6, 24.0).is_noop
+
+
+def test_holds_up_to_twice_the_pattern_are_drawn_through():
+    """A 4-frame hold in a clip on 2s is a drawing, not a pose. Kept half
+    still, it stuttered."""
+    holds = [Hold(0, 2), Hold(2, 4), Hold(6, 2)]
+    assert build_output_indices(holds, 2) == [0, 2, 6]
+
+
+def test_the_pose_length_follows_the_frame_rate():
+    """Measured on a 60 fps scene pack file: holds of 2, 2, 2, 4 and 5 are
+    drawings at 60, so none stays still, but a 12-frame hold is a pose."""
+    holds = [Hold(0, 2), Hold(2, 2), Hold(4, 4), Hold(8, 5), Hold(13, 12), Hold(25, 2)]
+    assert build_output_indices(holds, 2, 60.0) == [0, 2, 4, 8, 13, 13, 25]
+    assert build_output_indices(holds, 2, 24.0) == [0, 2, 4, 8, 8, 8, 13, 13, 13, 13, 13, 13, 25]
+
+
+def test_analyse_marks_each_drawing_of_a_60fps_clip_once():
+    from Stages.resolve_smooth import drawing_marks
+    plan = plan_from_scores(scores_for([5] * 6), 60.0, threshold=T)
+    assert drawing_marks(plan) == [0, 5, 10, 15, 20, 25]

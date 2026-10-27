@@ -170,7 +170,8 @@ def drawing_marks(plan) -> list:
     Marked only where it starts, it would drift the whole way there. Shorter
     holds are drawn through, like 3s in a clip mostly on 2s.
     """
-    base = max(2, plan.base_hold)
+    from Pipeline.dedupe import pose_base
+    base = pose_base(plan.base_hold, plan.fps)
     marks = set()
     for hold in plan.holds:
         marks.add(hold.index)
