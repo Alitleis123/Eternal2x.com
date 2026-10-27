@@ -964,10 +964,9 @@ end
 -- clip's first frame, after taking down the ones it put there last time. Each
 -- goes on the first timeline frame that shows it, so it reads back as that
 -- frame or a later one of the same drawing, never the drawing before. On a
--- timeline slower than the clip, a drawing held for less than one timeline
--- frame can share it with the next one. It never shows on that timeline, and
--- is counted instead of marked. Returns how many it placed and how many
--- shared a frame.
+-- timeline slower than the clip, two found frames can fall on one timeline
+-- frame, which then reads as the later one. The earlier is counted instead of
+-- marked. Returns how many it placed and how many shared a frame.
 local function mark_drawings(clip, marks)
     local placed, shared, used = 0, 0, {}
     if clip.unreadable then return placed, shared end
@@ -1328,8 +1327,9 @@ local function apply_status(st)
                     .. " frames on the clip."
                 if shared > 0 then
                     items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " " .. shared
-                        .. (shared == 1 and " drawing lasts" or " drawings last")
-                        .. " less than a frame of this timeline, so never shows on it."
+                        .. (shared == 1 and " more found frame shares a timeline frame with another"
+                            or " more found frames share timeline frames with others")
+                        .. ", as the clip runs faster than the timeline."
                 end
                 set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
             elseif st.marks ~= "" and ANALYSED_ITEM and ANALYSED_ITEM.unreadable then

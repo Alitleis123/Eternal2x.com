@@ -2075,9 +2075,9 @@ def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
     assert "No markers" in H.status()
 
 
-def test_drawings_too_short_for_the_timeline_are_reported(lua, direct):
-    """30 fps on 23.976: source frame 4 is never shown, so drawings at 4 and
-    5 share timeline frame 4. The panel says so rather than dropping one."""
+def test_found_frames_that_share_a_timeline_frame_are_reported(lua, direct):
+    """30 fps on 23.976: source frame 4 is never shown, so frames 4 and 5
+    share timeline frame 4. The panel says so rather than dropping one."""
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
     H.click("RefreshBtn")
@@ -2085,7 +2085,7 @@ def test_drawings_too_short_for_the_timeline_are_reported(lua, direct):
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,6"
-    assert "1 drawing lasts less than a frame of this timeline" in H.widgets["AnalysisLabel"].Text
+    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].Text
 
 
 def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
@@ -2103,3 +2103,14 @@ def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
     H.add_marker(999)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "999", "rounded, 999 timeline frames came out as 1000"
+
+
+def test_several_shared_frames_read_as_a_plural(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "60", "24"
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3,5,6,7", message="On 1s.")
+    H.click("RefreshStatusBtn")
+    text = H.widgets["AnalysisLabel"].Text
+    assert "2 more found frames share timeline frames with others, as the clip runs faster" in text
