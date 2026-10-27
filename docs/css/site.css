@@ -89,7 +89,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 }
 .brand:hover { color: var(--text); }
 .brand img { width: 34px; height: 34px; }
-.brand span span { color: var(--amber); }
+.brand span span { margin-left: 2px; padding: 4px 5px 3px; border-radius: 5px; font: 600 11px/1 var(--mono); letter-spacing: .04em; color: var(--bg); background: var(--amber); vertical-align: 3px; }
 .top nav { display: flex; align-items: center; gap: 6px; }
 .top nav a:not(.btn) { font-size: 15px; text-decoration: none; color: var(--soft); padding: 8px 10px; border-radius: 6px; }
 .top nav a:not(.btn):hover { color: var(--text); }
