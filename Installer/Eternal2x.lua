@@ -1,5 +1,5 @@
--- Eternal2x  --  smooth 2x for hand-drawn animation
--- Resolve script panel: Workspace > Scripts > Eternal2x
+-- Upflow2x  --  upscale and smooth hand-drawn animation
+-- Resolve script panel: Workspace > Scripts > Upflow2x
 
 -- ---------------------------------------------------------------------------
 -- paths and config
@@ -108,12 +108,91 @@ local conf = read_conf(CONF_PATH)
 local REPO_ROOT = trim_trailing_sep(conf["repo_root"] or _G.ETERNAL2X_ROOT or root or "")
 local PYTHON = conf["python"] or (is_windows() and "python" or "python3")
 local UPDATE_URL = conf["update_url"] or ""
--- The repo moved to sidebandstudio. An install keeps the feed it was set up
--- with through every update, and the old one only works while GitHub
--- redirects it, so it is swapped for the new one.
-if UPDATE_URL == "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json" then
-    UPDATE_URL = "https://raw.githubusercontent.com/sidebandstudio/Eternal2x.com/main/update/latest.json"
+-- The repo moved to sidebandstudio, then was renamed Upflow2x. An install
+-- keeps the feed it was set up with through every update, and the old ones
+-- only work while GitHub redirects them, so they are swapped for the new one.
+if UPDATE_URL == "https://raw.githubusercontent.com/Alitleis123/Eternal2x.com/main/update/latest.json"
+        or UPDATE_URL == "https://raw.githubusercontent.com/sidebandstudio/Eternal2x.com/main/update/latest.json" then
+    UPDATE_URL = "https://raw.githubusercontent.com/sidebandstudio/Upflow2x/main/update/latest.json"
 end
+
+-- Workspace > Scripts lists the launcher by its file name. Installs from
+-- before the rename have it as Eternal2x.lua beside the config, and updates
+-- never touch that file, so the panel renames it once, to Upflow2x.lua.
+-- The old one only goes once a whole new one is in place, so a failure along
+-- the way leaves the menu entry that works.
+local function read_file(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local body = f:read("*a")
+    f:close()
+    return body
+end
+
+-- Every launcher ever installed opens with this line.
+local function is_launcher(body)
+    local first = body and body:match("^[^\r\n]*") or ""
+    return first:find("^%-%- %w+ launcher script installed into Resolve Scripts/") ~= nil
+end
+
+local function same_path(a, b)
+    local function norm(p)
+        p = p:gsub("\\", "/"):gsub("/+", "/")
+        return is_windows() and p:lower() or p
+    end
+    return norm(a) == norm(b)
+end
+
+-- A launcher that would run: the header, the call into the panel, and Lua
+-- that compiles, so one cut short anywhere is refused.
+local function complete_launcher(body)
+    return is_launcher(body) and body:find("pcall(dofile, ui_script)", 1, true) ~= nil
+        and (loadstring or load)(body) ~= nil
+end
+
+local function exists(path)
+    if read_file(path) then return true end
+    -- An unreadable file is still there. Renaming a file onto itself only
+    -- succeeds when it exists, on macOS and Linux.
+    return not is_windows() and os.rename(path, path) ~= nil
+end
+
+local function rename_launcher()
+    if not _G.ETERNAL2X_CONF then return end
+    local dir = CONF_PATH:match("^(.*)[/\\][^/\\]*$")
+    if not dir then return end
+    local old_path, new_path = join_path(dir, "Eternal2x.lua"), join_path(dir, "Upflow2x.lua")
+    -- With the config beside this panel, Eternal2x.lua there is the panel.
+    if same_path(old_path, join_path(REPO_ROOT, "Installer/Eternal2x.lua")) then return end
+    if not is_launcher(read_file(old_path)) then return end
+    local existing = read_file(new_path)
+    if existing then
+        -- Someone else's script, or one cut short: keep the old launcher.
+        if not complete_launcher(existing) then return end
+    elseif exists(new_path) then
+        return
+    else
+        local launcher = read_file(join_path(REPO_ROOT, "Installer/Eternal2xLauncher.lua"))
+        if not complete_launcher(launcher) then return end
+        -- Written whole under a name of its own first, so a full disk or a
+        -- second Resolve doing the same never finds half a launcher.
+        local temp = new_path .. "." .. os.time() .. (tostring({}):gsub("%W", "")) .. ".part"
+        local out = io.open(temp, "wb")
+        if not out then return end
+        local wrote = out:write(launcher)
+        local closed = out:close()
+        -- Windows refuses to rename onto a file that exists, but macOS
+        -- replaces it, so look once more just before.
+        if not (wrote and closed) or read_file(temp) ~= launcher or exists(new_path)
+                or not os.rename(temp, new_path) then
+            os.remove(temp)
+            return
+        end
+        if read_file(new_path) ~= launcher then return end
+    end
+    os.remove(old_path)
+end
+pcall(rename_launcher)
 local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
@@ -478,7 +557,7 @@ local function build_command(module_name, args, background, log)
         -- the full path, `cmd /c` strips its quotes when it holds & and
         -- splits there, and `call` would double a ^ in it.
         local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
-        return "start \"Eternal2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
+        return "start \"Upflow2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
             .. basename(RUN_SCRIPT)
     end
     -- The subshell backgrounds the whole run, and records how it ended.
@@ -493,7 +572,7 @@ end
 local function launch_problem()
     if is_windows() and (REPO_ROOT ~= "" and REPO_ROOT or root):find("%%") then
         return "The plugin folder's path contains %, which Windows cannot start Python "
-            .. "from. Move the Eternal2x folder to a path without %, then re-run the installer."
+            .. "from. Move the Upflow2x folder to a path without %, then re-run the installer."
     end
     return nil
 end
@@ -566,7 +645,7 @@ end
 
 local function run_blocking(module_name, args, log)
     local cmd = build_command(module_name, args, false, log)
-    print("[Eternal2x] " .. cmd)
+    print("[Upflow2x] " .. cmd)
     local ok = execute(cmd)
     return (ok == true or ok == 0)
 end
@@ -575,7 +654,7 @@ end
 local function run_background(module_name, args)
     local cmd = build_command(module_name, args, true)
     if not cmd then return false end
-    print("[Eternal2x] " .. cmd)
+    print("[Upflow2x] " .. cmd)
     local ok = execute(cmd)
     return (ok == true or ok == 0)
 end
@@ -738,7 +817,7 @@ local ANALYSIS_HINT = "Analyse marks the drawings on the clip. Or mark the frame
 
 local win = disp:AddWindow({
     ID = "Eternal2x",
-    WindowTitle = "Eternal2x  v" .. CURRENT_VERSION,
+    WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
     Geometry = { 100, 100, 460, 700 },
     StyleSheet = [[
         QWidget { background-color: #0b0b0f; color: #e2e2ea; font-size: 12px; }
@@ -768,7 +847,7 @@ local win = disp:AddWindow({
 }, ui:VGroup{
     Spacing = 2,
 
-    ui:Label{ ID = "Title", Text = "Eternal2x", StyleSheet = TITLE },
+    ui:Label{ ID = "Title", Text = "Upflow2x", StyleSheet = TITLE },
     ui:Label{ ID = "SubTitle", StyleSheet = SUBTITLE,
               Text = "Smooth 2x for hand-drawn animation  \xC2\xB7  v" .. CURRENT_VERSION },
 
@@ -869,7 +948,7 @@ local ANALYSING = false
 
 local function set_status(msg)
     items.Status.Text = msg or ""
-    print("[Eternal2x] " .. (msg or ""))
+    print("[Upflow2x] " .. (msg or ""))
 end
 
 -- A stage at 0% is still shown: installing the AI runtime on first use stays
@@ -991,7 +1070,7 @@ local function mark_drawings(clip, marks)
                 shared = shared + 1
             elseif t < clip.length then
                 used[t] = true
-                if item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
+                if item:AddMarker(clip.origin + t, "Yellow", "Upflow2x",
                                   "Delete this marker to leave the frame out.", 1, MARK_TAG) then
                     placed = placed + 1
                 end
@@ -1179,7 +1258,7 @@ local function place_above(pool, project, mpi, frames)
         if added then pcall(function() timeline:DeleteTrack("video", track) end) end
         return nil
     end
-    if added then pcall(function() timeline:SetTrackName("video", track, "Eternal2x") end) end
+    if added then pcall(function() timeline:SetTrackName("video", track, "Upflow2x") end) end
     -- Where it really ends, in case this Resolve counts frames differently.
     local over = 0
     pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
@@ -1371,7 +1450,7 @@ local function apply_status(st)
             elseif where then
                 -- The status box fits two lines, too few for a path as well.
                 items.Meta.Text = short_path(where, 68)
-                print("[Eternal2x] The render is at " .. where)
+                print("[Upflow2x] The render is at " .. where)
                 set_status(st.message .. " " .. notes .. " Drag it in from the path below.")
             else
                 set_status(st.message .. " " .. notes ..
@@ -1403,7 +1482,7 @@ local function poll()
             set_status(string.format("Python has not started after %d minutes. Press Reset "
                 .. "and run it again. Log: %s", math.floor(quiet / 60 + 0.5), LOG_PATH))
         elseif quiet > STALLED_AFTER then
-            set_status(string.format("No progress for %d minutes. If the Eternal2x window "
+            set_status(string.format("No progress for %d minutes. If the Upflow2x window "
                 .. "was closed, the render stopped: press Reset and run it again.",
                 math.floor(quiet / 60 + 0.5)))
         elseif (items.Status.Text or ""):match("^No progress for")
@@ -1477,7 +1556,7 @@ local function start_run(args)
         start_polling()
         return
     end
-    local msg = "Could not start the run. Check that Eternal2x's folder can be written to, "
+    local msg = "Could not start the run. Check that Upflow2x's folder can be written to, "
         .. "then try again."
     set_busy(false)
     set_progress(0, nil)
@@ -1587,7 +1666,7 @@ function win.On.SmoothBtn.Clicked(ev)
         set_status("Rendering from the " .. #marks .. " frames marked on the clip. Resolve stays usable.")
         start_run(current_args(" --marks-file " .. shell_quote(MARKS_PATH)))
     else
-        set_status("No markers on the clip, so Eternal2x finds the drawings. Resolve stays usable.")
+        set_status("No markers on the clip, so Upflow2x finds the drawings. Resolve stays usable.")
         start_run(current_args(""))
     end
 end
@@ -1605,8 +1684,8 @@ function win.On.CompareBtn.Clicked(ev)
         set_status("The smoothed clip is no longer on the timeline.")
         return
     end
-    items.CompareBtn.Text = showing and "Show Original" or "Show Eternal2x"
-    set_status(showing and "Showing the Eternal2x version." or "Showing the original.")
+    items.CompareBtn.Text = showing and "Show Original" or "Show Upflow2x"
+    set_status(showing and "Showing the Upflow2x version." or "Showing the original.")
 end
 
 function win.On.FolderBtn.Clicked(ev)
@@ -1628,14 +1707,14 @@ function win.On.FolderBtn.Clicked(ev)
                 (target:gsub("%%", "%%%%")), "\r\n")
         f:close()
         local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
-        cmd = "start \"Eternal2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
+        cmd = "start \"Upflow2x\" /D " .. shell_quote(dir) .. " /MIN cmd /c .\\"
             .. basename(REVEAL_SCRIPT)
     else
         local q = shell_quote(LAST_OUTPUT)
         cmd = "open -R " .. q .. " 2>/dev/null || xdg-open " ..
               shell_quote(LAST_OUTPUT:match("^(.+)/") or ".") .. " >/dev/null 2>&1 &"
     end
-    print("[Eternal2x] " .. cmd)
+    print("[Upflow2x] " .. cmd)
     execute(cmd)
 end
 
