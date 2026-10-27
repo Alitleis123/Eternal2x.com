@@ -247,8 +247,8 @@
     var seen = new IntersectionObserver(function (entries) {
         if (!entries[0].isIntersecting) return;
         seen.disconnect();
-        // Once the hero has finished coming in.
-        setTimeout(sweep, 900);
+        // As the hero finishes coming in.
+        setTimeout(sweep, 400);
     }, { threshold: .6 });
     seen.observe(box);
 })();
