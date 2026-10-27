@@ -1,37 +1,3 @@
-// The phone menu: a drawer that slides over the page. Closed, it is hidden
-// from the keyboard too (see .sidebar in style.css), so Tab cannot land on a
-// link nobody can see.
-(function () {
-    var sidebar = document.getElementById('sidebar');
-    var overlay = document.getElementById('overlay');
-    var button = document.getElementById('menu-button');
-    if (!sidebar || !overlay || !button) return;
-
-    function setOpen(open, returnFocus) {
-        sidebar.classList.toggle('open', open);
-        overlay.classList.toggle('open', open);
-        button.setAttribute('aria-expanded', open ? 'true' : 'false');
-        if (open) {
-            var first = sidebar.querySelector('a');
-            if (first) first.focus();
-        } else if (returnFocus) {
-            button.focus();
-        }
-    }
-
-    button.addEventListener('click', function () {
-        setOpen(!sidebar.classList.contains('open'), false);
-    });
-    overlay.addEventListener('click', function () { setOpen(false, true); });
-    document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && sidebar.classList.contains('open')) setOpen(false, true);
-    });
-    // On a phone the drawer covers the page, so close it once a link is chosen.
-    sidebar.querySelectorAll('a').forEach(function (link) {
-        link.addEventListener('click', function () { setOpen(false, false); });
-    });
-})();
-
 // The demo on the home page: one video holds the original above the
 // Eternal2x render, and a canvas shows the original left of a divider and
 // the render right of it. One video keeps both sides on the same frame,
@@ -54,22 +20,35 @@
         // A zero-width source rectangle throws in some browsers.
         if (x > 0) ctx.drawImage(video, 0, 0, x, H, 0, 0, x, H);
         if (x < W) ctx.drawImage(video, x, H, W - x, H, x, 0, W - x, H);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(x - 1, 0, 2, H);
+        // A light line with an amber grip.
+        ctx.fillStyle = '#f4f4f1';
+        ctx.fillRect(x - 1.5, 0, 3, H);
         ctx.beginPath();
-        ctx.arc(x, H / 2, 14, 0, Math.PI * 2);
+        ctx.arc(x, H / 2, 17, 0, Math.PI * 2);
+        ctx.fillStyle = '#f2a93b';
         ctx.fill();
-        ctx.fillStyle = '#0b0b0f';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('↔', x, H / 2 + 1);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = '#101013';
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x - 4, H / 2 - 5); ctx.lineTo(x - 9, H / 2); ctx.lineTo(x - 4, H / 2 + 5);
+        ctx.moveTo(x + 4, H / 2 - 5); ctx.lineTo(x + 9, H / 2); ctx.lineTo(x + 4, H / 2 + 5);
+        ctx.lineWidth = 2.2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
     }
 
+    var tick = 0;
     function loop() {
         draw();
-        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(loop);
-        else requestAnimationFrame(loop);
+        tick = video.requestVideoFrameCallback ? video.requestVideoFrameCallback(loop)
+                                              : requestAnimationFrame(loop);
+    }
+    function restart() {
+        if (video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(tick);
+        else cancelAnimationFrame(tick);
+        loop();
     }
 
     function setPos(value) {
@@ -86,13 +65,40 @@
     box.classList.add('js');
     video.controls = false;
 
+    // A finger on the picture may be scrolling the page, so it only moves the
+    // divider once it heads sideways, or lifts again without moving: a tap.
+    // A mouse or pen moves it at once.
+    var dragging = false, touch = null;
     box.addEventListener('pointerdown', function (e) {
         if (e.target === pause) return;
+        if (e.pointerType === 'touch') {
+            touch = { x: e.clientX, y: e.clientY };
+            return;
+        }
+        dragging = true;
         box.setPointerCapture(e.pointerId);
         fromPointer(e);
     });
     box.addEventListener('pointermove', function (e) {
-        if (box.hasPointerCapture(e.pointerId)) fromPointer(e);
+        if (touch && !dragging) {
+            var dx = Math.abs(e.clientX - touch.x), dy = Math.abs(e.clientY - touch.y);
+            if (dx > 8 && dx > dy) {
+                dragging = true;
+                box.setPointerCapture(e.pointerId);
+            } else if (dy > 8) {
+                touch = null;
+            }
+        }
+        if (dragging) fromPointer(e);
+    });
+    box.addEventListener('pointerup', function (e) {
+        if (touch && !dragging) fromPointer(e);
+        dragging = false;
+        touch = null;
+    });
+    box.addEventListener('pointercancel', function () {
+        dragging = false;
+        touch = null;
     });
     slider.addEventListener('input', function () { setPos(slider.value / 100); });
     box.addEventListener('click', function (e) {
@@ -110,6 +116,46 @@
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
 
+    // Speed and frame rate pick one of four renders of the same shots. The new
+    // one picks up at the same moment, playing or paused as the last was.
+    var controls = document.getElementById('compare-controls');
+    if (controls) {
+        var choice = { speed: 'half', rate: '24' };
+        var pending = null;
+        controls.hidden = false;
+        controls.addEventListener('click', function (e) {
+            var button = e.target.closest('button');
+            if (!button) return;
+            var key = button.dataset.speed ? 'speed' : 'rate';
+            var value = button.dataset[key];
+            if (choice[key] === value) return;
+            choice[key] = value;
+            controls.querySelectorAll('[data-' + key + ']').forEach(function (b) {
+                b.setAttribute('aria-pressed', String(b === button));
+            });
+            // A second switch before the first render has loaded keeps the
+            // first one's moment. By then the video reads as paused at 0.
+            if (!pending) {
+                pending = { playing: !video.paused,
+                            at: video.duration ? video.currentTime / video.duration : 0 };
+            }
+            // The page's ?v= on the first video carries over, so a browser
+            // holding older renders fetches these.
+            var version = (video.getAttribute('src').split('?')[1] || '');
+            video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4'
+                + (version ? '?' + version : '');
+        });
+        video.addEventListener('loadedmetadata', function () {
+            if (!pending) return;
+            var resume = pending;
+            pending = null;
+            video.currentTime = resume.at * video.duration;
+            restart();
+            if (resume.playing) setPlaying(true);
+            else label();
+        });
+    }
+
     video.addEventListener('loadeddata', draw);
     video.addEventListener('seeked', draw);
     loop();
@@ -117,4 +163,72 @@
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     label();
     setPlaying(!still);
+})();
+
+// Copy buttons on the help page's command blocks.
+(function () {
+    var blocks = document.querySelectorAll('.code');
+    if (!blocks.length) return;
+    // Tells a screen reader what the button did, which its label alone doesn't.
+    var status = document.createElement('p');
+    status.className = 'sr-only';
+    status.setAttribute('role', 'status');
+    document.body.appendChild(status);
+    function say(text) {
+        status.textContent = '';
+        setTimeout(function () { status.textContent = text; }, 30);
+    }
+    blocks.forEach(function (block) {
+        var code = block.querySelector('code');
+        if (!code) return;
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'copy';
+        button.textContent = 'Copy';
+        button.setAttribute('aria-label', 'Copy this command');
+        // Where the clipboard is out of reach, the command is selected
+        // instead, ready for Ctrl+C.
+        function select() {
+            var range = document.createRange();
+            range.selectNodeContents(code);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(range);
+            button.textContent = 'Selected';
+            say('Command selected. Press Control C or Command C to copy it.');
+            setTimeout(function () { button.textContent = 'Copy'; }, 2500);
+        }
+        button.addEventListener('click', function () {
+            if (!navigator.clipboard) return select();
+            navigator.clipboard.writeText(code.textContent.trim()).then(function () {
+                button.textContent = 'Copied';
+                say('Command copied.');
+                setTimeout(function () { button.textContent = 'Copy'; }, 1500);
+            }, select);
+        });
+        block.appendChild(button);
+    });
+})();
+
+// The film starts on a frame inside Resolve under one big play button, so
+// nobody mistakes it for a picture. Pressing it plays with sound.
+(function () {
+    document.querySelectorAll('.player').forEach(function (player) {
+        var video = player.querySelector('video');
+        var play = player.querySelector('.play');
+        if (!video || !play) return;
+        player.classList.add('js');
+        video.controls = false;
+        function started() {
+            player.classList.add('playing');
+            video.controls = true;
+        }
+        play.addEventListener('click', function () {
+            started();
+            // A refused play leaves the controls up for a second try.
+            video.play().catch(function () {});
+            video.focus();
+        });
+        video.addEventListener('play', started);
+    });
 })();

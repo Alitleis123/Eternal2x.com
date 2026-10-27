@@ -1,0 +1,622 @@
+/* Eternal2x. Minimal: grey surfaces, one amber, plain type, and the footage
+   doing the talking. */
+
+:root {
+    --bg: #101013;
+    --panel: #191a1e;
+    --raise: #23242a;
+    --stage: #06060a;
+    --line: rgba(255, 255, 255, .08);
+    --line-strong: rgba(255, 255, 255, .14);
+    --text: #f4f4f1;
+    --soft: #b9b9b6;
+    --mute: #999996;
+    --amber: #f2a93b;
+    --amber-hover: #f6bd63;
+
+    --sans: 'Geist', 'Segoe UI', system-ui, sans-serif;
+    --mono: 'Geist Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+    --page: 1200px;
+    --gutter: clamp(20px, 5vw, 48px);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+body {
+    margin: 0;
+    font: 400 17px/1.6 var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+}
+
+img, video, canvas, svg { display: block; max-width: 100%; }
+a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+a:hover { color: var(--amber); text-decoration-color: currentColor; }
+:focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
+p { margin: 0; }
+code, kbd {
+    font: 500 .88em/1.4 var(--mono);
+    padding: .08em .36em;
+    border-radius: 4px;
+    background: var(--raise);
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
+
+.wrap { width: min(100% - 2 * var(--gutter), var(--page)); margin-inline: auto; }
+
+.sr-only {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.skip {
+    position: absolute; left: 12px; top: -60px; z-index: 10;
+    background: var(--amber); color: var(--bg); padding: 8px 14px; border-radius: 6px;
+    text-decoration: none; font-weight: 600;
+}
+.skip:focus { top: 12px; }
+
+.label {
+    font: 500 12px/1.4 var(--mono);
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--mute);
+}
+
+/* header */
+
+.top .wrap {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    height: 72px;
+}
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 18px;
+    letter-spacing: -.01em;
+    text-decoration: none;
+}
+.brand:hover { color: var(--text); }
+.brand img { width: 34px; height: 34px; }
+.brand span span { color: var(--amber); }
+.top nav { display: flex; align-items: center; gap: 6px; }
+.top nav a:not(.btn) { font-size: 15px; text-decoration: none; color: var(--soft); padding: 8px 10px; border-radius: 6px; }
+.top nav a:not(.btn):hover { color: var(--text); }
+.top nav a[aria-current="page"]:not(.btn) { color: var(--text); }
+
+/* buttons */
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font: 600 15px/1 var(--sans);
+    text-decoration: none;
+    padding: 13px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--line-strong);
+    color: var(--text);
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+}
+.btn:hover { color: var(--text); border-color: rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .04); }
+.btn svg { width: 16px; height: 16px; flex: none; }
+.btn-amber { background: var(--amber); border-color: var(--amber); color: var(--bg); }
+.btn-amber:hover { background: var(--amber-hover); border-color: var(--amber-hover); color: var(--bg); }
+.top .btn { padding: 9px 14px; font-size: 14px; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+
+/* hero */
+
+/* The pitch on the left, the slider it describes on the right. */
+.hero {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(32px, 4vw, 56px);
+    align-items: center;
+    padding: clamp(48px, 8vw, 96px) 0 0;
+}
+.hero h1 { font-size: clamp(38px, 4.6vw, 60px); line-height: 1.04; }
+.hero h1 span { color: var(--amber); }
+.hero-text p { margin-top: 18px; max-width: 32em; font-size: clamp(16.5px, 1.4vw, 18px); color: var(--soft); }
+.hero .actions { margin-top: 28px; }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; } }
+
+/* panels that hold footage */
+
+.panel {
+    margin: 0;
+    background: var(--panel);
+    border: 1px solid rgba(242, 169, 59, .32);
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 0 0 4px rgba(242, 169, 59, .05), 0 30px 80px -40px rgba(242, 169, 59, .35);
+}
+.panel-head {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 6px 10px;
+}
+.panel-head .on { color: var(--amber); }
+.panel figcaption, .note { padding: 12px 6px 4px; font-size: 13.5px; color: var(--mute); }
+.panel figcaption a, .note a { color: var(--soft); }
+
+/* Without script the video shows both halves stacked, with its own controls. */
+.compare { position: relative; border-radius: 6px; overflow: hidden; background: var(--stage); }
+.compare-video { width: 100%; height: auto; }
+.compare-canvas, .compare-pause { display: none; }
+/* Off screen but focusable, so the keyboard can move the divider. */
+.compare-slider { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+/* With script, one half shows at a time and a divider wipes between them.
+   The video stays in place under the canvas: iOS pauses one it cannot see. */
+.compare.js { aspect-ratio: 16 / 9; cursor: ew-resize; touch-action: pan-y; }
+.compare.js .compare-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
+.compare.js:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
+.compare.js .compare-pause {
+    display: block;
+    position: absolute;
+    left: 10px; bottom: 10px;
+    min-height: 34px;
+    padding: 0 13px;
+    font: 500 12px/1 var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--text);
+    background: rgba(16, 16, 19, .78);
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    cursor: pointer;
+}
+.compare.js .compare-pause:hover { border-color: var(--amber); }
+@media (pointer: coarse) { .compare.js .compare-pause { min-height: 44px; left: 8px; bottom: 8px; } }
+
+/* Speed and frame rate for the demo, shown only where the script can switch them. */
+.compare-controls { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 12px 6px 0; }
+.compare-controls[hidden] { display: none; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.seg button {
+    min-height: 32px;
+    padding: 0 12px;
+    font: 500 12px/1 var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--soft);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { color: var(--amber); background: var(--raise); }
+.seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+@media (pointer: coarse) { .seg button { min-height: 44px; } }
+
+.film video { width: 100%; height: auto; border-radius: 6px; background: var(--stage); }
+
+/* sections */
+
+/* One thin line where each section starts, and nothing else ruled off. */
+.section {
+    margin-top: clamp(64px, 9vw, 104px);
+    padding-top: clamp(40px, 5vw, 56px);
+    border-top: 1px solid var(--line);
+}
+.section h2 { font-size: clamp(26px, 3.2vw, 34px); line-height: 1.15; }
+.section .lead { margin: 10px 0 24px; color: var(--soft); max-width: 36em; }
+
+/* How it works: the film on the left, and beside it the clip's path
+   through the panel drawn as a chain of nodes, the way Fusion shows one. */
+.how {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: clamp(28px, 4vw, 56px);
+    align-items: center;
+}
+.how-text h2 { font-size: clamp(26px, 3vw, 34px); line-height: 1.15; }
+.how-text > p { margin-top: 10px; color: var(--soft); }
+@media (max-width: 900px) { .how { grid-template-columns: 1fr; } }
+
+.flow { list-style: none; margin: 26px 0 0; padding: 0; }
+.node {
+    position: relative;
+    display: grid;
+    gap: 2px;
+    padding: 12px 16px 13px;
+    border: 1px solid var(--line-strong);
+    border-radius: 10px;
+    background: var(--raise);
+}
+/* The ports each node is wired through. */
+.node::before, .node::after {
+    content: "";
+    position: absolute;
+    left: 22px;
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--bg);
+    border: 2px solid var(--mute);
+}
+.node::before { top: -6px; }
+.node::after { bottom: -6px; }
+.node:first-child::before, .node:last-child::after { display: none; }
+.node + .node { margin-top: 22px; }
+/* The wire between two nodes, with a pulse running down it. */
+.node + .node > .node-kind::before {
+    content: "";
+    position: absolute;
+    left: 26px;
+    top: -18px;
+    width: 2px;
+    height: 14px;
+    background: linear-gradient(var(--amber), var(--amber)) 0 0 / 100% 40% no-repeat, var(--line-strong);
+    animation: wire 1.8s linear infinite;
+}
+@keyframes wire { from { background-position: 0 -60%; } to { background-position: 0 160%; } }
+@media (prefers-reduced-motion: reduce) { .node + .node > .node-kind::before { animation: none; } }
+.node-kind { font: 500 11.5px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.node strong { font-size: 16.5px; font-weight: 600; }
+.node span:last-child { font-size: 14px; color: var(--soft); }
+.node-on { border-color: var(--amber); background: rgba(242, 169, 59, .1); }
+.node-on .node-kind { color: var(--amber); }
+.node-on::before, .node-on::after { border-color: var(--amber); }
+
+/* The film opens on a frame inside Resolve with one big play button, so it
+   reads as a video. Its own controls come back once it plays. */
+.player { position: relative; }
+.player .play { display: none; }
+.player.js .play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 14px;
+    border: 0;
+    border-radius: 6px;
+    background: rgba(6, 6, 10, .28);
+    color: var(--text);
+    cursor: pointer;
+    transition: background-color .2s ease;
+}
+.player.js .play:hover { background: rgba(6, 6, 10, .12); }
+.play-dot {
+    display: grid;
+    place-items: center;
+    width: clamp(64px, 9vw, 92px);
+    height: clamp(64px, 9vw, 92px);
+    border-radius: 50%;
+    background: var(--amber);
+    box-shadow: 0 0 0 10px rgba(242, 169, 59, .22), 0 16px 40px rgba(0, 0, 0, .55);
+    transition: transform .2s ease;
+}
+.player.js .play:hover .play-dot { transform: scale(1.06); }
+.play-dot svg { width: 38%; height: 38%; margin-left: 6%; fill: var(--bg); }
+.player.playing .play { display: none; }
+
+/* What you need, read at a glance: one strip, four readouts. */
+.needs {
+    list-style: none;
+    margin: 32px auto 0;
+    padding: 0;
+    max-width: 980px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: var(--panel);
+    text-align: left;
+}
+.needs li { display: grid; gap: 4px; align-content: start; padding: 20px 20px 22px; }
+.needs li + li { border-left: 1px solid var(--line); }
+.needs svg { width: 22px; height: 22px; margin-bottom: 8px; color: var(--amber); }
+.needs strong { font-size: 17px; font-weight: 600; letter-spacing: -.01em; }
+.needs span { font-size: 14px; line-height: 1.5; color: var(--mute); }
+.needs a { color: var(--soft); }
+@media (max-width: 860px) {
+    .needs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .needs li:nth-child(3) { border-left: 0; }
+    .needs li:nth-child(n + 3) { border-top: 1px solid var(--line); }
+}
+@media (max-width: 480px) {
+    .needs { grid-template-columns: 1fr; }
+    .needs li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+.get {
+    margin-top: clamp(64px, 9vw, 104px);
+    padding: clamp(48px, 7vw, 80px) 0 clamp(24px, 4vw, 40px);
+    border-top: 1px solid var(--line);
+    text-align: center;
+}
+.get h2 { font-size: clamp(30px, 4vw, 42px); }
+.get p { margin-top: 10px; color: var(--soft); }
+.get .actions { justify-content: center; margin-top: 26px; }
+.get .note { margin-top: 18px; }
+
+/* footer */
+
+.foot { padding: 56px 0 48px; color: var(--mute); font-size: 14px; }
+.foot .wrap { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 14px 32px; }
+.foot nav { display: flex; flex-wrap: wrap; gap: 4px; margin-right: -10px; }
+.foot a { color: var(--soft); text-decoration: none; }
+.foot a:hover { color: var(--amber); }
+.foot nav a { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 8px;
+              transition: color .15s, background-color .15s; }
+.foot nav a:hover { background: var(--panel); }
+.foot nav a:focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+.foot nav svg { width: 20px; height: 20px; }
+@media (pointer: coarse) { .foot nav a { width: 44px; height: 44px; } }
+/* Wrapped under the maker line, the first icon lines up with its text. */
+@media (max-width: 520px) { .foot nav { margin: 0 0 0 -12px; } }
+.foot .credit { flex-basis: 100%; font-size: 13px; line-height: 1.6; }
+.foot .credit a { text-decoration: underline; text-decoration-color: var(--line-strong); }
+
+@media (max-width: 520px) {
+    .top nav .hide-small { display: none; }
+}
+
+/* inner pages */
+
+.page-head { padding: clamp(48px, 8vw, 88px) 0 clamp(28px, 4vw, 40px); border-bottom: 1px solid var(--line); }
+.page-head .label { margin-bottom: 14px; }
+.page-head h1 { font-size: clamp(36px, 5vw, 52px); line-height: 1.05; }
+.lede { margin-top: 14px; max-width: 38em; font-size: clamp(16.5px, 1.5vw, 18px); color: var(--soft); }
+.lede a { color: var(--text); }
+
+.section-head { margin-bottom: 22px; }
+.section-head .label { margin-bottom: 10px; }
+.section-head h2 { font-size: clamp(24px, 3vw, 30px); line-height: 1.15; }
+.section-head p:not(.label) { margin-top: 8px; max-width: 38em; color: var(--soft); }
+
+.note { margin-top: 18px; font-size: 14px; color: var(--mute); }
+
+/* download */
+
+.platforms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 32px; }
+@media (max-width: 760px) { .platforms { grid-template-columns: 1fr; } }
+.platform {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+    padding: 24px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+.platform-top { display: flex; flex-wrap: wrap-reverse; justify-content: space-between; align-items: start; gap: 10px 16px; }
+.platform h2 { font-size: 26px; letter-spacing: -.02em; }
+.platform .os { margin-top: 4px; font-size: 14.5px; color: var(--mute); }
+.platform .btn { align-self: flex-start; }
+.platform .size { font-size: 14px; color: var(--mute); }
+.platform .size a { color: var(--soft); }
+.tag {
+    font: 500 12px/1 var(--mono);
+    letter-spacing: .04em;
+    padding: 7px 9px;
+    border-radius: 6px;
+    background: rgba(242, 169, 59, .12);
+    color: var(--amber);
+    border: 1px solid rgba(242, 169, 59, .35);
+    white-space: nowrap;
+}
+.tag.pending { background: transparent; color: var(--mute); border-color: var(--line-strong); }
+
+.notice {
+    margin-top: 14px;
+    padding: 16px 20px;
+    border: 1px solid rgba(242, 169, 59, .35);
+    border-radius: 12px;
+    background: rgba(242, 169, 59, .06);
+    font-size: 15px;
+    color: var(--soft);
+}
+.notice strong { color: var(--text); font-weight: 600; }
+
+.three {
+    counter-reset: n;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
+}
+.three li { counter-increment: n; padding: 22px 24px 24px; }
+.three li + li { border-left: 1px solid var(--line); }
+.three li::before { content: "0" counter(n); font: 500 12px/1 var(--mono); letter-spacing: .08em; color: var(--amber); }
+.three h3 { margin: 10px 0 8px; font-size: 19px; font-weight: 600; letter-spacing: -.01em; }
+.three p { color: var(--soft); font-size: 15.5px; }
+@media (max-width: 760px) {
+    .three { grid-template-columns: 1fr; }
+    .three li + li { border-left: 0; border-top: 1px solid var(--line); }
+}
+
+.older { border: 1px solid var(--line); border-radius: 12px; background: var(--panel); overflow-x: auto; }
+.older table { width: 100%; border-collapse: collapse; font-size: 15px; }
+.older th, .older td { text-align: left; padding: 13px 20px; }
+.older tr + tr td, .older tbody tr:first-child td { border-top: 1px solid var(--line); }
+.older th { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--mute); }
+.older td:first-child { font-weight: 600; }
+.older .when { color: var(--mute); }
+.older a { color: var(--soft); }
+
+/* help */
+
+.help-grid {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: clamp(28px, 5vw, 64px);
+    padding-top: 36px;
+    align-items: start;
+}
+.toc { position: sticky; top: 20px; }
+.toc .label { margin-bottom: 10px; }
+.toc ol { list-style: none; margin: 0; padding: 0; border-left: 1px solid var(--line-strong); }
+.toc a {
+    display: block;
+    margin-left: -1px;
+    padding: 6px 0 6px 14px;
+    border-left: 1px solid transparent;
+    font-size: 15px;
+    text-decoration: none;
+    color: var(--soft);
+}
+.toc a:hover { color: var(--text); border-left-color: var(--amber); }
+@media (max-width: 900px) {
+    .help-grid { grid-template-columns: minmax(0, 1fr); }
+    .toc { position: static; }
+    .toc ol { display: flex; flex-wrap: wrap; gap: 6px; border: 0; }
+    .toc a { margin: 0; padding: 7px 11px; border: 1px solid var(--line-strong); border-radius: 6px; font-size: 14px; }
+}
+
+.doc { max-width: 740px; }
+.doc > section { padding-bottom: 48px; scroll-margin-top: 20px; }
+.doc > section + section { padding-top: 32px; border-top: 1px solid var(--line); }
+.doc h2 { font-size: clamp(26px, 3vw, 32px); line-height: 1.15; }
+.doc h3 { margin: 26px 0 6px; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+.doc p, .doc li { color: var(--soft); }
+.doc p + p { margin-top: 10px; }
+.doc strong { color: var(--text); font-weight: 600; }
+.doc .sub { margin-top: 6px; color: var(--mute); }
+.doc code, .doc kbd {
+    font: 500 .88em/1.4 var(--mono);
+    padding: .08em .36em;
+    border-radius: 4px;
+    background: var(--raise);
+    color: var(--text);
+    overflow-wrap: anywhere;
+}
+
+.os-steps { list-style: none; counter-reset: s; margin: 24px 0 0; padding: 0; }
+.os-steps > li { counter-increment: s; position: relative; padding: 0 0 24px 46px; }
+.os-steps > li::before {
+    content: counter(s);
+    position: absolute;
+    left: 0; top: -2px;
+    width: 28px; height: 28px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    border: 1px solid rgba(242, 169, 59, .5);
+    background: rgba(242, 169, 59, .1);
+    font: 500 13px/1 var(--mono);
+    color: var(--amber);
+}
+.os-steps > li::after { content: ""; position: absolute; left: 14px; top: 32px; bottom: 6px; width: 1px; background: var(--line-strong); }
+.os-steps > li:last-child::after { display: none; }
+.os-steps h3 { margin: 0 0 6px; }
+.os-steps ul { margin: 8px 0 0; padding-left: 20px; }
+
+/* The command scrolls in its own box, so a long one never runs under the
+   Copy button beside it. */
+.code {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 12px 0;
+    padding: 10px 10px 10px 16px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--stage);
+}
+.doc .code code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 3px 0;
+    background: none;
+    border-radius: 0;
+    font: 500 14px/1.6 var(--mono);
+    white-space: pre;
+    overflow-wrap: normal;
+}
+.copy {
+    flex: none;
+    padding: 8px 10px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: transparent;
+    font: 500 11.5px/1 var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--soft);
+    cursor: pointer;
+}
+.copy:hover { color: var(--text); border-color: var(--amber); }
+
+.path {
+    display: inline-block;
+    margin: 6px 0;
+    padding: 7px 11px;
+    border: 1px solid var(--line-strong);
+    border-radius: 6px;
+    background: var(--raise);
+    font: 500 14px/1.4 var(--mono);
+    color: var(--text);
+}
+
+.settings { margin: 18px 0 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.settings div { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 20px; padding: 14px 18px; }
+.settings div + div { border-top: 1px solid var(--line); }
+.settings dt { font-weight: 600; }
+.settings dd { margin: 0; color: var(--soft); font-size: 15.5px; }
+@media (max-width: 560px) { .settings div { grid-template-columns: 1fr; } }
+
+.faq { margin-top: 18px; border-top: 1px solid var(--line); }
+.faq details { border-bottom: 1px solid var(--line); }
+.faq summary {
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16px;
+    padding: 15px 0;
+    font-weight: 500;
+    color: var(--text);
+}
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; flex: none; font: 400 20px/1 var(--mono); color: var(--amber); transition: transform .2s ease; }
+.faq details[open] summary::after { transform: rotate(45deg); }
+.faq .answer { padding: 0 0 18px; }
+
+.callout {
+    margin: 20px 0 0;
+    padding: 16px 18px;
+    border: 1px solid rgba(242, 169, 59, .35);
+    border-radius: 10px;
+    background: rgba(242, 169, 59, .06);
+}
+
+/* contact */
+
+.letter { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; margin-top: 32px; }
+@media (max-width: 820px) { .letter { grid-template-columns: 1fr; } }
+.envelope { padding: clamp(22px, 3vw, 32px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.envelope .label { margin-bottom: 10px; }
+.envelope .address {
+    display: block;
+    margin: 4px 0 22px;
+    font-size: clamp(26px, 3.6vw, 36px);
+    font-weight: 600;
+    letter-spacing: -.02em;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+}
+.checklist { margin: 0; padding: 0; list-style: none; }
+.checklist li { position: relative; padding: 10px 0 10px 26px; color: var(--soft); }
+.checklist li + li { border-top: 1px solid var(--line); }
+.checklist li::before { content: ""; position: absolute; left: 2px; top: 19px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
+.checklist code { font: 500 .88em/1.4 var(--mono); padding: .08em .36em; border-radius: 4px; background: var(--raise); overflow-wrap: anywhere; }

@@ -3,268 +3,158 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Eternal2x | Smooth 2x for hand-drawn animation for DaVinci Resolve</title>
-    <meta name="description" content="Eternal2x is a DaVinci Resolve plugin that smooths hand-drawn animation to 2x. It finds the real drawings in a held shot, rebuilds the missing in-betweens and upscales 2x, from one panel.">
+    <title>Eternal2x | Upscale and smooth anime in DaVinci Resolve</title>
+    <meta name="description" content="Eternal2x is a free DaVinci Resolve Studio plugin for anime. It draws the frames between the drawings, so animation plays smooth at the full frame rate, and redraws every frame at 2x with an upscaler trained on anime.">
     <link rel="canonical" href="https://eternal2x.com/">
+    <meta name="theme-color" content="#101013">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://eternal2x.com/">
-    <meta property="og:title" content="Eternal2x | Smooth 2x for hand-drawn animation">
-    <meta property="og:description" content="A DaVinci Resolve plugin that finds the real drawings in a held shot and rebuilds the in-betweens that were never drawn.">
-    <meta property="og:image" content="https://eternal2x.com/assets/demo/og.jpg">
+    <meta property="og:title" content="Eternal2x: upscale and smooth anime">
+    <meta property="og:description" content="A free DaVinci Resolve Studio plugin that draws the frames between the drawings and redraws every frame at 2x, so anime plays smooth and sharp.">
+    <meta property="og:image" content="https://eternal2x.com/assets/og.jpg">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
     <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" href="assets/icon.svg?v=20261027b" type="image/svg+xml">
+    <link rel="icon" href="assets/favicon.png?v=20261027b" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261027b">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="icon" type="image/png" href="assets/favicon.png">
-    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/site.css?v=20261027b">
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
-<!-- Mobile Header -->
-<div class="mobile-header">
-    <img src="assets/logo.png" alt="Eternal2x" class="mobile-logo-img">
-    <button class="hamburger" id="menu-button" aria-label="Menu" aria-controls="sidebar" aria-expanded="false">&#9776;</button>
-</div>
-<div class="sidebar-overlay" id="overlay"></div>
-
-<!-- Sidebar -->
-<nav class="sidebar" id="sidebar">
-    <img src="assets/logo.png" alt="Eternal2x" class="sidebar-logo-img">
-    <div class="sidebar-tagline">Smooth 2x for hand-drawn animation for DaVinci Resolve</div>
-
-    <div class="sidebar-section">Navigation</div>
-    <ul class="sidebar-nav">
-        <li><a href="index.html" class="active">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            About
-        </a></li>
-        <li><a href="download.html">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Download
-        </a></li>
-    </ul>
-
-    <div class="sidebar-section">Docs</div>
-    <ul class="sidebar-nav">
-        <li><a href="help.html">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-            Help
-        </a></li>
-        <li><a href="help.html#windows">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            Windows
-        </a></li>
-        <li><a href="help.html#macos">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-            macOS
-        </a></li>
-    </ul>
-
-    <div class="sidebar-section">Community</div>
-    <ul class="sidebar-nav">
-        <li><a href="contact.html">
-            <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-            Contact
-        </a></li>
-    </ul>
-
-    <div class="sidebar-bottom">
-        <a href="download.html">Download</a>
+<header class="top">
+    <div class="wrap">
+        <a class="brand" href="index.html" aria-label="Eternal2x home">
+            <img src="assets/icon.svg" alt="" width="34" height="34">
+            <span>Eternal<span>2x</span></span>
+        </a>
+        <nav aria-label="Main">
+            <a href="help.html">Help</a>
+            <a class="hide-small" href="contact.html">Contact</a>
+            <a class="btn btn-amber" href="download.html">Download</a>
+        </nav>
     </div>
-</nav>
+</header>
 
-<!-- Main Content -->
-<main class="main">
+<main id="main" class="wrap">
 
-    <!-- Hero -->
-    <div class="hero">
-        <div class="badge">
-            <span class="badge-dot"></span>
-            DaVinci Resolve Plugin
+    <section class="hero">
+        <div class="hero-text">
+            <h1>Upscale and smooth <span>anime in Resolve.</span></h1>
+            <p>Anime holds each drawing for two or three frames, so it moves in steps, and most of it reaches you as compressed 1080p. Eternal2x draws the frames in between and redraws every frame at 2x, right inside DaVinci Resolve, so it plays smooth and stays sharp on a 4K timeline.</p>
+            <div class="actions">
+                <a class="btn btn-amber" href="download.html">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                    Download, free
+                </a>
+                <a class="btn" href="help.html#windows">How to install</a>
+            </div>
         </div>
-        <h1>Smooth 2x for anime<br>with <span>Eternal2x</span></h1>
-        <p>
-            Recovers the drawings in animation held on 2s and 3s, rebuilds the in-betweens and upscales 2x,
-            right on your DaVinci Resolve timeline. No external tools. No render-export loops.
-        </p>
-        <div class="hero-buttons">
-            <a href="download.html" class="btn btn-primary">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Download
+        <figure class="panel" id="demo">
+            <div class="compare" id="compare">
+                <video class="compare-video" id="compare-video" src="assets/demo/compare-24-half.mp4?v=20261027b"
+                       poster="assets/demo/poster.jpg?v=20261027b" controls muted loop playsinline preload="metadata"
+                       width="960" height="1080"
+                       aria-label="Two anime shots, a close-up with hair in the wind and a run across a lake through falling leaves, as drawn on top and rebuilt by Eternal2x below"></video>
+                <canvas class="compare-canvas" id="compare-canvas" width="960" height="540" aria-hidden="true"></canvas>
+                <input class="compare-slider" id="compare-slider" type="range" min="0" max="100" value="50"
+                       aria-label="Divider position. Left of it is the original, right of it is Eternal2x">
+                <button class="compare-pause" id="compare-pause" type="button">Pause</button>
+            </div>
+            <div class="compare-controls" id="compare-controls" hidden>
+                <div class="seg" role="group" aria-label="Speed">
+                    <button type="button" data-speed="half" aria-pressed="true">Half speed</button>
+                    <button type="button" data-speed="full" aria-pressed="false">Full speed</button>
+                </div>
+                <div class="seg" role="group" aria-label="Frame rate">
+                    <button type="button" data-rate="24" aria-pressed="true">23.976 fps</button>
+                    <button type="button" data-rate="60" aria-pressed="false">60 fps</button>
+                </div>
+            </div>
+            <figcaption>Drag across the picture to compare.</figcaption>
+        </figure>
+    </section>
+
+    <section class="section how" id="how" aria-labelledby="how-title">
+            <figure class="panel film">
+                <div class="player">
+                    <video src="assets/demo/promo.mp4" poster="assets/demo/promo-resolve.jpg" controls playsinline preload="none"
+                           width="1920" height="1080"
+                           aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
+                    <button class="play" type="button" aria-label="Play the film, 21 seconds, with sound">
+                        <span class="play-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l11-6.5a1 1 0 0 0 0-1.72l-11-6.5A1 1 0 0 0 8 5.5z"/></svg></span>
+                    </button>
+                </div>
+            </figure>
+        <div class="how-text">
+            <h2 id="how-title">How it works</h2>
+            <p>Open the panel from Workspace, Scripts and put the playhead on a clip. This is the path it takes, and the film shows all of it in 21 seconds.</p>
+            <ol class="flow" aria-label="What happens to your clip">
+                <li class="node">
+                    <span class="node-kind">Input</span>
+                    <strong>Your clip</strong>
+                    <span>Anything on the timeline, on 2s or 3s</span>
+                </li>
+                <li class="node">
+                    <span class="node-kind">Analyse</span>
+                    <strong>Marks the real drawings</strong>
+                    <span>Puts a marker on each one. Move or add markers to choose</span>
+                </li>
+                <li class="node node-on">
+                    <span class="node-kind">Render</span>
+                    <strong>Draws every in-between, then 2x</strong>
+                    <span>RIFE 4.25 and Real-ESRGAN on your own GPU. Resolve stays usable</span>
+                </li>
+                <li class="node">
+                    <span class="node-kind">Output</span>
+                    <strong>Lands on the track above</strong>
+                    <span>Same frame and length. Show Original flips between them</span>
+                </li>
+            </ol>
+        </div>
+    </section>
+
+    <section class="get" id="specs" aria-labelledby="get-title">
+        <h2 id="get-title">Get Eternal2x</h2>
+        <p>Free, and it updates itself. This is all you need:</p>
+        <ul class="needs" aria-label="What you need">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="11" rx="2"/><path d="M3 18h18M7 21h4M13 21h4"/></svg><strong>Studio 18+</strong><span>DaVinci Resolve Studio. The free edition blocks script panels.</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></svg><strong>Windows and Mac</strong><span>Windows 10 or 11, or macOS 12 or newer</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg><strong>Python 3.10 to 3.14</strong><span>Older Macs need an older one, see the <a href="help.html#macos">Mac guide</a></span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg><strong>Any DirectX 12 GPU</strong><span>Draws and upscales on the GPU on Windows. A Mac draws on the CPU and upscales with Super Scale</span></li>
+        </ul>
+        <div class="actions">
+            <a class="btn btn-amber" href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-win.zip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                Windows
             </a>
-            <a href="help.html" class="btn btn-secondary">Documentation</a>
+            <a class="btn btn-amber" href="https://github.com/sidebandstudio/Eternal2x.com/releases/latest/download/eternal2x-mac.zip">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+                macOS
+            </a>
         </div>
-    </div>
-
-    <!-- Demo -->
-    <figure class="demo">
-        <div class="compare" id="compare">
-            <video class="compare-video" id="compare-video" src="assets/demo/compare.mp4"
-                   poster="assets/demo/poster.jpg" controls muted loop playsinline preload="metadata"
-                   width="960" height="804"
-                   aria-label="A shot from Hero, as drawn on 2s on top and rebuilt by Eternal2x below, at half speed"></video>
-            <canvas class="compare-canvas" id="compare-canvas" width="960" height="402" aria-hidden="true"></canvas>
-            <input class="compare-slider" id="compare-slider" type="range" min="0" max="100" value="50"
-                   aria-label="Divider position. Left of it is the original, right of it is Eternal2x">
-            <button class="compare-pause" id="compare-pause" type="button">Pause</button>
-        </div>
-        <figcaption>
-            Drag across the picture. Left of the line is the shot as drawn, on 2s. Right of it is Eternal2x,
-            with every in-between it drew. Shown at half speed. From
-            <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation,
-            <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, rebuilt by Eternal2x.
-        </figcaption>
-    </figure>
-
-    <!-- Stats -->
-    <div class="stats-row">
-        <div class="stat-card">
-            <div class="stat-value">2x</div>
-            <div class="stat-label">Upscale</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">2</div>
-            <div class="stat-label">Button Workflow</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-value">0</div>
-            <div class="stat-label">External Tools</div>
-        </div>
-    </div>
-
-    <div class="section-divider"></div>
-
-    <!-- How it works -->
-    <div class="section">
-        <h2 class="section-title">How it works</h2>
-        <p class="section-subtitle">Two buttons. Analyse first, then rebuild.</p>
-    </div>
-
-    <figure class="frames">
-        <img src="assets/demo/frames.jpg" width="1200" height="760" loading="lazy"
-             alt="Six frames in a row from Hero. As drawn, each drawing repeats for two frames. From Eternal2x, each drawing stays on its own frame and every repeat is replaced by a new in-between.">
-        <figcaption>Six frames of a walk. As drawn, every drawing is held for two frames. Eternal2x keeps each
-            drawing where it was and replaces the repeat with an in-between it generates.</figcaption>
-    </figure>
-
-    <div class="features">
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Find the real drawings
-            </h3>
-            <p>Animation drawn on 2s or 3s repeats each drawing two or three times. Eternal2x compares each frame with the last drawing it found and works out which frames are genuinely new and which are held.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                Read the timing
-            </h3>
-            <p>It reports whether the shot is on 1s, 2s or 3s before touching anything, so you can see what it found. Deliberate held poses are recognised and kept still rather than smoothed into drift.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                Fill in the gaps
-            </h3>
-            <p>The in-between frames that were never drawn are generated by the RIFE network, which keeps a fast-moving character in one piece. The real drawings are never resampled.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                Upscale 2x
-            </h3>
-            <p>Every frame is redrawn at 2x by Real-ESRGAN's anime model on the GPU, or Resolve's Super Scale without one. The rebuilt clip lands on the track above the original, lined up with it, at the same length and frame rate.</p>
-        </div>
-    </div>
-
-    <figure class="frames">
-        <video src="assets/demo/promo.mp4" poster="assets/demo/promo.jpg" controls playsinline preload="none"
-               width="1920" height="1080"
-               aria-label="A 21 second film: the Hero walk as drawn and from Eternal2x, the panel in DaVinci Resolve, and the render on the track above the original"></video>
-        <figcaption>The whole thing in DaVinci Resolve Studio 20.3.1, in 21 seconds. Footage from
-            <a href="https://studio.blender.org/projects/hero/">Hero</a> by the Blender Foundation,
-            <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>, edited. Footsteps, clicks and paper
-            sounds by <a href="https://kenney.nl/">Kenney</a>, CC0.</figcaption>
-    </figure>
-
-    <div class="section-divider"></div>
-
-    <!-- Why Eternal2x -->
-    <div class="section">
-        <h2 class="section-title">Why Eternal2x</h2>
-    </div>
-
-    <div class="features">
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
-                Built into Resolve
-            </h3>
-            <p>Runs as a native Resolve script panel on your timeline. Rendering happens in the background, so Resolve stays usable while it works.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-                Simple Install
-            </h3>
-            <p>One installer command sets up the Python packages, copies the plugin into Resolve and writes its config. No manual file copying.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
-                Auto Updates
-            </h3>
-            <p>Install once, stay current. Eternal2x checks for updates when it opens and verifies every download against a checksum before applying it.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                Made for animation
-            </h3>
-            <p>Built for hand-drawn animation, not generic footage. If a clip has no duplicated frames it tells you and stops, rather than inventing motion that was never there.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="4" width="20" height="5" rx="1"/><rect x="2" y="15" width="20" height="5" rx="1"/><line x1="12" y1="9" x2="12" y2="15"/></svg>
-                Lined up with your edit
-            </h3>
-            <p>The result lands on the track above the original, starting on the same frame. Show Original flips between the two, so you judge it on your own timeline.</p>
-        </div>
-        <div class="feature-card">
-            <h3>
-                <svg class="feature-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l2.4 7.4H22l-6.2 4.5 2.4 7.3L12 16.7l-6.2 4.5 2.4-7.3L2 9.4h7.6z"/></svg>
-                Drawn, not warped
-            </h3>
-            <p>Warping pixels along optical flow doubles lines and smears fast characters. The RIFE network draws each in-between instead. It runs on your own machine, on the GPU on Windows wherever DirectML loads and on the CPU otherwise, and its first use downloads about 50 MB.</p>
-        </div>
-    </div>
-
-    <!-- Requirements -->
-    <div class="section">
-        <h2 class="section-title">Requirements</h2>
-        <div class="feature-card" style="max-width: 480px;">
-            <p><strong>DaVinci Resolve Studio 18+</strong>. Since 19.1 the free edition blocks script panels like this one, so it cannot open Eternal2x.</p>
-            <p class="mt-8"><strong>Windows 10/11</strong> or <strong>macOS 12+</strong></p>
-            <p class="mt-8"><strong>Python 3.10 to 3.14</strong>, free from <a href="https://www.python.org/downloads/latest/python3.14/">python.org</a>. The installer adds the packages it needs.</p>
-        </div>
-    </div>
-
-    <!-- Footer -->
-    <footer class="site-footer">
-        <span>&copy; 2026 Eternal2x</span>
-        <span>
-            <a href="contact.html">Contact</a> &middot;
-            <a href="help.html">Help</a> &middot;
-            <a href="download.html">Download</a>
-        </span>
-    </footer>
+        <p class="note">The in-between model, about 50 MB, downloads on the first render. Everything else is in the <a href="help.html">help</a>.</p>
+    </section>
 
 </main>
 
-<script src="js/site.js"></script>
+<footer class="foot">
+    <div class="wrap">
+        <span>Made by <a href="https://sideband.studio">Sideband Studio</a></span>
+        <nav aria-label="Footer">
+            <a href="download.html" aria-label="Download" title="Download"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg></a>
+            <a href="help.html" aria-label="Help" title="Help"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.4 2.4c-.6.3-1 .8-1 1.5v.4"/><path d="M12 16.8h.01"/></svg></a>
+            <a href="contact.html" aria-label="Contact" title="Contact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3.5 7 8.5 6 8.5-6"/></svg></a>
+            <a href="https://github.com/sidebandstudio/Eternal2x.com" aria-label="GitHub" title="GitHub"><svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg></a>
+        </nav>
+        <p class="credit">DaVinci Resolve is a trademark of Blackmagic Design, which does not make Eternal2x.</p>
+    </div>
+</footer>
 
+<script src="js/site.js?v=20261027e"></script>
 </body>
 </html>
