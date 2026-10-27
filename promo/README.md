@@ -22,11 +22,9 @@ cd promo/film
 npx --yes hyperframes@0.8.193 preview
 ```
 
-The poster, `docs/assets/demo/promo.jpg`, is frame 0. Only make it again if frame 0 changes:
-
-```
-ffmpeg -i docs/assets/demo/promo.mp4 -frames:v 1 -q:v 2 docs/assets/demo/promo.jpg
-```
+The site shows `docs/assets/demo/promo-resolve.jpg` as the film's poster. It is
+the Resolve screenshot `docs/assets/demo/resolve.jpg` lined up with the film's
+frame at 17.2 s. Make it again if that part of the film changes.
 
 ## Timing the sound
 
