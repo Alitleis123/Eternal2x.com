@@ -39,10 +39,16 @@
         ctx.stroke();
     }
 
+    var tick = 0;
     function loop() {
         draw();
-        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(loop);
-        else requestAnimationFrame(loop);
+        tick = video.requestVideoFrameCallback ? video.requestVideoFrameCallback(loop)
+                                              : requestAnimationFrame(loop);
+    }
+    function restart() {
+        if (video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(tick);
+        else cancelAnimationFrame(tick);
+        loop();
     }
 
     function setPos(value) {
@@ -109,6 +115,35 @@
         else video.pause();
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
+
+    // Speed and frame rate pick one of four renders of the same shots. The new
+    // one picks up at the same moment, playing or paused as the last was.
+    var controls = document.getElementById('compare-controls');
+    if (controls) {
+        var choice = { speed: 'half', rate: '24' };
+        controls.hidden = false;
+        controls.addEventListener('click', function (e) {
+            var button = e.target.closest('button');
+            if (!button) return;
+            var key = button.dataset.speed ? 'speed' : 'rate';
+            var value = button.dataset[key];
+            if (choice[key] === value) return;
+            choice[key] = value;
+            controls.querySelectorAll('[data-' + key + ']').forEach(function (b) {
+                b.setAttribute('aria-pressed', String(b === button));
+            });
+            var playing = !video.paused;
+            var at = video.duration ? video.currentTime / video.duration : 0;
+            video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4';
+            video.addEventListener('loadedmetadata', function resume() {
+                video.removeEventListener('loadedmetadata', resume);
+                video.currentTime = at * video.duration;
+                restart();
+                if (playing) setPlaying(true);
+                else label();
+            });
+        });
+    }
 
     video.addEventListener('loadeddata', draw);
     video.addEventListener('seeked', draw);

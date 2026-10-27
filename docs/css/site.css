@@ -180,6 +180,27 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .compare.js .compare-pause:hover { border-color: var(--amber); }
 @media (pointer: coarse) { .compare.js .compare-pause { min-height: 44px; left: 8px; bottom: 8px; } }
 
+/* Speed and frame rate for the demo, shown only where the script can switch them. */
+.compare-controls { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 12px 6px 0; }
+.compare-controls[hidden] { display: none; }
+.seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
+.seg button {
+    min-height: 32px;
+    padding: 0 12px;
+    font: 500 12px/1 var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    color: var(--soft);
+    background: none;
+    border: 0;
+    cursor: pointer;
+}
+.seg button + button { border-left: 1px solid var(--line-strong); }
+.seg button:hover { color: var(--text); }
+.seg button[aria-pressed="true"] { color: var(--amber); background: var(--raise); }
+.seg button:focus-visible { outline: 2px solid var(--amber); outline-offset: -2px; }
+@media (pointer: coarse) { .seg button { min-height: 44px; } }
+
 .film video { width: 100%; height: auto; border-radius: 6px; background: var(--stage); }
 
 /* sections */
