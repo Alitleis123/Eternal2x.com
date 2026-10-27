@@ -327,6 +327,21 @@ local function shown_item(timeline, top)
     return top
 end
 
+-- The rates Resolve shows for 24000/1001 and its kin. It counts with the
+-- exact rate, which over a long clip comes out a frame different. Any other
+-- rate, 23.98 say, is what it says.
+local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
+               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
+
+local function exact_rate(text)
+    local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
+    if not r then return nil end
+    for _, pair in ipairs(NTSC) do
+        if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
+    end
+    return r
+end
+
 -- How the clip's markers line up with its frames. Resolve counts them in
 -- timeline frames from the start of the media, not from the clip's left edge,
 -- so a trimmed clip's first frame is at its left offset. A clip at another
@@ -335,8 +350,7 @@ end
 -- wrong frame, so a clip whose bounds Resolve will not give is `unreadable`.
 local function marked_clip(item, timeline, props)
     local ok, clip = pcall(function()
-        local fps = tonumber(tostring(props["FPS"] or ""):match("^%s*([%d%.]+)"))
-        local rate = tonumber(timeline:GetSetting("timelineFrameRate"))
+        local fps, rate = exact_rate(props["FPS"]), exact_rate(timeline:GetSetting("timelineFrameRate"))
         if not (fps and rate and fps > 0 and rate > 0) then error("no frame rates") end
         local per = fps / rate
         local origin
@@ -949,11 +963,14 @@ end
 -- Put a marker on each frame Analyse found, given as source frames from the
 -- clip's first frame, after taking down the ones it put there last time. Each
 -- goes on the first timeline frame that shows it, so it reads back as that
--- frame or a later one of the same drawing, never the drawing before.
--- Returns how many it placed.
+-- frame or a later one of the same drawing, never the drawing before. On a
+-- timeline slower than the clip, a drawing held for less than one timeline
+-- frame can share it with the next one. It never shows on that timeline, and
+-- is counted instead of marked. Returns how many it placed and how many
+-- shared a frame.
 local function mark_drawings(clip, marks)
-    local placed = 0
-    if clip.unreadable then return placed end
+    local placed, shared, used = 0, 0, {}
+    if clip.unreadable then return placed, shared end
     pcall(function()
         local item = clip.item
         local markers = item:GetMarkers()
@@ -965,14 +982,18 @@ local function mark_drawings(clip, marks)
         end
         for f in marks:gmatch("%d+") do
             local t = math.ceil(tonumber(f) / clip.per - 1e-6)
-            if t < clip.length
-                and item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
-                                   "Delete this marker to leave the frame out.", 1, MARK_TAG) then
-                placed = placed + 1
+            if used[t] then
+                shared = shared + 1
+            elseif t < clip.length then
+                used[t] = true
+                if item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
+                                  "Delete this marker to leave the frame out.", 1, MARK_TAG) then
+                    placed = placed + 1
+                end
             end
         end
     end)
-    return placed
+    return placed, shared
 end
 
 local function current_args(extra)
@@ -1087,23 +1108,9 @@ local function find_source(timeline, place)
     return nil
 end
 
--- The rates Resolve shows for 24000/1001 and its kin. It counts with the
--- exact rate, which over a long clip comes out a frame different. Any other
--- rate, 23.98 say, is what it says.
-local NTSC = { { 23.976, 24000 / 1001 }, { 29.97, 30000 / 1001 }, { 47.952, 48000 / 1001 },
-               { 59.94, 60000 / 1001 }, { 119.88, 120000 / 1001 } }
-
 -- The timeline's frame rate and the clip's. nil when either is unknown.
 local function rates(timeline, mpi)
-    local function rate(text)
-        local r = tonumber(tostring(text or ""):match("^%s*([%d%.]+)"))
-        if not r then return nil end
-        for _, pair in ipairs(NTSC) do
-            if math.abs(r - pair[1]) < 1e-6 then return pair[2] end
-        end
-        return r
-    end
-    local ours, theirs = rate(timeline:GetSetting("timelineFrameRate")), rate(clip_property(mpi, "FPS"))
+    local ours, theirs = exact_rate(timeline:GetSetting("timelineFrameRate")), exact_rate(clip_property(mpi, "FPS"))
     if not (ours and theirs and ours > 0 and theirs > 0) then return nil end
     return ours, theirs
 end
@@ -1313,11 +1320,17 @@ local function apply_status(st)
         set_progress(1.0, "Finished")
         if ANALYSING then
             ANALYSING = false
-            local placed = ANALYSED_ITEM and mark_drawings(ANALYSED_ITEM, st.marks) or 0
+            local placed, shared = 0, 0
+            if ANALYSED_ITEM then placed, shared = mark_drawings(ANALYSED_ITEM, st.marks) end
             if st.message ~= "" then items.AnalysisLabel.Text = st.message end
             if placed > 0 then
                 items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
                     .. " frames on the clip."
+                if shared > 0 then
+                    items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " " .. shared
+                        .. (shared == 1 and " drawing lasts" or " drawings last")
+                        .. " less than a frame of this timeline, so never shows on it."
+                end
                 set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
             elseif st.marks ~= "" and ANALYSED_ITEM and ANALYSED_ITEM.unreadable then
                 set_status("Analysis complete. Resolve would not say where the clip's frames are, so no markers were placed.")

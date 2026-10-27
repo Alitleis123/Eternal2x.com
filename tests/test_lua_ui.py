@@ -1999,7 +1999,9 @@ def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
     H.click("SmoothBtn")
     sent = [int(m) for m in marks_sent(direct).split(",")]
     assert sent == [0, 125, 127, 130]
-    assert all(m <= f < m + 1.25125 for m, f in zip((0, 125, 127, 129), sent))
+    drawn = (0, 125, 127, 129, 10 ** 6)
+    assert all(drawn[i] <= f < drawn[i + 1] for i, f in enumerate(sent)), \
+        "each mark reads as its own drawing, not the one before or after"
 
 
 def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, direct):
@@ -2071,3 +2073,33 @@ def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
     H.click("SmoothBtn")
     assert "--marks-file" not in H.last_command()
     assert "No markers" in H.status()
+
+
+def test_drawings_too_short_for_the_timeline_are_reported(lua, direct):
+    """30 fps on 23.976: source frame 4 is never shown, so drawings at 4 and
+    5 share timeline frame 4. The panel says so rather than dropping one."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps = "30", "23.976"
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
+    H.click("RefreshStatusBtn")
+    assert H.marker_frames() == "0,2,4,6"
+    assert "1 drawing lasts less than a frame of this timeline" in H.widgets["AnalysisLabel"].Text
+
+
+def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
+    """23.976 is 24000/1001. Rounded, frame 1001 of a 24 fps timeline read
+    as 999, the drawing before the 1000 it shows."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "24", 1200
+    lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
+    H.click("RefreshBtn")
+    H.add_marker(1001)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "1000"
+    H.clip_fps, H.timeline_fps = "30", "29.97"
+    lua.execute("local H = ...; H.markers = {}", H)
+    H.add_marker(999)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "999", "rounded, 999 timeline frames came out as 1000"
