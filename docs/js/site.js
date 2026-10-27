@@ -134,7 +134,11 @@
             });
             var playing = !video.paused;
             var at = video.duration ? video.currentTime / video.duration : 0;
-            video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4';
+            // The page's ?v= on the first video carries over, so a browser
+            // holding older renders fetches these.
+            var version = (video.getAttribute('src').split('?')[1] || '');
+            video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4'
+                + (version ? '?' + version : '');
             video.addEventListener('loadedmetadata', function resume() {
                 video.removeEventListener('loadedmetadata', resume);
                 video.currentTime = at * video.duration;
