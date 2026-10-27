@@ -1473,20 +1473,62 @@ def test_an_install_set_up_with_an_old_feed_checks_the_new_one(lua, direct, old)
     assert "Eternal2x.com/main" not in H.last_command()
 
 
-def test_an_old_launcher_is_renamed_so_the_menu_says_upflow2x(lua, tmp_path, repo_root):
-    """Updates never touch the launcher, so the panel renames it once."""
+def _old_install(tmp_path, repo_root):
+    """A launcher from before the rename, Eternal2x.lua, beside its config."""
     plugin_root = _plugin_tree(tmp_path / "Eternal2x", repo_root)
     utility = tmp_path / "Utility"
     utility.mkdir()
     old = utility / "Eternal2x.lua"
-    old.write_text("-- Eternal2x launcher script installed into Resolve Scripts/Utility.\n"
-                   + (repo_root / "Installer" / "Eternal2xLauncher.lua").read_text(encoding="utf-8"),
+    launcher = (repo_root / "Installer" / "Eternal2xLauncher.lua").read_text(encoding="utf-8")
+    old.write_text(launcher.replace("-- Upflow2x launcher", "-- Eternal2x launcher", 1),
                    encoding="utf-8")
     (utility / "Eternal2x.conf").write_text(f"repo_root={plugin_root}\nauto_update=false\n",
                                             encoding="utf-8")
+    return utility, old
+
+
+def test_an_old_launcher_is_renamed_so_the_menu_says_upflow2x(lua, tmp_path, repo_root):
+    """Updates never touch the launcher, so the panel renames it once."""
+    utility, old = _old_install(tmp_path, repo_root)
     assert load(lua, old).window is not None
     assert not old.exists() and (utility / "Upflow2x.lua").exists()
+    assert not (utility / "Upflow2x.lua.part").exists()
     assert load(lua, utility / "Upflow2x.lua").window is not None
+
+
+@pytest.mark.parametrize("there", ["-- someone else's script\n", ""])
+def test_a_script_already_called_upflow2x_keeps_the_old_launcher(lua, tmp_path, repo_root, there):
+    """Unrelated, or cut short: deleting the old one would leave no menu entry."""
+    utility, old = _old_install(tmp_path, repo_root)
+    (utility / "Upflow2x.lua").write_text(there, encoding="utf-8")
+    load(lua, old)
+    assert old.exists()
+    assert (utility / "Upflow2x.lua").read_text(encoding="utf-8") == there
+
+
+def test_a_launcher_that_cannot_be_written_keeps_the_old_one(lua, tmp_path, repo_root):
+    """A full disk: the write reports failure through its return value."""
+    utility, old = _old_install(tmp_path, repo_root)
+    lua.execute("""
+        local real = io.open
+        io.open = function(path, mode)
+            if tostring(path):find("%.part$") then
+                return { write = function() return nil, "No space left on device" end,
+                         close = function() return true end }
+            end
+            return real(path, mode)
+        end
+    """)
+    load(lua, old)
+    assert old.exists() and not (utility / "Upflow2x.lua").exists()
+
+
+def test_the_launcher_run_beside_the_panel_never_deletes_the_panel(lua, direct):
+    """There, Eternal2x.lua beside the config is the panel itself."""
+    H = load(lua, direct / "Installer" / "Eternal2xLauncher.lua")
+    assert H.window is not None
+    assert ui_script(direct).exists()
+    assert not (direct / "Installer" / "Upflow2x.lua").exists()
 
 
 def test_a_panel_run_from_its_own_folder_never_renames_itself(lua, direct):

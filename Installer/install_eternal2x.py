@@ -57,10 +57,12 @@ def remove_old_install() -> None:
         pass
     # Before the rename to Upflow2x the launcher was Eternal2x.lua, which
     # Resolve would list beside the new one. Every version of it opens with
-    # this line.
+    # this line. Called once the new launcher is in place, so a failed
+    # install keeps the old one working.
     old_lua = root / "Utility" / "Eternal2x.lua"
     try:
-        if LAUNCHER_MARK in old_lua.read_text(encoding="utf-8", errors="replace"):
+        first = old_lua.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+        if LAUNCHER_MARK in first:
             old_lua.unlink()
     except OSError:
         pass
@@ -171,10 +173,9 @@ def main() -> int:
 
     dest_dir = _resolve_scripts_dir()
     dest_dir.mkdir(parents=True, exist_ok=True)
-    remove_old_install()
-
     dest_lua = dest_dir / "Upflow2x.lua"
     shutil.copy2(src_lua, dest_lua)
+    remove_old_install()
 
     conf_path = write_config(dest_dir, repo_root, _pick_python(repo_root))
 

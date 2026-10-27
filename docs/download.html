@@ -133,8 +133,9 @@ function versionFromTag(tag) {
 
 function buildCard(release, isLatest) {
     var version = versionFromTag(release.tag_name);
-    var winUrl = findAsset(release.assets, 'upflow2x-win.zip');
-    var macUrl = findAsset(release.assets, 'upflow2x-mac.zip');
+    // Releases before the rename to Upflow2x carry eternal2x-*.zip.
+    var winUrl = findAsset(release.assets, 'upflow2x-win.zip') || findAsset(release.assets, 'eternal2x-win.zip');
+    var macUrl = findAsset(release.assets, 'upflow2x-mac.zip') || findAsset(release.assets, 'eternal2x-mac.zip');
 
     var card = document.createElement('div');
     card.className = 'download-card' + (isLatest ? ' latest' : '');

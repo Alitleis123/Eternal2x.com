@@ -1,5 +1,5 @@
--- Eternal2x  --  smooth 2x for hand-drawn animation
--- Resolve script panel: Workspace > Scripts > Eternal2x
+-- Upflow2x  --  upscale and smooth hand-drawn animation
+-- Resolve script panel: Workspace > Scripts > Upflow2x
 
 -- ---------------------------------------------------------------------------
 -- paths and config
@@ -119,32 +119,58 @@ end
 -- Workspace > Scripts lists the launcher by its file name. Installs from
 -- before the rename have it as Eternal2x.lua beside the config, and updates
 -- never touch that file, so the panel renames it once, to Upflow2x.lua.
+-- The old one only goes once a whole new one is in place, so a failure along
+-- the way leaves the menu entry that works.
+local function read_file(path)
+    local f = io.open(path, "rb")
+    if not f then return nil end
+    local body = f:read("*a")
+    f:close()
+    return body
+end
+
+-- Every launcher ever installed opens with this line.
+local function is_launcher(body)
+    local first = body and body:match("^[^\r\n]*") or ""
+    return first:find("^%-%- %w+ launcher script installed into Resolve Scripts/") ~= nil
+end
+
+local function same_path(a, b)
+    local function norm(p)
+        p = p:gsub("\\", "/"):gsub("/+", "/")
+        return is_windows() and p:lower() or p
+    end
+    return norm(a) == norm(b)
+end
+
 local function rename_launcher()
-    -- Run from the plugin folder instead, the config sits beside this
-    -- panel, which is also called Eternal2x.lua.
     if not _G.ETERNAL2X_CONF then return end
     local dir = CONF_PATH:match("^(.*)[/\\][^/\\]*$")
     if not dir then return end
     local old_path, new_path = join_path(dir, "Eternal2x.lua"), join_path(dir, "Upflow2x.lua")
-    local f = io.open(old_path, "rb")
-    if not f then return end
-    local body = f:read("*a") or ""
-    f:close()
-    -- Every launcher ever installed opens with this line, and the panel never
-    -- contains it.
-    if not body:find("launcher script installed into Resolve Scripts", 1, true) then return end
-    local existing = io.open(new_path, "rb")
+    -- With the config beside this panel, Eternal2x.lua there is the panel.
+    if same_path(old_path, join_path(REPO_ROOT, "Installer/Eternal2x.lua")) then return end
+    if not is_launcher(read_file(old_path)) then return end
+    local existing = read_file(new_path)
     if existing then
-        existing:close()
+        -- Someone else's script, or one cut short: keep the old launcher.
+        if not (is_launcher(existing) and existing:find("pcall(dofile, ui_script)", 1, true)) then
+            return
+        end
     else
-        local src = io.open(join_path(REPO_ROOT, "Installer/Eternal2xLauncher.lua"), "rb")
-        if not src then return end
-        local launcher = src:read("*a")
-        src:close()
-        local out = io.open(new_path, "wb")
+        local launcher = read_file(join_path(REPO_ROOT, "Installer/Eternal2xLauncher.lua"))
+        if not is_launcher(launcher) then return end
+        -- Written whole under another name first, so a full disk or a second
+        -- Resolve never finds half a launcher under the real one.
+        local temp = new_path .. ".part"
+        local out = io.open(temp, "wb")
         if not out then return end
-        out:write(launcher)
-        out:close()
+        local wrote = out:write(launcher)
+        local closed = out:close()
+        if not (wrote and closed) or read_file(temp) ~= launcher or not os.rename(temp, new_path) then
+            os.remove(temp)
+            return
+        end
     end
     os.remove(old_path)
 end

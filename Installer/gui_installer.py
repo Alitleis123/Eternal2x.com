@@ -665,11 +665,11 @@ class InstallerApp:
             return
 
         dest_dir.mkdir(parents=True, exist_ok=True)
-        remove_old_install()
-
         src_launcher = self.repo_root / "Installer" / "Eternal2xLauncher.lua"
         dest_lua = dest_dir / "Upflow2x.lua"
         shutil.copy2(src_launcher, dest_lua)
+        # Only once the new launcher is in, so a failed copy keeps the old.
+        remove_old_install()
 
         self.root.after(0, self._set_progress, 90, "Writing config...")
         self.root.after(0, self._log, f"  Launcher: {dest_lua}", "ok")

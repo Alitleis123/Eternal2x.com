@@ -91,6 +91,23 @@ def test_a_reinstall_keeps_a_script_that_only_shares_the_old_name(fake_home, mon
     assert (utility / "Eternal2x.lua").exists()
 
 
+def test_a_failed_install_keeps_the_old_launcher(fake_home, monkeypatch):
+    """The old one only goes once the new one is in place."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    utility = inst._resolve_scripts_root() / "Utility"
+    utility.mkdir(parents=True)
+    old = utility / "Eternal2x.lua"
+    old.write_text("-- Eternal2x launcher script installed into Resolve Scripts/Utility.\n")
+
+    def refuse(src, dst):
+        raise PermissionError(f"read-only: {dst}")
+
+    monkeypatch.setattr(inst.shutil, "copy2", refuse)
+    with pytest.raises(PermissionError):
+        inst.main()
+    assert old.exists()
+
+
 def _comp_conf(text):
     comp = inst._resolve_scripts_root() / "Comp"
     comp.mkdir(parents=True)
