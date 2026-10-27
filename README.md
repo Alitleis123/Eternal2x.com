@@ -18,12 +18,10 @@ drawings   A   B   C     D          4 unique drawings
 rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer hold
 ```
 
-![Six frames of a walk from the open movie Hero. As drawn, each drawing is held for two frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
+![Six frames of hair blowing in the wind, drawn on 3s. As drawn, each drawing is held for three frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
 
-*Six frames of a walk from [Hero](https://studio.blender.org/projects/hero/)
-(Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)),
-edited by Eternal2x. The [site](https://eternal2x.com) has the moving version,
-with a divider to drag between the two.*
+*Six frames of hair in the wind, drawn on 3s. The [site](https://eternal2x.com)
+has the moving version, with a divider to drag between the two.*
 
 Every drawing starts on the same frame it did in the source, so cuts and lip
 sync stay where the edit put them.
@@ -253,13 +251,11 @@ The in-betweens are drawn by [Practical-RIFE](https://github.com/hzwer/Practical
 the first time in-betweens are drawn and checked against its SHA-256. It is not
 part of the Eternal2x download.
 
-The demo footage is from [Hero](https://studio.blender.org/projects/hero/) by
-the Blender Foundation,
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), edited for these
-demos. The film on the site,
-[promo.mp4](https://eternal2x.com/assets/demo/promo.mp4), uses footsteps,
-clicks and paper sounds by [Kenney](https://kenney.nl/), CC0. Its wind is made
-from noise.
+The film on the site, [promo.mp4](https://eternal2x.com/assets/demo/promo.mp4),
+uses footage from [Hero](https://studio.blender.org/projects/hero/) by the
+Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+edited, and footsteps, clicks and paper sounds by [Kenney](https://kenney.nl/),
+CC0. Its wind is made from noise.
 
 ## Questions
 

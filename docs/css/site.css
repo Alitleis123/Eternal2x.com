@@ -159,7 +159,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .compare-slider { position: absolute; top: 0; left: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 /* With script, one half shows at a time and a divider wipes between them.
    The video stays in place under the canvas: iOS pauses one it cannot see. */
-.compare.js { aspect-ratio: 960 / 402; cursor: ew-resize; touch-action: pan-y; }
+.compare.js { aspect-ratio: 16 / 9; cursor: ew-resize; touch-action: pan-y; }
 .compare.js .compare-canvas { display: block; position: absolute; inset: 0; width: 100%; height: 100%; }
 .compare.js:focus-within { outline: 2px solid var(--amber); outline-offset: 3px; }
 .compare.js .compare-pause {
