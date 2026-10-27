@@ -19,6 +19,8 @@
 
     --page: 1200px;
     --gutter: clamp(20px, 5vw, 48px);
+
+    --ease-out: cubic-bezier(.2, .7, .3, 1);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -34,7 +36,8 @@ body {
 }
 
 img, video, canvas, svg { display: block; max-width: 100%; }
-a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 3px; }
+a { color: inherit; text-decoration-color: var(--line-strong); text-underline-offset: 3px;
+    transition: color .15s ease, text-decoration-color .15s ease; }
 a:hover { color: var(--amber); text-decoration-color: currentColor; }
 :focus-visible { outline: 2px solid var(--amber); outline-offset: 3px; border-radius: 4px; }
 p { margin: 0; }
@@ -88,7 +91,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     text-decoration: none;
 }
 .brand:hover { color: var(--text); }
-.brand img { width: 34px; height: 34px; }
+.brand img, .brand svg { width: 34px; height: 34px; }
 .brand span span { margin-left: 2px; padding: 4px 5px 3px; border-radius: 5px; font: 600 11px/1 var(--mono); letter-spacing: .04em; color: var(--bg); background: var(--amber); vertical-align: 3px; }
 .top nav { display: flex; align-items: center; gap: 6px; }
 .top nav a:not(.btn) { font-size: 15px; text-decoration: none; color: var(--soft); padding: 8px 10px; border-radius: 6px; }
@@ -109,7 +112,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     color: var(--text);
     background: transparent;
     cursor: pointer;
-    transition: background-color .15s ease, border-color .15s ease, color .15s ease;
+    transition: background-color .15s ease, border-color .15s ease, color .15s ease, transform .15s ease-out;
 }
 .btn:hover { color: var(--text); border-color: rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .04); }
 .btn svg { width: 16px; height: 16px; flex: none; }
@@ -178,6 +181,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     border: 1px solid var(--line-strong);
     border-radius: 6px;
     cursor: pointer;
+    transition: border-color .15s ease;
 }
 .compare.js .compare-pause:hover { border-color: var(--amber); }
 @media (pointer: coarse) { .compare.js .compare-pause { min-height: 44px; left: 8px; bottom: 8px; } }
@@ -196,6 +200,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     background: none;
     border: 0;
     cursor: pointer;
+    transition: color .15s ease, background-color .15s ease;
 }
 .seg button + button { border-left: 1px solid var(--line-strong); }
 .seg button:hover { color: var(--text); }
@@ -365,6 +370,58 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 
 @media (max-width: 520px) {
     .top nav .hide-small { display: none; }
+}
+
+/* motion
+
+   The home page sets .js-motion on <html> before this file loads, and
+   site.js sets .js-reveal, so without script nothing waits hidden. A reader
+   who asks for less motion gets none of it and sees each part as it ends.
+   Only opacity and transform move, apart from the wire's own pulse. */
+
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes node-pass { 25% { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+    .btn:not(:disabled):active { transform: translateY(1px); }
+
+    /* The logo's two drawn frames, then the amber one Upflow2x draws between them. */
+    .js-motion .brand-drawn { animation: fade .25s ease-out backwards; }
+    .js-motion .brand-tween { animation: fade .35s ease-out .3s backwards; }
+
+    /* The pitch comes in line by line, then the demo under it. */
+    .js-motion .hero-text > *, .js-motion .hero .panel { animation: rise .5s var(--ease-out) backwards; }
+    .js-motion .hero-text > p { animation-delay: .06s; }
+    .js-motion .hero .actions { animation-delay: .12s; }
+    .js-motion .hero .panel { animation-delay: .2s; }
+
+    /* Sections further down rise in the first time they scroll into view. */
+    .js-reveal [data-reveal] { transition: opacity .5s ease-out, transform .5s var(--ease-out); }
+    .js-reveal [data-reveal]:not(.in) { opacity: 0; transform: translateY(12px); }
+
+    /* The node chain runs once as it comes into view. Each node lights in
+       turn and the wire's pulse carries down to the next, then the wires go
+       back to their steady pulse. The light sits under the node's text. */
+    .js-reveal .flow .node { isolation: isolate; }
+    .js-reveal .flow .node > .node-kind::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        z-index: -1;
+        border: 1px solid var(--amber);
+        border-radius: 10px;
+        background: rgba(242, 169, 59, .1);
+        opacity: 0;
+    }
+    .js-reveal .flow .node:nth-child(2) { --at: .45s; }
+    .js-reveal .flow .node:nth-child(3) { --at: .8s; }
+    .js-reveal .flow .node:nth-child(4) { --at: 1.15s; }
+    .js-reveal .flow.in .node > .node-kind::after { animation: node-pass .7s ease-out var(--at, .1s); }
+    .js-reveal .flow:not(.in) .node + .node > .node-kind::before { animation: none; background-position: 0 -60%; }
+    .js-reveal .flow.in .node + .node > .node-kind::before {
+        animation: wire .3s ease-out calc(var(--at) - .3s) both, wire 1.8s linear 1.9s infinite;
+    }
 }
 
 /* inner pages */

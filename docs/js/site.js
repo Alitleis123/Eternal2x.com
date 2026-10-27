@@ -189,6 +189,75 @@
     var still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     label();
     setPlaying(!still);
+
+    // The first time the demo is on screen, the divider sweeps aside and back
+    // once to show it can be dragged. Touching the demo first skips that, and
+    // any press or key during it puts the divider straight back.
+    if (still || !window.IntersectionObserver) return;
+    var figure = box.closest('figure') || box;
+    var sweeping = false, done = false, frame = 0, began = 0, from = pos;
+    function stop() {
+        if (done) return;
+        done = true;
+        seen.disconnect();
+        cancelAnimationFrame(frame);
+        window.removeEventListener('pointerdown', input, true);
+        window.removeEventListener('keydown', input, true);
+        if (sweeping) setPos(from);
+        sweeping = false;
+    }
+    function input(e) {
+        if (sweeping || figure.contains(e.target)) stop();
+    }
+    function step(now) {
+        if (!began) began = now;
+        var t = Math.min(1, (now - began) / 1100);
+        setPos(from - .12 * (1 - Math.cos(2 * Math.PI * t)) / 2);
+        if (t < 1) frame = requestAnimationFrame(step);
+        else stop();
+    }
+    function sweep() {
+        if (done) return;
+        // Nothing shows until the video has a frame to draw.
+        if (video.readyState < 2) {
+            video.addEventListener('loadeddata', sweep, { once: true });
+            return;
+        }
+        from = pos;
+        sweeping = true;
+        frame = requestAnimationFrame(step);
+    }
+    window.addEventListener('pointerdown', input, true);
+    window.addEventListener('keydown', input, true);
+    var seen = new IntersectionObserver(function (entries) {
+        if (!entries[0].isIntersecting) return;
+        seen.disconnect();
+        // Once the hero has finished coming in.
+        setTimeout(sweep, 900);
+    }, { threshold: .6 });
+    seen.observe(box);
+})();
+
+// Sections below the hero rise in the first time they scroll into view, and
+// the node chain in How it works runs once when most of it is in view. They
+// stay as they are after that.
+(function () {
+    var items = document.querySelectorAll('[data-reveal]');
+    var flow = document.querySelector('.flow');
+    if (!window.IntersectionObserver || (!items.length && !flow)) return;
+    function once(els, options) {
+        var seen = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                entry.target.classList.add('in');
+                seen.unobserve(entry.target);
+            });
+        }, options);
+        els.forEach(function (el) { seen.observe(el); });
+    }
+    document.documentElement.classList.add('js-reveal');
+    once(items, { rootMargin: '0px 0px -10% 0px' });
+    if (flow) once([flow], { threshold: .5 });
 })();
 
 // Copy buttons on the help page's command blocks.

@@ -21,7 +21,8 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/site.css?v=20261027d">
+    <script>document.documentElement.classList.add('js-motion');</script>
+    <link rel="stylesheet" href="css/site.css?v=20261027m">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -29,7 +30,24 @@
 <header class="top">
     <div class="wrap">
         <a class="brand" href="index.html" aria-label="Upflow2x home">
-            <img src="assets/icon.svg" alt="" width="34" height="34">
+            <!-- assets/icon.svg, inline so the frame Upflow2x draws can come in last. -->
+            <svg viewBox="0 0 512 512" width="34" height="34" aria-hidden="true">
+                <rect x="6" y="6" width="500" height="500" rx="114" fill="#1B1C21" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="10"/>
+                <rect x="64" y="150" width="384" height="212" rx="26" fill="#F4F4F1"/>
+                <g fill="#1B1C21">
+                    <rect x="82" y="166" width="28" height="22" rx="6"/><rect x="146" y="166" width="28" height="22" rx="6"/>
+                    <rect x="210" y="166" width="28" height="22" rx="6"/><rect x="274" y="166" width="28" height="22" rx="6"/>
+                    <rect x="338" y="166" width="28" height="22" rx="6"/><rect x="402" y="166" width="28" height="22" rx="6"/>
+                    <rect x="82" y="324" width="28" height="22" rx="6"/><rect x="146" y="324" width="28" height="22" rx="6"/>
+                    <rect x="210" y="324" width="28" height="22" rx="6"/><rect x="274" y="324" width="28" height="22" rx="6"/>
+                    <rect x="338" y="324" width="28" height="22" rx="6"/><rect x="402" y="324" width="28" height="22" rx="6"/>
+                </g>
+                <g class="brand-drawn" fill="#1B1C21">
+                    <rect x="82" y="200" width="104" height="112" rx="12"/>
+                    <rect x="326" y="200" width="104" height="112" rx="12"/>
+                </g>
+                <rect class="brand-tween" x="204" y="200" width="104" height="112" rx="12" fill="#F2A93B"/>
+            </svg>
             <span>Upflow <span>2X</span></span>
         </a>
         <nav aria-label="Main">
@@ -79,7 +97,7 @@
         </figure>
     </section>
 
-    <section class="section how" id="how" aria-labelledby="how-title">
+    <section class="section how" id="how" aria-labelledby="how-title" data-reveal>
             <figure class="panel film">
                 <div class="player">
                     <video src="assets/demo/promo.mp4" poster="assets/demo/promo-resolve.jpg" controls playsinline preload="none"
@@ -118,7 +136,7 @@
         </div>
     </section>
 
-    <section class="get" id="specs" aria-labelledby="get-title">
+    <section class="get" id="specs" aria-labelledby="get-title" data-reveal>
         <h2 id="get-title">Get Upflow2x</h2>
         <p>Free, and it updates itself. This is all you need:</p>
         <ul class="needs" aria-label="What you need">
@@ -155,6 +173,6 @@
     </div>
 </footer>
 
-<script src="js/site.js?v=20261027f"></script>
+<script src="js/site.js?v=20261027m"></script>
 </body>
 </html>
