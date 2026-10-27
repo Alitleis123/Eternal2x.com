@@ -1,3 +1,29 @@
+// The home page's download buttons open the newest release on GitHub. Point
+// them at its zips instead. Releases before the rename to Upflow2x carry
+// eternal2x-*.zip.
+(function () {
+    var links = document.querySelectorAll('a[data-asset]');
+    if (!links.length || !window.fetch) return;
+    fetch('https://api.github.com/repos/sidebandstudio/Upflow2x/releases/latest')
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (release) {
+            if (!release || !release.assets) return;
+            links.forEach(function (link) {
+                var name = link.getAttribute('data-asset');
+                var names = [name, name.replace('upflow2x', 'eternal2x')];
+                for (var n = 0; n < names.length; n++) {
+                    for (var i = 0; i < release.assets.length; i++) {
+                        if (release.assets[i].name === names[n]) {
+                            link.href = release.assets[i].browser_download_url;
+                            return;
+                        }
+                    }
+                }
+            });
+        })
+        .catch(function () {});
+})();
+
 // The demo on the home page: one video holds the original above the
 // Upflow2x render, and a canvas shows the original left of a divider and
 // the render right of it. One video keeps both sides on the same frame,
@@ -121,6 +147,7 @@
     var controls = document.getElementById('compare-controls');
     if (controls) {
         var choice = { speed: 'half', rate: '24' };
+        var pending = null;
         controls.hidden = false;
         controls.addEventListener('click', function (e) {
             var button = e.target.closest('button');
@@ -132,20 +159,26 @@
             controls.querySelectorAll('[data-' + key + ']').forEach(function (b) {
                 b.setAttribute('aria-pressed', String(b === button));
             });
-            var playing = !video.paused;
-            var at = video.duration ? video.currentTime / video.duration : 0;
+            // A second switch before the first render has loaded keeps the
+            // first one's moment. By then the video reads as paused at 0.
+            if (!pending) {
+                pending = { playing: !video.paused,
+                            at: video.duration ? video.currentTime / video.duration : 0 };
+            }
             // The page's ?v= on the first video carries over, so a browser
             // holding older renders fetches these.
             var version = (video.getAttribute('src').split('?')[1] || '');
             video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4'
                 + (version ? '?' + version : '');
-            video.addEventListener('loadedmetadata', function resume() {
-                video.removeEventListener('loadedmetadata', resume);
-                video.currentTime = at * video.duration;
-                restart();
-                if (playing) setPlaying(true);
-                else label();
-            });
+        });
+        video.addEventListener('loadedmetadata', function () {
+            if (!pending) return;
+            var resume = pending;
+            pending = null;
+            video.currentTime = resume.at * video.duration;
+            restart();
+            if (resume.playing) setPlaying(true);
+            else label();
         });
     }
 

@@ -27,6 +27,22 @@ def _stand_in_for_the_network(request, monkeypatch):
     monkeypatch.setattr(rife, "Rife", StandInRife)
 
 
+@pytest.fixture(autouse=True)
+def _no_gpu_for_the_upscaler(request, monkeypatch):
+    """Renders leave the upscale to Super Scale, as on a machine without a GPU,
+    so a test machine with one draws the same frames. tests/test_upscaler.py
+    tests the network."""
+    if request.module.__name__.endswith("test_upscaler"):
+        return
+    from Pipeline import upscaler
+    from Pipeline.rife import AIUnavailable
+
+    def no_gpu(progress=None):
+        raise AIUnavailable("There is no GPU runtime here.")
+
+    monkeypatch.setattr(upscaler, "Upscaler", no_gpu)
+
+
 @pytest.fixture
 def repo_root() -> Path:
     return REPO_ROOT

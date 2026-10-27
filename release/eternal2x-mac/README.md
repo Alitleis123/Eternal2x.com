@@ -18,12 +18,10 @@ drawings   A   B   C     D          4 unique drawings
 rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer hold
 ```
 
-![Six frames of a walk from the open movie Hero. As drawn, each drawing is held for two frames. From Eternal2x, each repeat is replaced by a new in-between.](https://eternal2x.com/assets/demo/frames.jpg)
+![Six frames of hair blowing in the wind, drawn on 3s. As drawn, each drawing is held for three frames. From Eternal2x, each repeat is replaced by a new in-between.](https://upflow2x.com/assets/demo/frames.jpg)
 
-*Six frames of a walk from [Hero](https://studio.blender.org/projects/hero/)
-(Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)),
-edited by Eternal2x. The [site](https://eternal2x.com) has the moving version,
-with a divider to drag between the two.*
+*Six frames of hair in the wind, drawn on 3s. The [site](https://upflow2x.com)
+has the moving version, with a divider to drag between the two.*
 
 Every drawing starts on the same frame it did in the source, so cuts and lip
 sync stay where the edit put them.
@@ -45,7 +43,9 @@ it drops straight back into your edit.
 - Keeps deliberate held poses still, instead of smearing them into drift.
 - Cuts stay hard. Blending across a scene change would show both shots at once,
   so it snaps instead.
-- Upscales 2x using Resolve's Super Scale.
+- Upscales 2x with Real-ESRGAN's anime model, on the GPU on Windows. It clears
+  compression blocks and keeps thin lines crisp, where Super Scale enlarges
+  the blocks. Without a GPU, Resolve's Super Scale does the upscale.
 
 It does a job like Twixtor's, but finds the held drawings first, so it only
 generates the frames that were never drawn. It draws them with a network
@@ -55,8 +55,8 @@ which is where retimers tear, melt and double lines.
 ## Requirements
 
 - **DaVinci Resolve Studio** 18 or newer. Since 19.1 the free edition blocks
-  script panels like this one, so it cannot open Eternal2x. The 2x upscale uses
-  Super Scale, which is Studio only too.
+  script panels like this one, so it cannot open Eternal2x. Without a GPU, the
+  2x upscale falls back to Super Scale, which is Studio only too.
 - Python 3.10 to 3.14 on your PATH, from
   [python.org](https://www.python.org/downloads/latest/python3.14/). 3.15 is too
   new for the AI runtime, and on an Intel Mac it stops at 3.13.
@@ -103,12 +103,26 @@ move it.
    scripts which clip is selected, so Eternal2x works on the clip under the
    playhead, read again each time you press a button.
 2. Open **Workspace → Scripts → Eternal2x**.
-3. Click **Analyse**. It reads the clip and tells you what it found, for
-   example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`
-   Nothing is changed, so this is safe to run on anything.
-4. Click **Smooth Clip**.
+3. Click **Analyse**. It reads the clip, tells you what it found, for
+   example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`,
+   and puts a marker on the clip at every drawing. A pose held for more than
+   twice the clip's pattern is a pause. It gets a second marker just before
+   the next drawing, so it stays still and then moves on at the clip's pace.
+4. Check the markers. If Analyse marked too many or too few, move **Threshold**
+   and analyse again. That replaces only its own markers, never yours, and
+   puts back any of its markers you deleted. Then delete a marker to leave its
+   frame out, even if it moved, or select the clip and press **M** to mark a
+   frame Analyse missed.
+5. Click **Render**.
 
-![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://eternal2x.com/assets/demo/resolve.jpg)
+Render keeps every marked frame as drawn and draws every frame between two
+markers fresh, so a part you leave unmarked never counts. Every marker on the
+clip counts, whatever its colour, and the clip's first frame always does.
+Markers on the timeline's ruler do not, so beat markers are safe there. You can
+skip Analyse and mark the frames yourself. A clip with no markers at all is
+rendered from the drawings Eternal2x finds on its own.
+
+![The Eternal2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://upflow2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
@@ -137,9 +151,10 @@ Whole file when Resolve does not report one.
 
 | Setting | What it does |
 |---|---|
+| **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
-| **Upscale 2x** | Applies Resolve's Super Scale to the imported clip. It only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. |
+| **Upscale 2x** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Eternal2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
 | **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
 | **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
 
@@ -169,9 +184,10 @@ python -m Stages.resolve_smooth --video grainy.mov --grain
 ```
 
 `--video` skips Resolve entirely and writes the result to an `Eternal2x` folder
-beside the source, or to `--output-dir`. The 2x upscale is Resolve's Super
-Scale, applied when the panel imports the result, so a `--video` run is always
-at source resolution and `--no-upscale` only matters inside Resolve.
+beside the source, or to `--output-dir`. Add `--network-upscale` and, where
+Real-ESRGAN runs on a GPU, the render is 2x. Without it, or without a GPU, the
+2x upscale is Resolve's Super Scale, applied when the panel imports the result,
+so a `--video` run stays at source resolution.
 
 Add `--json` and stdout carries a single JSON summary, errors included, while
 progress goes to stderr.
@@ -197,7 +213,7 @@ afterwards.
 | "...has a variable frame rate" | Render the clip to a constant frame rate first, from Resolve or with ffmpeg, as the message says. |
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` usually avoids this. |
-| Upscale skipped | Super Scale needs Resolve Studio. |
+| Upscale skipped | Without a GPU the upscale is Super Scale, which needs Resolve Studio. |
 | Something else | Email the panel's status text and the `.eternal2x_last_run.log` file from the plugin folder. |
 
 ## Development
@@ -253,13 +269,17 @@ The in-betweens are drawn by [Practical-RIFE](https://github.com/hzwer/Practical
 the first time in-betweens are drawn and checked against its SHA-256. It is not
 part of the Eternal2x download.
 
-The demo footage is from [Hero](https://studio.blender.org/projects/hero/) by
-the Blender Foundation,
-[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), edited for these
-demos. The film on the site,
-[promo.mp4](https://eternal2x.com/assets/demo/promo.mp4), uses footsteps,
-clicks and paper sounds by [Kenney](https://kenney.nl/), CC0. Its wind is made
-from noise.
+The 2x upscale is drawn by Real-ESRGAN's anime video model, realesr-animevideov3,
+by Xintao Wang, under the BSD 3-Clause licence
+([Real-ESRGAN](https://github.com/xinntao/Real-ESRGAN)). Its network file in
+`Pipeline/networks` is built from the published weights by
+`tools/make_upscaler_model.py`, and ships with its licence beside it.
+
+The film on the site, [promo.mp4](https://upflow2x.com/assets/demo/promo.mp4),
+uses footage from [Hero](https://studio.blender.org/projects/hero/) by the
+Blender Foundation, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+edited, and footsteps, clicks and paper sounds by [Kenney](https://kenney.nl/),
+CC0. Its wind is made from noise.
 
 ## Questions
 

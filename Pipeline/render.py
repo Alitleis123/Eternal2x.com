@@ -43,6 +43,10 @@ class RenderResult:
     is_sequence: bool
     # Why no in-betweens were drawn, if Interpolate was on and none were.
     note: str = ""
+    # Whether the network drew every frame at 2x, and if it was asked to and
+    # did not, why.
+    upscaled: bool = False
+    upscale_note: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -53,6 +57,8 @@ class RenderResult:
             "fps": self.fps,
             "is_sequence": self.is_sequence,
             "note": self.note,
+            "upscaled": self.upscaled,
+            "upscale_note": self.upscale_note,
         }
 
 
@@ -356,6 +362,9 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
         yield current
 
 
+# How many in-betweens are drawn before they are written.
+BATCH = 8
+
 # Encoders to try per container, best quality first.
 _ENCODERS = {
     ".mkv": ("FFV1",),             # lossless; Resolve refuses FFV1 in AVI
@@ -415,7 +424,9 @@ def render_plan(
     else:
         output.parent.mkdir(parents=True, exist_ok=True)
 
-    factor = cfg.upscale_factor if cfg.upscale_enabled else 1
+    # The network's 2x and Lanczos never both apply, or the render would be 4x.
+    # Where the network cannot run, the upscale is left to Super Scale.
+    factor = cfg.upscale_factor if cfg.upscale_enabled and not cfg.network_upscale else 1
     positions = output_time_map(plan)
 
     # Set up before the source is opened, since the first render installs the
@@ -430,6 +441,15 @@ def render_plan(
             pair = Rife(progress).interpolate_pair
         except AIUnavailable as exc:
             note = f"No in-betweens were drawn, so every drawing is kept as drawn. {exc}"
+    upscaler = None
+    upscale_note = ""
+    if cfg.network_upscale:
+        from Pipeline.rife import AIUnavailable
+        from Pipeline.upscaler import Upscaler  # needs onnxruntime
+        try:
+            upscaler = Upscaler(progress)
+        except AIUnavailable as exc:
+            upscale_note = str(exc)
 
     # Which in-between times belong to each pair of consecutive drawings.
     last_pair = plan.output_frames - 2
@@ -439,10 +459,28 @@ def render_plan(
         buckets[i].append(p - i)
 
     cap = _open(source, frames, progress)
-    state = {"writer": None, "written": 0, "width": 0, "height": 0}
+    state = {"writer": None, "written": 0, "width": 0, "height": 0, "upscaler": upscaler,
+             "upscale_note": upscale_note, "last_in": None, "last_out": None}
 
     def emit(frame: np.ndarray) -> None:
         """Upscale if asked, then write one output frame."""
+        if state["upscaler"] is not None:
+            # A held drawing comes through once for every frame it is held,
+            # and the network would draw the same picture again each time.
+            if state["last_in"] is not None and np.array_equal(frame, state["last_in"]):
+                frame = state["last_out"]
+            else:
+                try:
+                    big = state["upscaler"].upscale(frame)
+                except AIUnavailable as exc:
+                    # Past the first frame, the frames so far are 2x and the rest
+                    # cannot be left at 1x, so the render stops and says why.
+                    if state["written"]:
+                        raise
+                    state["upscaler"], state["upscale_note"] = None, str(exc)
+                else:
+                    state["last_in"], state["last_out"] = frame, big
+                    frame = big
         if factor > 1:
             frame = upscale(frame, factor)
         if state["written"] and frame.shape[:2] != (state["height"], state["width"]):
@@ -478,7 +516,10 @@ def render_plan(
             state["writer"].write(frame)
         state["written"] += 1
         if progress and plan.source_frames:
-            progress("Rendering",
+            # A GPU that gave out mid-render leaves the rest to the CPU, which
+            # takes seconds a frame. A new stage name restarts the time left.
+            on_cpu = not getattr(state["upscaler"], "on_gpu", True)
+            progress("Rendering, upscaling on the CPU" if on_cpu else "Rendering",
                      min(1.0, state["written"] / float(plan.source_frames)))
 
     try:
@@ -490,13 +531,17 @@ def render_plan(
         index = 0
         for curr in frames:
             times = buckets[index] if index < len(buckets) else []
-            if times:
+            # A few at a time. Between two markers there can be hundreds of
+            # frames, and drawn all at once a minute's pause at 4K held over
+            # 30 GB before the first was written.
+            for at in range(0, len(times), BATCH):
+                part = times[at:at + BATCH]
                 if pair is not None:
-                    produced = pair(prev, curr, times)
+                    produced = pair(prev, curr, part)
                 else:
                     # De-duplicate only: every output frame is a real drawing,
                     # nothing is synthesised, and each starts where it did.
-                    produced = [(prev if t < 1.0 else curr).copy() for t in times]
+                    produced = [(prev if t < 1.0 else curr).copy() for t in part]
                 for frame in produced:
                     emit(frame)
             prev = curr
@@ -518,4 +563,6 @@ def render_plan(
         fps=plan.fps,
         is_sequence=is_sequence,
         note=note,
+        upscaled=state["upscaler"] is not None,
+        upscale_note=state["upscale_note"],
     )

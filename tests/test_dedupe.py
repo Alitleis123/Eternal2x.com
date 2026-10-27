@@ -14,6 +14,7 @@ from Pipeline.dedupe import (
     noise_threshold,
     output_time_map,
     plan_from_scores,
+    pose_base,
 )
 
 T = 0.004  # duplicate threshold
@@ -217,8 +218,9 @@ def test_plan_survives_mixed_timing():
     plan = plan_from_scores(scores_for([2, 2, 3, 2, 8, 2, 2]), 24.0, threshold=T)
     assert plan.base_hold == 2
     assert plan.unique_drawings == 7
-    # 8-frame hold -> 4 frames, 3-frame hold -> 2, the five 2-frame holds -> 1 each
-    assert plan.output_frames == 11
+    # The 8-frame hold is a pose and keeps 4 frames. The 3-frame hold is
+    # under twice the pattern, so it is drawn through like the five on 2s.
+    assert plan.output_frames == 10
 
 
 def test_plan_serialises():
@@ -324,3 +326,68 @@ def test_a_mostly_ones_clip_with_held_frames_is_not_a_noop():
 def test_a_single_drawing_is_still_a_noop():
     plan = plan_from_scores(scores_for([24]), 24.0, threshold=T)
     assert plan.is_noop
+
+
+# --------------------------------------------------------------------------
+# frames the editor marked
+# --------------------------------------------------------------------------
+
+def test_marked_frames_are_the_drawings_and_the_rest_are_in_betweens():
+    from Pipeline.dedupe import output_time_map, plan_from_marks
+    plan = plan_from_marks([0, 4, 6], 8, 24.0)
+    assert [h.index for h in plan.holds] == [0, 4, 6]
+    assert plan.output_indices == [0, 4, 6]
+    assert output_time_map(plan) == [0, 0.25, 0.5, 0.75, 1, 1.5, 2, 2]
+
+
+def test_the_first_frame_always_counts():
+    from Pipeline.dedupe import plan_from_marks
+    plan = plan_from_marks([3], 6, 24.0)
+    assert [(h.index, h.length) for h in plan.holds] == [(0, 3), (3, 3)]
+
+
+def test_marks_outside_the_clip_or_repeated_are_dropped():
+    from Pipeline.dedupe import plan_from_marks
+    plan = plan_from_marks([5, 5, -1, 12, 2], 10, 24.0)
+    assert [h.index for h in plan.holds] == [0, 2, 5]
+
+
+def test_a_long_gap_between_marks_is_drawn_through_not_held():
+    """Detection keeps a long hold still. Marks are the editor's word, so
+    every frame between two of them is an in-between, however long the gap."""
+    from Pipeline.dedupe import output_time_map, plan_from_marks
+    plan = plan_from_marks([0, 8], 10, 24.0)
+    assert output_time_map(plan)[:8] == [k / 8 for k in range(8)]
+
+
+def test_marking_every_frame_or_only_the_first_leaves_nothing_to_do():
+    from Pipeline.dedupe import plan_from_marks
+    assert plan_from_marks(range(6), 6, 24.0).is_noop
+    assert plan_from_marks([], 6, 24.0).is_noop
+
+
+def test_holds_up_to_twice_the_pattern_are_drawn_through():
+    """A 4-frame hold in a clip on 2s is a drawing, not a pose. Kept half
+    still, it stuttered."""
+    holds = [Hold(0, 2), Hold(2, 4), Hold(6, 2)]
+    assert build_output_indices(holds, 2) == [0, 2, 6]
+
+
+def test_the_pose_length_follows_the_frame_rate():
+    """Measured on a 60 fps scene pack file: holds of 2, 2, 2, 4 and 5 are
+    drawings at 60, so none stays still, but a 12-frame hold is a pose."""
+    holds = [Hold(0, 2), Hold(2, 2), Hold(4, 4), Hold(8, 5), Hold(13, 12), Hold(25, 2)]
+    assert build_output_indices(holds, 2, 60.0) == [0, 2, 4, 8, 13, 13, 25]
+    assert build_output_indices(holds, 2, 24.0) == [0, 2, 4, 8, 8, 8, 13, 13, 13, 13, 13, 13, 25]
+
+
+@pytest.mark.parametrize("ntsc, rate", [(24000 / 1001, 24.0), (30000 / 1001, 30.0),
+                                        (60000 / 1001, 60.0)])
+def test_an_ntsc_rate_measures_poses_like_its_round_rate(ntsc, rate):
+    assert pose_base(1, ntsc) == pose_base(1, rate)
+
+
+def test_analyse_marks_each_drawing_of_a_60fps_clip_once():
+    from Stages.resolve_smooth import drawing_marks
+    plan = plan_from_scores(scores_for([5] * 6), 60.0, threshold=T)
+    assert drawing_marks(plan) == [0, 5, 10, 15, 20, 25]
