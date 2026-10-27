@@ -21,6 +21,7 @@ from typing import Optional, Tuple
 try:
     from Pipeline import resolve_bridge as bridge
     from Pipeline.config import Eternal2xConfig
+    from Pipeline.dedupe import plan_from_marks
     from Pipeline.render import SourceError, analyse_video, probe_video, render_plan
 except ImportError as exc:
     IMPORT_ERROR: Optional[ImportError] = exc
@@ -51,6 +52,9 @@ class StatusFile:
         # A sequence carries no frame rate, so Resolve would play it at the
         # project's. The panel sets this on the imported clip.
         self.fps = 0.0
+        # After an analysis, the frames found to be drawings, counted from the
+        # clip's first frame, for the panel to mark on the clip.
+        self.marks = ""
 
     def write(self, *, done: bool = False, ok: bool = False,
               message: Optional[str] = None) -> None:
@@ -68,6 +72,7 @@ class StatusFile:
             "sequence_pattern": self.sequence_pattern,
             "sequence_frames": self.sequence_frames,
             "fps": round(self.fps, 3),
+            "marks": self.marks,
             "done": done,
             "ok": ok,
             "updated": time.time(),
@@ -155,6 +160,26 @@ def _output_path(source: Path, output_dir: Optional[str], fmt: str,
     return target
 
 
+def drawing_marks(plan) -> list:
+    """The frames to mark on the clip for this plan's drawings.
+
+    Each drawing is marked where it starts, so everything between two
+    drawings is drawn fresh. A pose held for more than twice the clip's
+    pattern is a pause, and is marked again one pattern before it ends, so it
+    stays still and then moves into the next drawing at the clip's own pace.
+    Marked only where it starts, it would drift the whole way there. Shorter
+    holds are drawn through, like 3s in a clip mostly on 2s.
+    """
+    from Pipeline.dedupe import pose_base
+    base = pose_base(plan.base_hold, plan.fps)
+    marks = set()
+    for hold in plan.holds:
+        marks.add(hold.index)
+        if hold.length > 2 * base:
+            marks.add(hold.index + hold.length - base)
+    return sorted(marks)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Rebuild the selected Resolve clip with smooth motion."
@@ -184,8 +209,15 @@ def build_parser() -> argparse.ArgumentParser:
                              "Leave off for clean animation.")
     parser.add_argument("--base-hold", type=int, default=0,
                         help="Force the hold pattern (2 = on 2s). 0 auto-detects.")
+    parser.add_argument("--marks", default=None,
+                        help="Comma-separated frames, counted from the clip's first frame, "
+                             "to keep as drawn. Every other frame becomes an in-between "
+                             "of the marks around it, and nothing is detected.")
     # A panel still open across an update sends the quality it used to offer.
     # The in-betweens are always drawn by the network now, so it is ignored.
+    parser.add_argument("--marks-file", default=None,
+                        help="A file holding the --marks list, for a list too long "
+                             "for the command line.")
     parser.add_argument("--quality", default=None, help=argparse.SUPPRESS)
     parser.add_argument("--no-interpolate", action="store_true",
                         help="De-duplicate only, without drawing in-betweens. With it on, "
@@ -289,9 +321,37 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=False, message=str(exc))
         return 2
 
+    if args.marks_file is not None:
+        try:
+            args.marks = Path(args.marks_file).read_text(encoding="utf-8")
+        except OSError as exc:
+            args.marks = f"(unreadable: {exc})"
+    if args.marks is not None:
+        try:
+            marks = [int(m) for m in args.marks.split(",") if m.strip()]
+        except ValueError:
+            message = f"The marked frames could not be read: {args.marks}"
+            print(f"Error: {message}")
+            summary["error"] = message
+            status.write(done=True, ok=False, message=message)
+            return 2
+        plan = plan_from_marks(marks, plan.source_frames, plan.fps)
     print(plan.describe())
     summary.update({"source": str(source), "width": width, "height": height,
                     "plan": plan.to_dict()})
+
+    if plan.is_noop and plan.marked:
+        if plan.unique_drawings <= 1:
+            why = "Only the first frame is marked, so there is nothing to draw between."
+            short = "Mark at least one more frame on the clip, or delete the markers to let Eternal2x find the drawings."
+        else:
+            why = "Every frame is marked, so there is nothing to draw between."
+            short = "Every frame is marked. Delete the markers on frames that should be drawn fresh."
+        print(f"Nothing to do. {why}")
+        summary["skipped"] = "marks"
+        summary["ok"] = True
+        status.write(done=True, ok=True, message=short)
+        return 0
 
     if plan.is_noop:
         if plan.unique_drawings <= 1:
@@ -316,6 +376,7 @@ def _run(args, summary: dict) -> int:
     if args.analyse:
         print("Analysis only. Nothing was changed.")
         summary["ok"] = True
+        status.marks = ",".join(str(f) for f in drawing_marks(plan))
         status.write(done=True, ok=True, message=plan.describe())
         return 0
 

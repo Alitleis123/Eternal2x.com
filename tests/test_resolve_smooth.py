@@ -649,3 +649,80 @@ def test_the_message_says_when_no_in_betweens_could_be_drawn():
 
 def test_a_clean_render_says_only_what_it_made():
     assert smooth._finished(_Plan(), _Result()) == "Rendered 12 drawings into 24 smooth frames."
+
+
+# --------------------------------------------------------------------------
+# frames the editor marked
+# --------------------------------------------------------------------------
+
+def test_marked_frames_are_kept_and_everything_between_is_drawn_fresh(
+        make_anime, monkeypatch, tmp_path, read_frames):
+    """Frame 4 is a new drawing in the source. Unmarked, it does not count."""
+    import numpy as np
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    source = read_frames(src)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--marks", "0,6"]) == 0
+    frames = read_frames(out / f"{src.stem}_smooth")
+    assert len(frames) == 12
+    assert np.array_equal(frames[0], source[0])
+    assert np.array_equal(frames[6], source[6])
+    assert not np.array_equal(frames[4], source[4]), "the unmarked drawing was kept"
+
+
+def test_analyse_hands_the_drawings_it_found_to_the_panel(make_anime, monkeypatch, tmp_path):
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--status-file", str(status)]) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["marks"] == "0,2,4,6,8,10"
+
+
+def test_marks_that_cannot_be_read_are_reported(make_anime, monkeypatch, tmp_path):
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--marks", "0,x",
+                             "--status-file", str(status)]) == 2
+    assert "could not be read" in json.loads(status.read_text(encoding="utf-8"))["message"]
+
+
+def test_only_the_first_frame_marked_asks_for_more(make_anime, monkeypatch, tmp_path):
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--marks", "0",
+                             "--status-file", str(status)]) == 0
+    assert "Mark at least one more frame" in json.loads(status.read_text(encoding="utf-8"))["message"]
+
+
+def test_analyse_marks_a_pause_again_before_it_moves_on(make_anime, monkeypatch, tmp_path):
+    """Marked only where it starts, a pose held for eight frames on 2s would
+    drift the whole way into the next drawing. It stays still until two
+    frames before the next one instead."""
+    src = make_anime(holds=(2, 2, 8, 2), fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--status-file", str(status)]) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["marks"] == "0,2,4,10,12"
+
+
+def test_analyse_marks_3s_in_a_clip_on_1s_once(make_anime, monkeypatch, tmp_path):
+    """Measured on a Frieren opening: a walk on 3s, then a pan on 1s, read as
+    on 1s. Marking both ends of each 3-frame hold kept the walk stepped."""
+    src = make_anime(holds=(3,) * 6 + (1,) * 6, fps=24.0)
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--analyse",
+                             "--status-file", str(status)]) == 0
+    marks = json.loads(status.read_text(encoding="utf-8"))["marks"]
+    assert marks == "0,3,6,9,12,15,18,19,20,21,22,23"
+
+
+def test_marks_can_come_from_a_file(make_anime, monkeypatch, tmp_path):
+    """A long clip's marks do not fit on a Windows command line."""
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    marks = tmp_path / "marks.txt"
+    marks.write_text("0,4,8", encoding="utf-8")
+    status = tmp_path / "status.json"
+    assert run(monkeypatch, ["--video", str(src), "--marks-file", str(marks),
+                             "--status-file", str(status)]) == 0
+    assert json.loads(status.read_text(encoding="utf-8"))["ok"]

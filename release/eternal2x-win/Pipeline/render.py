@@ -356,6 +356,9 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
         yield current
 
 
+# How many in-betweens are drawn before they are written.
+BATCH = 8
+
 # Encoders to try per container, best quality first.
 _ENCODERS = {
     ".mkv": ("FFV1",),             # lossless; Resolve refuses FFV1 in AVI
@@ -490,13 +493,17 @@ def render_plan(
         index = 0
         for curr in frames:
             times = buckets[index] if index < len(buckets) else []
-            if times:
+            # A few at a time. Between two markers there can be hundreds of
+            # frames, and drawn all at once a minute's pause at 4K held over
+            # 30 GB before the first was written.
+            for at in range(0, len(times), BATCH):
+                part = times[at:at + BATCH]
                 if pair is not None:
-                    produced = pair(prev, curr, times)
+                    produced = pair(prev, curr, part)
                 else:
                     # De-duplicate only: every output frame is a real drawing,
                     # nothing is synthesised, and each starts where it did.
-                    produced = [(prev if t < 1.0 else curr).copy() for t in times]
+                    produced = [(prev if t < 1.0 else curr).copy() for t in part]
                 for frame in produced:
                     emit(frame)
             prev = curr

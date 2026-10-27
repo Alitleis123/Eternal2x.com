@@ -543,3 +543,27 @@ def test_every_frame_is_read_whatever_the_file_says_its_count_is(make_anime, mon
     assert plan.source_frames == 24
     result = render_plan(src, plan, tmp_path / "out", cfg(), sequence=True)
     assert result.frames_written == 24
+
+
+def test_a_long_gap_between_markers_is_drawn_a_few_frames_at_a_time(monkeypatch, make_anime,
+                                                                    tmp_path):
+    """A minute's pause between two markers was drawn as one list, held in
+    memory before the first frame was written: over 30 GB at 4K."""
+    from Pipeline import rife
+    from Pipeline.dedupe import plan_from_marks
+    from Pipeline.render import BATCH
+
+    asked = []
+    real = rife.Rife.interpolate_pair
+
+    def spy(self, a, b, times):
+        asked.append(len(times))
+        return real(self, a, b, times)
+
+    monkeypatch.setattr(rife.Rife, "interpolate_pair", spy)
+    src = make_anime(holds=(30, 2))
+    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    marked = plan_from_marks([0, 30], plan.source_frames, plan.fps)
+    result = render_plan(src, marked, tmp_path / "out", Eternal2xConfig(), sequence=True)
+    assert result.frames_written == 32
+    assert max(asked) <= BATCH and sum(asked) >= 29

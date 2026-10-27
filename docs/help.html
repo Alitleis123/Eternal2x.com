@@ -383,7 +383,7 @@
                 <h3>Put the playhead on a clip</h3>
                 <p>Move the playhead over the clip you want on your timeline, then open
                    <strong>Workspace &rarr; Scripts &rarr; Eternal2x</strong>. The panel shows the
-                   clip it picked up. Analyse and Smooth Clip always use the clip under the playhead
+                   clip it picked up. Analyse and Render always use the clip under the playhead
                    when you press them, and <strong>Use Clip at Playhead</strong> shows you which
                    one that is.</p>
             </div>
@@ -395,8 +395,8 @@
                 <h3>Analyse</h3>
                 <p>Click <strong>Analyse</strong>. Eternal2x reads the clip and reports what it found,
                    for example <code>1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.</code>
-                   Nothing is changed, so this is safe to run on anything. If a clip has no duplicated
-                   frames it says so and stops.</p>
+                   It also marks the drawings on the clip, replacing only the markers it placed before. If a
+                   clip has no duplicated frames it says so and places none.</p>
             </div>
         </div>
 
@@ -420,8 +420,14 @@
         <div class="guide-step">
             <div class="step-number">4</div>
             <div class="step-content">
-                <h3>Smooth Clip</h3>
-                <p>Click <strong>Smooth Clip</strong>. The render runs in the background with a progress bar
+                <h3>Mark the frames, then Render</h3>
+                <p>Analyse also puts a marker on the clip at every drawing it found. Delete a marker to leave
+                   its frame out, even if it moved, or select the clip and press M to mark a frame it missed.
+                   <strong>Threshold</strong> sets how big a change Analyse counts. Analysing again replaces only
+                   its own markers and puts back any of them you deleted, so set the Threshold first. Every marker on the clip counts, but not the ones on the timeline's ruler.
+                   You can also skip Analyse and mark the frames yourself.</p>
+                <p>Click <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame
+                   between two markers fresh. With no markers on the clip, it uses the drawings Eternal2x finds. The render runs in the background with a progress bar
                    and the time left, so Resolve stays usable. When it finishes, the rebuilt clip is imported
                    with 2x Super Scale applied and placed on the track above the original, starting on the same
                    frame, at the same length and frame rate. It uses the lowest track that is empty there, or a

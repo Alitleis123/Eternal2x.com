@@ -171,6 +171,33 @@ function H.make_resolve(clip_file_path)
         local start = H.item_start or 86400
         H.src_span = { start, start + (H.item_duration or 48) }
     end
+    -- Markers on the clip, keyed in timeline frames from the start of its
+    -- media, as Resolve keeps them, so a clip trimmed H.left_offset frames
+    -- into its media has its first frame there. Each table carries the
+    -- __flags entry every Resolve table does.
+    H.markers = H.markers or {}
+    item.GetLeftOffset = function(_self)
+        if H.left_offset_fails then error("GetLeftOffset failed") end
+        return H.left_offset or 0
+    end
+    item.GetMarkers = function(_self)
+        if H.markers_fail then error("GetMarkers failed") end
+        if H.markers_nil then return nil end
+        local out = { __flags = 4194304 }
+        for frame, info in pairs(H.markers) do out[frame] = info end
+        return out
+    end
+    item.AddMarker = function(_self, frame, color, name, note, duration, custom)
+        if H.markers[frame] then return false end
+        H.markers[frame] = { color = color, name = name, note = note,
+                             duration = duration, customData = custom or "" }
+        return true
+    end
+    item.DeleteMarkerAtFrame = function(_self, frame)
+        if not H.markers[frame] then return false end
+        H.markers[frame] = nil
+        return true
+    end
     if not H.no_place_api then
         item.GetStart = function(_self) return H.src_span[1] end
         item.GetEnd = function(_self) return H.src_span[2] end
@@ -201,7 +228,7 @@ function H.make_resolve(clip_file_path)
             local span = H.under_spans[i]
             local file_mpi = {
                 GetClipProperty = function(_self)
-                    return { ["File Path"] = file, FPS = H.clip_fps or "24" }
+                    return { ["File Path"] = file, FPS = H.under_fps or H.clip_fps or "24" }
                 end,
             }
             local it = {}
@@ -212,6 +239,25 @@ function H.make_resolve(clip_file_path)
             it.GetEnd = function(_self) return span[2] end
             it.GetDuration = function(_self) return span[2] - span[1] end
             it.GetUniqueId = function(_self) return "under-" .. i end
+            -- Each clip underneath keeps its own markers, in H.under_markers[i].
+            H.under_markers = H.under_markers or {}
+            H.under_markers[i] = H.under_markers[i] or {}
+            local own = H.under_markers[i]
+            it.GetMarkers = function(_self)
+                local out = { __flags = 4194304 }
+                for frame, info in pairs(own) do out[frame] = info end
+                return out
+            end
+            it.AddMarker = function(_self, frame, color, name, note, duration, custom)
+                if own[frame] then return false end
+                own[frame] = { color = color, customData = custom or "" }
+                return true
+            end
+            it.DeleteMarkerAtFrame = function(_self, frame)
+                if not own[frame] then return false end
+                own[frame] = nil
+                return true
+            end
             it.GetTrackTypeAndIndex = function(_self) return resolve_list({ "video", i }) end
             under[span] = it
         end
@@ -456,6 +502,23 @@ function H.enabled(id)
 end
 
 function H.set_source_range(a, b) H.source_range = { a, b } end
+function H.add_marker(frame, custom)
+    H.markers = H.markers or {}
+    H.markers[frame] = { color = "Blue", name = "", note = "", duration = 1, customData = custom or "" }
+end
+function H.marker_frames()
+    local out = {}
+    for frame in pairs(H.markers or {}) do out[#out + 1] = frame end
+    table.sort(out)
+    return table.concat(out, ",")
+end
+function H.tagged_markers()
+    local n = 0
+    for _, info in pairs(H.markers or {}) do
+        if info.customData == "eternal2x" then n = n + 1 end
+    end
+    return n
+end
 function H.imported_count() return #H.imported end
 function H.sequence_import_count() return H.sequence_imports or 0 end
 function H.last_sequence_field(k) return H.last_sequence and H.last_sequence[k] end
