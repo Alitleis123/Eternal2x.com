@@ -9,6 +9,8 @@ catches every case, so none is made from it.
 
 from __future__ import annotations
 
+from typing import Optional
+
 import cv2
 import numpy as np
 
@@ -55,10 +57,16 @@ UNRELATED_DISAGREEMENT = 0.06
 UNRELATED_WIDTH = 480
 
 
-def frames_are_unrelated(a: np.ndarray, b: np.ndarray) -> bool:
-    """True when two frames look like different shots, even at similar brightness."""
+def shot_change(a: np.ndarray, b: np.ndarray) -> float:
+    """How far the midpoint warps of two frames disagree, as a fraction of full scale.
+
+    Identical frames score 0. Frames of different sizes cannot be one shot and
+    score infinity.
+    """
     if a.shape != b.shape:
-        return True
+        return float("inf")
+    if np.array_equal(a, b):
+        return 0.0
     h, w = a.shape[:2]
     if w > UNRELATED_WIDTH:
         size = (UNRELATED_WIDTH, max(1, int(round(h * UNRELATED_WIDTH / float(w)))))
@@ -69,7 +77,62 @@ def frames_are_unrelated(a: np.ndarray, b: np.ndarray) -> bool:
     flow_ab, flow_ba = engine.calc(ga, gb, None), engine.calc(gb, ga, None)
     probe_a = _warp(a.astype(np.float32), flow_ba * 0.5)
     probe_b = _warp(b.astype(np.float32), flow_ab * 0.5)
-    return _disagreement(probe_a, probe_b) > UNRELATED_DISAGREEMENT
+    return _disagreement(probe_a, probe_b)
+
+
+def frames_are_unrelated(a: np.ndarray, b: np.ndarray) -> bool:
+    """True when two frames look like different shots, even at similar brightness."""
+    return shot_change(a, b) > UNRELATED_DISAGREEMENT
+
+
+# Fast action disagrees as much as a cut. In a Jujutsu Kaisen fight that is one
+# shot, 37 of 53 pairs of marked drawings scored 0.06 to 0.21 and were held as
+# if each were a cut. A cut usually stands out from the pairs on either side,
+# which belong to one shot each, while fast action keeps a run of high scores.
+# In that fight no pair scored more than 2.3 times both its neighbours.
+#
+# Two cuts in a row, as in an opening's montage, do not stand out from each
+# other, so a pair over ALWAYS_A_CUT, or one whose colours change more than
+# PALETTE_CUT, is a cut whatever surrounds it. That fight's fastest pair scored
+# 0.21 and its colours changed by at most 0.74, at a lightning flash.
+#
+# Measured over 13,645 pairs of drawings in 98 anime clips, plus 69 cuts made
+# by joining one clip's last drawings to the next clip's first: the threshold
+# alone held 933 pairs and caught all 69 cuts. These rules hold 468, mostly
+# cuts, flashes and glitch effects, and catch 66.
+CUT_SPIKE = 3.0
+ALWAYS_A_CUT = 0.3
+PALETTE_CUT = 0.8
+
+
+def palette_change(a: np.ndarray, b: np.ndarray) -> float:
+    """How far apart two frames' hue and saturation spreads are, 0 to 1."""
+    hists = []
+    for frame in (a, b):
+        h, w = frame.shape[:2]
+        if w > UNRELATED_WIDTH:
+            size = (UNRELATED_WIDTH, max(1, int(round(h * UNRELATED_WIDTH / float(w)))))
+            frame = cv2.resize(frame, size, interpolation=cv2.INTER_AREA)
+        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        hist = cv2.calcHist([hsv], [0, 1], None, [30, 32], [0, 180, 0, 256])
+        hists.append(cv2.normalize(hist, hist).flatten())
+    return float(cv2.compareHist(hists[0], hists[1], cv2.HISTCMP_BHATTACHARYYA))
+
+
+def is_a_cut(a: np.ndarray, b: np.ndarray, here: float,
+             before: Optional[float] = None, after: Optional[float] = None) -> bool:
+    """Whether drawings a and b, whose shot_change is `here`, span a cut.
+
+    `before` and `after` are the shot_change of the pairs on either side, or
+    None where there is none. A pair with no neighbours has nothing to stand
+    out from, so the plain threshold decides.
+    """
+    if here <= UNRELATED_DISAGREEMENT:
+        return False
+    around = [s for s in (before, after) if s is not None]
+    if here > ALWAYS_A_CUT or not around or here > CUT_SPIKE * max(around):
+        return True
+    return palette_change(a, b) > PALETTE_CUT
 
 
 def _disagreement(warped_a: np.ndarray, warped_b: np.ndarray) -> float:
