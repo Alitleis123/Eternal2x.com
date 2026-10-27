@@ -335,6 +335,11 @@
         }).catch(function () {
             clearTimeout(late);
             lock(false);
+            // A send that timed out may still have arrived, so it says so
+            // rather than inviting a second copy.
+            document.getElementById('contact-error-why').textContent = give.signal.aborted
+                ? 'No answer after 30 seconds, so it may not have sent. Wait a few minutes before trying again,'
+                : 'That didn\'t send. Try again in a minute,';
             error.hidden = false;
             button.focus();
         });
