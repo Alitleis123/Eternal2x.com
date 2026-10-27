@@ -353,6 +353,33 @@ def test_a_hard_cut_stays_on_its_frame(make_anime, tmp_path, read_frames):
     )
 
 
+def _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames, scores):
+    """Render eight drawings on 2s with each pair's shot change set by hand."""
+    from Pipeline import interpolate
+    given = iter(scores)
+    monkeypatch.setattr(interpolate, "_disagreement", lambda a, b: next(given))
+    src = make_anime(holds=(2,) * 8)
+    plan, _, _ = analyse_video(src, cfg())
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    return [i for i in range(1, 15, 2)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+
+
+def test_fast_action_through_a_whole_shot_is_interpolated(monkeypatch, make_anime, tmp_path,
+                                                          read_frames):
+    """Fast action disagrees as much as a cut. Holding every such pair left a
+    Jujutsu Kaisen fight still on 37 of its 53 in-betweens."""
+    held = _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames,
+                             [0.15, 0.2, 0.12, 0.18, 0.15, 0.2, 0.14])
+    assert not held, f"in-betweens {held} were held as if the shot cut there"
+
+
+def test_a_cut_between_calm_pairs_still_holds(monkeypatch, make_anime, tmp_path, read_frames):
+    held = _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames,
+                             [0.01, 0.02, 0.01, 0.2, 0.02, 0.01, 0.02])
+    assert held == [7], f"held {held}, expected only the in-between across the cut"
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())
@@ -556,9 +583,9 @@ def test_a_long_gap_between_markers_is_drawn_a_few_frames_at_a_time(monkeypatch,
     asked = []
     real = rife.Rife.interpolate_pair
 
-    def spy(self, a, b, times):
+    def spy(self, a, b, times, **kw):
         asked.append(len(times))
-        return real(self, a, b, times)
+        return real(self, a, b, times, **kw)
 
     monkeypatch.setattr(rife.Rife, "interpolate_pair", spy)
     src = make_anime(holds=(30, 2))

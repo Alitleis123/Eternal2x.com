@@ -6,7 +6,8 @@ Two passes over the source:
                    last new drawing, which is all `Pipeline.dedupe` needs to
                    build a plan. A grainy clip is measured a second time.
   render_plan()    decodes again and writes the output, holding only the two
-                   drawings currently being interpolated between.
+                   drawings currently being interpolated between and the
+                   next one, which tells a cut from fast motion.
 
 Nothing loads the whole clip into memory, so length is limited by disk rather
 than by RAM.
@@ -24,7 +25,7 @@ import numpy as np
 
 from Pipeline.config import Eternal2xConfig
 from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
-from Pipeline.interpolate import upscale
+from Pipeline.interpolate import is_a_cut, shot_change, upscale
 
 ProgressFn = Callable[[str, float], None]
 
@@ -528,23 +529,34 @@ def render_plan(
         if prev is None:
             raise SourceError(f"Could not read frames from: {source}")
 
+        # One drawing is read ahead, so each pair can be judged against the
+        # pairs on both sides of it before it is drawn.
+        curr = next(frames, None)
+        before: Optional[float] = None
+        here = shot_change(prev, curr) if pair is not None and curr is not None else None
         index = 0
-        for curr in frames:
+        while curr is not None:
+            following = next(frames, None)
+            after = (shot_change(curr, following)
+                     if pair is not None and following is not None else None)
             times = buckets[index] if index < len(buckets) else []
+            unrelated = (is_a_cut(prev, curr, here, before, after)
+                         if pair is not None and times else None)
             # A few at a time. Between two markers there can be hundreds of
             # frames, and drawn all at once a minute's pause at 4K held over
             # 30 GB before the first was written.
             for at in range(0, len(times), BATCH):
                 part = times[at:at + BATCH]
                 if pair is not None:
-                    produced = pair(prev, curr, part)
+                    produced = pair(prev, curr, part, unrelated=unrelated)
                 else:
                     # De-duplicate only: every output frame is a real drawing,
                     # nothing is synthesised, and each starts where it did.
                     produced = [(prev if t < 1.0 else curr).copy() for t in part]
                 for frame in produced:
                     emit(frame)
-            prev = curr
+            before, here = here, after
+            prev, curr = curr, following
             index += 1
 
         # A single-drawing plan, or the trailing hold the buckets do not cover.

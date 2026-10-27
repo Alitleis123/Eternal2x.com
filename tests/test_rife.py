@@ -11,7 +11,9 @@ import pytest
 
 from Pipeline import rife
 from Pipeline.config import Eternal2xConfig
-from Pipeline.interpolate import frames_are_a_cut, frames_are_unrelated
+from Pipeline.interpolate import (ALWAYS_A_CUT, PALETTE_CUT, UNRELATED_DISAGREEMENT,
+                                  frames_are_a_cut, frames_are_unrelated, is_a_cut,
+                                  palette_change, shot_change)
 from Pipeline.render import SourceError, analyse_video, render_plan
 from tests.drawings import cel
 
@@ -329,7 +331,7 @@ def test_a_frame_of_another_size_never_reaches_the_file(monkeypatch, make_anime,
         def __init__(self, progress=None):
             pass
 
-        def interpolate_pair(self, a, b, times):
+        def interpolate_pair(self, a, b, times, **_):
             return [a[: a.shape[0] // 2] if 0 < t < 1 else a for t in times]
 
     monkeypatch.setattr(rife, "Rife", Shrinking)
@@ -375,6 +377,52 @@ def test_motion_however_fast_is_not_a_cut(dx):
 
 def test_frames_of_different_sizes_are_unrelated():
     assert frames_are_unrelated(cel(140, 120), cel(70, 60, w=160, h=120))
+
+
+ONE_SHOT = (cel(80, 120), cel(86, 120))
+
+
+def test_a_pair_that_stands_out_from_both_neighbours_is_a_cut():
+    # A cut inside a scene-pack clip, between two calm shots.
+    assert is_a_cut(*ONE_SHOT, 0.247, 0.002, 0.001)
+
+
+@pytest.mark.parametrize("here,before,after", [
+    (0.203, 0.089, 0.062),   # the pair that stood out most in a Jujutsu Kaisen fight
+    (0.127, 0.035, 0.119),   # where the fight speeds up
+    (0.213, 0.149, 0.055),
+])
+def test_fast_action_through_a_shot_is_not_a_cut(here, before, after):
+    assert not is_a_cut(*ONE_SHOT, here, before, after)
+
+
+def test_a_pair_standing_out_from_one_side_only_is_not_a_cut():
+    assert not is_a_cut(*ONE_SHOT, 0.2, 0.01, 0.15)
+
+
+def test_two_cuts_in_a_row_are_told_apart_by_their_colours():
+    """In a montage each cut sits next to another, so neither stands out."""
+    a, b = cel(140, 120), city()
+    assert palette_change(a, b) > PALETTE_CUT
+    assert is_a_cut(a, b, 0.2, 0.01, 0.25)
+
+
+def test_a_pair_on_its_own_is_judged_by_the_plain_threshold():
+    assert is_a_cut(*ONE_SHOT, UNRELATED_DISAGREEMENT + 0.01)
+    assert not is_a_cut(*ONE_SHOT, UNRELATED_DISAGREEMENT)
+
+
+def test_a_change_over_the_ceiling_is_a_cut_whatever_surrounds_it():
+    assert is_a_cut(*ONE_SHOT, ALWAYS_A_CUT + 0.01, ALWAYS_A_CUT, ALWAYS_A_CUT)
+
+
+def test_a_small_change_is_never_a_cut():
+    a, b = cel(140, 120), city()
+    assert not is_a_cut(a, b, UNRELATED_DISAGREEMENT, 0.0, 0.0)
+
+
+def test_identical_frames_show_no_change():
+    assert shot_change(cel(80, 120), cel(80, 120)) == 0.0
 
 
 # --------------------------------------------------------------------------
