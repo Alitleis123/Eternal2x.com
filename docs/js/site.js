@@ -258,3 +258,84 @@
         video.addEventListener('play', started);
     });
 })();
+
+// The contact card posts to FormSubmit, which emails the message to the
+// address in the form's action, hello@sideband.studio. Without script the
+// form still posts there, and FormSubmit shows its own thank-you page.
+(function () {
+    var form = document.getElementById('contact-form');
+    if (!form || !window.fetch || !window.FormData) return;
+    var bug = document.getElementById('contact-bug');
+    var messageLabel = document.getElementById('contact-message-label');
+    var error = document.getElementById('contact-error');
+    var sent = document.getElementById('contact-sent');
+    var button = form.querySelector('button[type="submit"]');
+    var LABELS = {
+        'Bug report': 'What did you press, what happened, and what did you expect?',
+        'Question': 'Your question',
+        'Idea': 'Your idea'
+    };
+
+    // Only a bug report asks about Resolve and the computer. A disabled
+    // fieldset leaves its answers out of the message.
+    function topic() { return form.elements.topic.value; }
+    function show() {
+        var isBug = topic() === 'Bug report';
+        bug.hidden = !isBug;
+        bug.disabled = !isBug;
+        messageLabel.textContent = LABELS[topic()] || 'Message';
+    }
+    form.addEventListener('change', function (e) {
+        if (e.target.name === 'topic') show();
+    });
+    show();
+
+    // Every field is locked while the message sends, so nothing typed in
+    // that time is lost to the reset afterwards. Locking each control rather
+    // than the bug fieldset leaves that fieldset's own setting alone.
+    function lock(busy) {
+        Array.prototype.forEach.call(form.elements, function (el) {
+            if (el.tagName !== 'FIELDSET') el.disabled = busy;
+        });
+        button.textContent = busy ? 'Sending...' : 'Send message';
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        // Read before locking, because disabled fields are left out.
+        var body = {};
+        new FormData(form).forEach(function (value, key) { body[key] = value; });
+        body._subject = 'Upflow2x site: ' + body.topic;
+        var replyTo = body.email;
+        error.hidden = true;
+        lock(true);
+        fetch(form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/'), {
+            method: 'POST',
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+        }).then(function (res) {
+            return res.json();
+        }).then(function (answer) {
+            // FormSubmit can answer without delivering, for example before
+            // the form is activated, so its success flag decides.
+            if (String(answer.success) !== 'true') throw new Error(answer.message);
+            lock(false);
+            document.getElementById('contact-sent-to').textContent = replyTo;
+            form.reset();
+            show();
+            form.hidden = true;
+            sent.hidden = false;
+            sent.querySelector('h2').focus();
+        }).catch(function () {
+            lock(false);
+            error.hidden = false;
+            button.focus();
+        });
+    });
+
+    document.getElementById('contact-again').addEventListener('click', function () {
+        sent.hidden = true;
+        form.hidden = false;
+        form.querySelector('input[name="topic"]:checked').focus();
+    });
+})();

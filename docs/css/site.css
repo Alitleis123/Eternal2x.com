@@ -107,6 +107,8 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     border-radius: 8px;
     border: 1px solid var(--line-strong);
     color: var(--text);
+    background: transparent;
+    cursor: pointer;
     transition: background-color .15s ease, border-color .15s ease, color .15s ease;
 }
 .btn:hover { color: var(--text); border-color: rgba(255, 255, 255, .3); background: rgba(255, 255, 255, .04); }
@@ -600,23 +602,73 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     background: rgba(242, 169, 59, .06);
 }
 
-/* contact */
+/* contact: one card that sends the message itself */
 
-.letter { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 14px; margin-top: 32px; }
-@media (max-width: 820px) { .letter { grid-template-columns: 1fr; } }
-.envelope { padding: clamp(22px, 3vw, 32px); border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-.envelope .label { margin-bottom: 10px; }
-.envelope .address {
-    display: block;
-    margin: 4px 0 22px;
-    font-size: clamp(26px, 3.6vw, 36px);
-    font-weight: 600;
-    letter-spacing: -.02em;
-    text-decoration: none;
-    overflow-wrap: anywhere;
+.contact {
+    max-width: 680px;
+    margin-top: 32px;
+    padding: clamp(22px, 3vw, 32px);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--panel);
 }
-.checklist { margin: 0; padding: 0; list-style: none; }
-.checklist li { position: relative; padding: 10px 0 10px 26px; color: var(--soft); }
-.checklist li + li { border-top: 1px solid var(--line); }
-.checklist li::before { content: ""; position: absolute; left: 2px; top: 19px; width: 8px; height: 8px; border-radius: 50%; background: var(--amber); }
-.checklist code { font: 500 .88em/1.4 var(--mono); padding: .08em .36em; border-radius: 4px; background: var(--raise); overflow-wrap: anywhere; }
+.contact fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.contact legend { padding: 0; }
+.contact-form > * + *, .bug > * + * { margin-top: 18px; }
+.contact-form > .bug, .bug:not([hidden]) + .field { margin-top: 30px; }
+
+/* The topics are radio buttons drawn as chips. */
+.choices { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.choices label { position: relative; }
+.choices input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.choices span {
+    display: inline-flex;
+    align-items: center;
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid var(--line-strong);
+    border-radius: 8px;
+    font-size: 15px;
+    color: var(--soft);
+    transition: color .15s ease, border-color .15s ease, background-color .15s ease;
+}
+.choices label:hover span { color: var(--text); border-color: rgba(255, 255, 255, .3); }
+.choices input:checked + span { color: var(--amber); border-color: var(--amber); background: rgba(242, 169, 59, .1); }
+.choices input:focus-visible + span { outline: 2px solid var(--amber); outline-offset: 2px; }
+@media (pointer: coarse) { .choices span { min-height: 44px; } }
+
+.pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 14px; }
+@media (max-width: 560px) { .pair { grid-template-columns: 1fr; } }
+
+.field { display: grid; gap: 7px; }
+.field > span { font-size: 14.5px; font-weight: 500; color: var(--soft); }
+/* 16px text, or iOS zooms in on every field it focuses. */
+.field input, .field textarea {
+    width: 100%;
+    padding: 11px 13px;
+    font: 400 16px/1.5 var(--sans);
+    color: var(--text);
+    background: var(--bg);
+    /* At least 3:1 against the card, so an empty field can still be found. */
+    border: 1px solid #6f7074;
+    border-radius: 8px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+.field textarea { resize: vertical; }
+.field ::placeholder { color: #808084; opacity: 1; }
+.field input:hover, .field textarea:hover { border-color: #8a8b8f; }
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(242, 169, 59, .2); }
+
+.hint { font-size: 14px; color: var(--mute); }
+.hint a { color: var(--soft); }
+
+.send { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.btn:disabled { opacity: .6; cursor: progress; }
+.form-error { font-size: 14.5px; color: #ff9b8f; }
+.form-error a { color: var(--text); }
+
+.sent svg { width: 30px; height: 30px; color: var(--amber); }
+.sent h2 { margin-top: 14px; font-size: 26px; letter-spacing: -.02em; }
+.sent h2:focus { outline: none; }
+.sent p { margin: 8px 0 22px; color: var(--soft); }
+.sent strong { color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
