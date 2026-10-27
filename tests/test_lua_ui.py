@@ -1967,3 +1967,20 @@ def test_markers_on_a_render_above_its_original_count_too(lua, direct):
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3", message="On 3s.")
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "6", "Analyse marks the original, not the render"
+
+
+def test_a_long_clip_name_leaves_room_for_its_range(lua, direct):
+    """Scene pack names run long, and wrapped they hid the range line."""
+    name = ("『葬送のフリーレン』第2期ノンクレジットオープニング映像／OPテーマ：「lulu.」"
+            "Mrs. GREEN APPLE／フリーレンOP - TOHO animation チャンネル (1080p, h264).mp4")
+    H = load(lua, ui_script(direct), clip="/media/" + name)
+    first, second = H.text_of("SourceLabel").split("\n")
+    assert first.startswith("『葬送のフリーレン』") and first.endswith("(1080p, h264).mp4")
+    assert "..." in first and len(first) < len(name)
+    assert "\ufffd" not in first
+    assert second.startswith("Whole file") or "of the file" in second
+
+
+def test_a_short_clip_name_is_left_whole(lua, direct):
+    H = load(lua, ui_script(direct), clip="/media/Gojo s laughter.mp4")
+    assert H.text_of("SourceLabel").startswith("Gojo s laughter.mp4\n")

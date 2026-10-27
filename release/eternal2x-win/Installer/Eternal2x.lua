@@ -72,6 +72,34 @@ local function basename(path)
     return (path:gsub("\\", "/")):match("([^/]+)$") or path
 end
 
+-- A file name cut to one line of the Source card, keeping its start and end.
+-- Long scene pack names wrapped and pushed the clip's range out of the card.
+-- CJK characters count double, and the cut never splits a character.
+local function short_name(name, width)
+    width = width or 64
+    local chars, total = {}, 0
+    for ch in name:gmatch("[\1-\127\194-\244][\128-\191]*") do
+        chars[#chars + 1] = ch
+        total = total + (#ch >= 3 and 2 or 1)
+    end
+    if total <= width then return name end
+    local function take(from, to, step, room)
+        local out, used = {}, 0
+        for k = from, to, step do
+            local w = #chars[k] >= 3 and 2 or 1
+            if used + w > room then break end
+            used = used + w
+            out[#out + 1] = chars[k]
+        end
+        return out
+    end
+    local tail = take(#chars, 1, -1, 20)
+    local head = take(1, #chars - #tail, 1, width - 23)
+    local rest = {}
+    for k = #tail, 1, -1 do rest[#rest + 1] = tail[k] end
+    return table.concat(head) .. "..." .. table.concat(rest)
+end
+
 local root = trim_trailing_sep(script_dir() or "")
 -- Launched through Eternal2xLauncher.lua the config lives in Resolve's Utility
 -- folder rather than beside this file, so the launcher passes its path down.
@@ -867,7 +895,7 @@ local function refresh_source()
     SOURCE_RANGE = range
     SOURCE_PLACE = place
     SOURCE_ITEM = item
-    items.SourceLabel.Text = basename(path) .. "\n" .. range_text(range)
+    items.SourceLabel.Text = short_name(basename(path)) .. "\n" .. range_text(range)
     items.Meta.Text = short_path(path, 68)
     return true
 end
