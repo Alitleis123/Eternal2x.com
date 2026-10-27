@@ -3,32 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Help | Eternal2x</title>
-    <meta name="description" content="Install Eternal2x on Windows or macOS, use the panel in DaVinci Resolve Studio, and fix the common problems.">
+    <title>Help | Upflow2x</title>
+    <meta name="description" content="Install Upflow2x on Windows or macOS, use the panel in DaVinci Resolve Studio, and fix the common problems.">
     <link rel="canonical" href="https://eternal2x.com/help.html">
     <meta name="theme-color" content="#101013">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://eternal2x.com/help.html">
-    <meta property="og:title" content="Eternal2x help">
+    <meta property="og:title" content="Upflow2x help">
     <meta property="og:description" content="Install guides, the panel's settings, and fixes for the messages it can show.">
     <meta property="og:image" content="https://eternal2x.com/assets/og.jpg">
     <meta name="twitter:card" content="summary_large_image">
-    <link rel="icon" href="assets/icon.svg?v=20261027b" type="image/svg+xml">
-    <link rel="icon" href="assets/favicon.png?v=20261027b" type="image/png" sizes="32x32">
-    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261027b">
+    <link rel="icon" href="assets/icon.svg?v=20261027c" type="image/svg+xml">
+    <link rel="icon" href="assets/favicon.png?v=20261027c" type="image/png" sizes="32x32">
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=20261027c">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@500&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/site.css?v=20261027b">
+    <link rel="stylesheet" href="css/site.css?v=20261027c">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="top">
     <div class="wrap">
-        <a class="brand" href="index.html" aria-label="Eternal2x home">
+        <a class="brand" href="index.html" aria-label="Upflow2x home">
             <img src="assets/icon.svg" alt="" width="34" height="34">
-            <span>Eternal<span>2x</span></span>
+            <span>Upflow<span>2x</span></span>
         </a>
         <nav aria-label="Main">
             <a href="help.html" aria-current="page">Help</a>
@@ -85,7 +85,7 @@
                     <li>
                         <h3>Open it in Resolve</h3>
                         <p>Restart DaVinci Resolve Studio, then go to</p>
-                        <span class="path">Workspace &rarr; Scripts &rarr; Eternal2x</span>
+                        <span class="path">Workspace &rarr; Scripts &rarr; Upflow2x</span>
                     </li>
                 </ol>
                 <h3>If the installer window doesn't open</h3>
@@ -116,7 +116,7 @@ python3 Installer/gui_installer.py</code></div>
                     <li>
                         <h3>Open it in Resolve</h3>
                         <p>Restart DaVinci Resolve Studio, then go to</p>
-                        <span class="path">Workspace &rarr; Scripts &rarr; Eternal2x</span>
+                        <span class="path">Workspace &rarr; Scripts &rarr; Upflow2x</span>
                     </li>
                 </ol>
                 <h3>If the installer window doesn't open</h3>
@@ -135,17 +135,17 @@ python3 Installer/gui_installer.py</code></div>
                     </li>
                     <li>
                         <h3>Analyse</h3>
-                        <p>Press <strong>Analyse</strong>. Eternal2x reads the clip and reports what it found, for example <code>1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.</code> Nothing changes, so it's safe to run on anything. If a clip has no duplicated frames, it says so and stops.</p>
+                        <p>Press <strong>Analyse</strong>. Upflow2x reads the clip and reports what it found, for example <code>1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.</code> Nothing changes, so it's safe to run on anything. If a clip has no duplicated frames, it says so and stops.</p>
                     </li>
                     <li>
                         <h3>Smooth Clip</h3>
                         <p>Press <strong>Smooth Clip</strong>. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
-                        <p>When it's done, the result is imported, with Super Scale applied if Upscale 2x is ticked, and placed above the original, starting on the same frame, at the same length and frame rate. It goes on the lowest track that is empty there, or a new track named Eternal2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
+                        <p>When it's done, the result is imported, with Super Scale applied if Upscale 2x is ticked, and placed above the original, starting on the same frame, at the same length and frame rate. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
                         <p>If another timeline is open when it finishes, or the original was deleted or retrimmed, it goes at the end of the timeline instead. An image sequence whose frame rate Resolve won't set stays in the media pool, since it would play at the wrong speed.</p>
                     </li>
                     <li>
                         <h3>Compare</h3>
-                        <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through, and Show Eternal2x switches it back. <strong>Show in Folder</strong> opens where the render was saved.</p>
+                        <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through, and Show Upflow2x switches it back. <strong>Show in Folder</strong> opens where the render was saved.</p>
                     </li>
                 </ol>
             </section>
@@ -168,7 +168,7 @@ python3 Installer/gui_installer.py</code></div>
                 <h3>Held poses stay still</h3>
                 <p>A drawing held on purpose keeps its full length instead of drifting. Only the timing between drawings is smoothed.</p>
                 <h3>Cuts stay hard</h3>
-                <p>Eternal2x never blends across a scene change, which would show both shots at once.</p>
+                <p>Upflow2x never blends across a scene change, which would show both shots at once.</p>
                 <h3>Nothing was smoothed</h3>
                 <p>The first render installs the network's runtime and downloads its model, so it needs a connection once. Without one, every drawing is kept as drawn rather than filled in some other way, since warping pixels doubles lines on drawn animation. The status says why. Smooth again once you're online.</p>
             </section>
@@ -180,12 +180,12 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>The plugin doesn't appear in Resolve</summary>
                         <div class="answer">
-                            <p>Check that the installer finished. The panel is at Workspace, Scripts, Eternal2x. If it's not there, restart Resolve, and if it still isn't, run the installer again.</p>
+                            <p>Check that the installer finished. The panel is at Workspace, Scripts, Upflow2x. If it's not there, restart Resolve, and if it still isn't, run the installer again.</p>
                             <p>If Resolve says you need Studio, you're on the free edition, which blocks script panels since Resolve 19.1.</p>
                         </div>
                     </details>
                     <details>
-                        <summary>Clicking Eternal2x does nothing</summary>
+                        <summary>Clicking Upflow2x does nothing</summary>
                         <div class="answer">
                             <p>Open Workspace, Console. If it says <code>UI script not found</code> or <code>Missing repo_root</code>, the plugin folder was moved, renamed or deleted after installing, since the settings file records its path. Run the installer again from where the folder is now. The panel's "Plugin folder not configured" means the same thing.</p>
                         </div>
@@ -193,26 +193,26 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"Could not reach Resolve"</summary>
                         <div class="answer">
-                            <p>The panel isn't running inside DaVinci Resolve. Open it from Workspace, Scripts, Eternal2x, not by double-clicking the Lua file.</p>
+                            <p>The panel isn't running inside DaVinci Resolve. Open it from Workspace, Scripts, Upflow2x, not by double-clicking the Lua file.</p>
                         </div>
                     </details>
                     <details>
                         <summary>"No clip under the playhead"</summary>
                         <div class="answer">
-                            <p>Eternal2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, then press Use Clip at Playhead.</p>
+                            <p>Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, then press Use Clip at Playhead.</p>
                         </div>
                     </details>
                     <details>
                         <summary>"No duplicate frames. This clip is already on 1s."</summary>
                         <div class="answer">
-                            <p>Analyse found nothing to do. The clip has no repeated frames, so there is nothing to recover. It's live action or animation already drawn on 1s, and smoothing it would only invent motion that was never there, so Eternal2x stops.</p>
+                            <p>Analyse found nothing to do. The clip has no repeated frames, so there is nothing to recover. It's live action or animation already drawn on 1s, and smoothing it would only invent motion that was never there, so Upflow2x stops.</p>
                             <p>If the panel says instead that every frame differs but the differences look like grain, tick Grainy source and analyse again. Leave it off for clean animation.</p>
                         </div>
                     </details>
                     <details>
                         <summary>"...has a variable frame rate"</summary>
                         <div class="answer">
-                            <p>Phone and screen recordings often space their frames unevenly. Eternal2x writes every frame for the same length of time, so such a clip would come out a different length and drift against its audio. It stops instead.</p>
+                            <p>Phone and screen recordings often space their frames unevenly. Upflow2x writes every frame for the same length of time, so such a clip would come out a different length and drift against its audio. It stops instead.</p>
                             <p>Render the clip to a constant frame rate first, from Resolve's Deliver page or with ffmpeg at your timeline's rate, then use that.</p>
                             <div class="code"><code>ffmpeg -i clip.mp4 -r 24 clip_cfr.mp4</code></div>
                         </div>
@@ -252,7 +252,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"python" is not recognised</summary>
                         <div class="answer">
-                            <p>Install <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org. Any version from 3.10 to 3.14 works on Windows. 3.15 is too new for the AI runtime, and Eternal2x would keep every drawing as drawn. On a Mac the range depends on the macOS version. See <a href="#macos">Install on macOS</a>.</p>
+                            <p>Install <a href="https://www.python.org/downloads/latest/python3.14/">Python 3.14</a> from python.org. Any version from 3.10 to 3.14 works on Windows. 3.15 is too new for the AI runtime, and Upflow2x would keep every drawing as drawn. On a Mac the range depends on the macOS version. See <a href="#macos">Install on macOS</a>.</p>
                             <p>On Windows, tick Add python.exe to PATH in its installer, then open a new Command Prompt window.</p>
                         </div>
                     </details>
@@ -263,7 +263,7 @@ python3 Installer/gui_installer.py</code></div>
                 <h2 id="updates-title">Updates</h2>
                 <p class="sub">They arrive on their own.</p>
                 <h3>Automatically</h3>
-                <p>Each time the panel opens, Eternal2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it. Untick Auto-update to stop this.</p>
+                <p>Each time the panel opens, Upflow2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it. Untick Auto-update to stop this.</p>
                 <h3>When you ask</h3>
                 <p>Press <strong>Check for Updates</strong> at any time. If nothing changed, it says so and leaves your install alone. A failed check never stops you working, and an update that can't finish is undone, so you keep the version you had.</p>
                 <div class="callout">
@@ -289,6 +289,6 @@ python3 Installer/gui_installer.py</code></div>
     </div>
 </footer>
 
-<script src="js/site.js?v=20261027b"></script>
+<script src="js/site.js?v=20261027c"></script>
 </body>
 </html>

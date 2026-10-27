@@ -1,5 +1,5 @@
 // The demo on the home page: one video holds the original above the
-// Eternal2x render, and a canvas shows the original left of a divider and
+// Upflow2x render, and a canvas shows the original left of a divider and
 // the render right of it. One video keeps both sides on the same frame,
 // where two videos drift apart.
 (function () {
