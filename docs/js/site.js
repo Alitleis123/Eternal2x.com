@@ -259,12 +259,12 @@
     });
 })();
 
-// The contact card posts to FormSubmit, which emails the message to the
-// address in the form's action, hello@sideband.studio. Without script the
-// form still posts there, and FormSubmit shows its own thank-you page.
+// The contact card posts to Web3Forms, which emails the message to the
+// address its access key was made for, hello@sideband.studio. Without script
+// the form still posts there, and Web3Forms shows its own thank-you page.
 (function () {
     var form = document.getElementById('contact-form');
-    if (!form || !window.fetch || !window.FormData) return;
+    if (!form || !window.fetch || !window.FormData || !window.AbortController) return;
     var bug = document.getElementById('contact-bug');
     var messageLabel = document.getElementById('contact-message-label');
     var error = document.getElementById('contact-error');
@@ -305,20 +305,26 @@
         // Read before locking, because disabled fields are left out.
         var body = {};
         new FormData(form).forEach(function (value, key) { body[key] = value; });
-        body._subject = 'Upflow2x site: ' + body.topic;
+        body.subject = 'Upflow2x site: ' + body.topic;
         var replyTo = body.email;
         error.hidden = true;
         lock(true);
-        fetch(form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/'), {
+        // A send that hangs gives up after 30 seconds and says so, instead of
+        // reading Sending... for good.
+        var give = new AbortController();
+        var late = setTimeout(function () { give.abort(); }, 30000);
+        fetch(form.action, {
             method: 'POST',
             body: JSON.stringify(body),
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            signal: give.signal
         }).then(function (res) {
             return res.json();
         }).then(function (answer) {
-            // FormSubmit can answer without delivering, for example before
-            // the form is activated, so its success flag decides.
-            if (String(answer.success) !== 'true') throw new Error(answer.message);
+            clearTimeout(late);
+            // Web3Forms can answer without delivering, for example over its
+            // rate limit, so its success flag decides.
+            if (answer.success !== true) throw new Error(answer.message);
             lock(false);
             document.getElementById('contact-sent-to').textContent = replyTo;
             form.reset();
@@ -327,6 +333,7 @@
             sent.hidden = false;
             sent.querySelector('h2').focus();
         }).catch(function () {
+            clearTimeout(late);
             lock(false);
             error.hidden = false;
             button.focus();

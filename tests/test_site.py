@@ -173,17 +173,21 @@ def test_the_contact_page_sends_the_message_itself(repo_root):
     parsed.feed(page(repo_root, "contact.html"))
     form, fields = parsed.form, parsed.fields
 
-    # Every message goes to the studio inbox, and the address lives here, not
-    # in some form service's settings.
-    assert form.get("action") == "https://formsubmit.co/hello@sideband.studio"
+    # Every message goes to the studio inbox. Web3Forms delivers to the address
+    # its access key was made for, hello@sideband.studio, and answers in about
+    # a second where FormSubmit took 20 to 40.
+    assert form.get("action") == "https://api.web3forms.com/submit"
     assert form.get("method", "").lower() == "post"
-    # FormSubmit replies to the field called email.
+    assert re.fullmatch(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                        fields["access_key"].get("value", "")), "the access key is missing"
+    # Web3Forms replies to the field called email.
     assert fields["email"].get("type") == "email" and "required" in fields["email"]
     assert "required" in fields["message"]
-    # Bots fill every field; people never see this one, and FormSubmit drops
+    # Bots fill every field; people never see this one, and Web3Forms drops
     # anything that arrives with it filled.
-    assert "_honey" in fields
-    assert fields["_subject"].get("value")
+    assert "botcheck" in fields
+    assert fields["subject"].get("value")
+    assert "formsubmit" not in page(repo_root, "contact.html").lower()
     # A bug report asks what the old checklist asked for.
     for question in ("resolve version", "plugin version", "computer", "panel said"):
         assert question in fields, f"the bug report never asks for {question!r}"

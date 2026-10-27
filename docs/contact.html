@@ -49,7 +49,7 @@
 
     <div class="wrap">
         <div class="contact">
-            <form class="contact-form" id="contact-form" action="https://formsubmit.co/hello@sideband.studio" method="POST">
+            <form class="contact-form" id="contact-form" action="https://api.web3forms.com/submit" method="POST">
                 <fieldset>
                     <legend class="label">What's it about?</legend>
                     <div class="choices">
@@ -78,9 +78,10 @@
 
                 <label class="field"><span id="contact-message-label">Message</span><textarea name="message" rows="6" required></textarea></label>
 
-                <input type="hidden" name="_subject" value="Upflow2x site message">
-                <input type="hidden" name="_template" value="table">
-                <input type="text" name="_honey" autocomplete="off" tabindex="-1" hidden>
+                <!-- Web3Forms sends to hello@sideband.studio, the address this key was made for. -->
+                <input type="hidden" name="access_key" value="2c17ecd3-a9c5-478a-b1d4-c5bd2c3e48e9">
+                <input type="hidden" name="subject" value="Upflow2x site message">
+                <input type="checkbox" name="botcheck" autocomplete="off" tabindex="-1" hidden>
 
                 <div class="send">
                     <button class="btn btn-amber" type="submit">Send message</button>
@@ -112,6 +113,6 @@
     </div>
 </footer>
 
-<script src="js/site.js?v=20261027g"></script>
+<script src="js/site.js?v=20261027r"></script>
 </body>
 </html>
