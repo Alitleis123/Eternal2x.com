@@ -63,7 +63,13 @@ class Upscaler:
             # One core left over, so Resolve stays responsive while it works.
             options.intra_op_num_threads = max(1, (os.cpu_count() or 2) - 1)
             providers = ["CPUExecutionProvider"]
-        return ort.InferenceSession(str(self._path), options, providers=providers)
+        session = ort.InferenceSession(str(self._path), options, providers=providers)
+        if self.on_gpu:
+            # Left on, ONNX Runtime retries a frame the GPU failed on the CPU
+            # by itself, and the whole clip would be upscaled at seconds a
+            # frame instead of being left to Super Scale.
+            session.disable_fallback()
+        return session
 
     def _infer(self, x: np.ndarray) -> np.ndarray:
         try:

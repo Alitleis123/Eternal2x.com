@@ -26,6 +26,7 @@ class _FakeSession:
                  gpu_quietly_on_cpu=False):
         self.providers = providers
         self.fail_on_gpu_run = fail_on_gpu_run
+        self.fallback = True
         if fail_on_gpu_start and "DmlExecutionProvider" in providers:
             raise RuntimeError("D3D12 device could not be created")
         if gpu_quietly_on_cpu:
@@ -33,6 +34,9 @@ class _FakeSession:
 
     def get_providers(self):
         return self.providers
+
+    def disable_fallback(self):
+        self.fallback = False
 
     def get_inputs(self):
         return [type("Input", (), {"name": "input"})()]
@@ -96,6 +100,13 @@ def test_a_first_frame_the_gpu_cannot_fit_leaves_it_to_super_scale(monkeypatch):
     _fake_ort(monkeypatch, fail_on_gpu_run=True)
     with pytest.raises(AIUnavailable, match="failed on the GPU"):
         upscaler.Upscaler().upscale(cel(120, 120))
+
+
+def test_onnx_runtime_never_moves_a_failed_gpu_frame_to_the_cpu_by_itself(monkeypatch):
+    """Its own fallback retried the first frame on the CPU, so a GPU that
+    failed at once left the whole clip to the CPU and not to Super Scale."""
+    _fake_ort(monkeypatch)
+    assert upscaler.Upscaler().session.fallback is False
 
 
 def test_a_gpu_that_runs_out_of_memory_mid_render_finishes_on_the_cpu(monkeypatch):
