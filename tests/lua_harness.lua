@@ -176,9 +176,13 @@ function H.make_resolve(clip_file_path)
     -- into its media has its first frame there. Each table carries the
     -- __flags entry every Resolve table does.
     H.markers = H.markers or {}
-    item.GetLeftOffset = function(_self) return H.left_offset or 0 end
+    item.GetLeftOffset = function(_self)
+        if H.left_offset_fails then error("GetLeftOffset failed") end
+        return H.left_offset or 0
+    end
     item.GetMarkers = function(_self)
         if H.markers_fail then error("GetMarkers failed") end
+        if H.markers_nil then return nil end
         local out = { __flags = 4194304 }
         for frame, info in pairs(H.markers) do out[frame] = info end
         return out
@@ -224,7 +228,7 @@ function H.make_resolve(clip_file_path)
             local span = H.under_spans[i]
             local file_mpi = {
                 GetClipProperty = function(_self)
-                    return { ["File Path"] = file, FPS = H.clip_fps or "24" }
+                    return { ["File Path"] = file, FPS = H.under_fps or H.clip_fps or "24" }
                 end,
             }
             local it = {}

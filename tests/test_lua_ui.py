@@ -1926,11 +1926,11 @@ def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
     H.add_marker(47)
     H.add_marker(57)
     H.click("SmoothBtn")
-    assert marks_sent(direct) == "0,13"
+    assert marks_sent(direct) == "0,12", "timeline frame 10 shows source frame 12"
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,13,25", message="On 2s.")
     H.click("RefreshStatusBtn")
-    assert H.marker_frames() == "47,57,67"
+    assert H.marker_frames() == "47,57,58,67"
 
 
 def test_markers_that_cannot_be_read_stop_the_render(lua, direct):
@@ -1984,3 +1984,90 @@ def test_a_long_clip_name_leaves_room_for_its_range(lua, direct):
 def test_a_short_clip_name_is_left_whole(lua, direct):
     H = load(lua, ui_script(direct), clip="/media/Gojo s laughter.mp4")
     assert H.text_of("SourceLabel").startswith("Gojo s laughter.mp4\n")
+
+
+def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
+    """30 fps on 23.976: rounded both ways, a drawing at 127 read back as 126,
+    the last frame of the drawing before it."""
+    H = load(lua, ui_script(direct))
+    H.clip_fps, H.timeline_fps, H.item_duration, H.left_offset = "30", "23.976", 200, 47
+    lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
+    H.click("RefreshBtn")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,125,127,129", message="On 2s.")
+    H.click("RefreshStatusBtn")
+    H.click("SmoothBtn")
+    sent = [int(m) for m in marks_sent(direct).split(",")]
+    assert sent == [0, 125, 127, 130]
+    assert all(m <= f < m + 1.25125 for m, f in zip((0, 125, 127, 129), sent))
+
+
+def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, direct):
+    """Guessing the left offset would read every marker as the wrong frame."""
+    H = load(lua, ui_script(direct))
+    H.left_offset_fails = True
+    H.click("RefreshBtn")
+    H.add_marker(30)
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not read the markers" in H.status()
+
+
+def test_an_unmarked_clip_whose_bounds_cannot_be_read_still_renders(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.left_offset_fails = True
+    H.click("RefreshBtn")
+    H.click("SmoothBtn")
+    assert "--marks-file" not in H.last_command()
+    assert "No markers" in H.status()
+
+
+def test_no_marker_list_from_resolve_stops_the_render(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.markers_nil = True
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not read the markers" in H.status()
+
+
+def test_a_marks_file_that_fails_to_close_stops_the_render(lua, direct):
+    """A buffered write can succeed and the close still lose its end."""
+    H = load(lua, ui_script(direct))
+    lua.execute("""
+        local real = io.open
+        io.open = function(path, mode)
+            if tostring(path):find(".eternal2x_marks", 1, true) and mode == "w" then
+                return { write = function(self) return self end,
+                         close = function() return nil, "disk full" end }
+            end
+            return real(path, mode)
+        end""")
+    H.add_marker(0)
+    H.add_marker(6)
+    before = H.last_command()
+    H.click("SmoothBtn")
+    assert H.last_command() == before
+    assert "Could not write the marked frames" in H.status()
+
+
+def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, direct):
+    """A 30 fps original under a 24 fps render on a 24 fps timeline: the
+    render's marker 12 timeline frames in is the original's frame 15."""
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_fps = '30'; H.under_markers[1][0] = {}", H)
+    H.click("RefreshBtn")
+    H.add_marker(12)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "0,15"
+
+
+def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
+    H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.under_spans[1][2] = H.under_spans[1][1] + 24", H)
+    H.click("RefreshBtn")
+    H.add_marker(30)
+    H.click("SmoothBtn")
+    assert "--marks-file" not in H.last_command()
+    assert "No markers" in H.status()

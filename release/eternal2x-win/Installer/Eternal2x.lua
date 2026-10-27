@@ -331,18 +331,25 @@ end
 -- timeline frames from the start of the media, not from the clip's left edge,
 -- so a trimmed clip's first frame is at its left offset. A clip at another
 -- rate than the timeline has `per` source frames to each timeline frame.
--- Measured on Resolve 20.3.1.
+-- Measured on Resolve 20.3.1. Guessed bounds would read every marker as the
+-- wrong frame, so a clip whose bounds Resolve will not give is `unreadable`.
 local function marked_clip(item, timeline, props)
     local ok, clip = pcall(function()
         local fps = tonumber(tostring(props["FPS"] or ""):match("^%s*([%d%.]+)"))
         local rate = tonumber(timeline:GetSetting("timelineFrameRate"))
-        local per = (fps and rate and fps > 0 and rate > 0) and fps / rate or 1
-        local origin = tonumber(item:GetLeftOffset())
-        if not origin then origin = (tonumber(item:GetSourceStartFrame()) or 0) / per end
-        return { item = item, origin = math.floor(origin + 0.5), per = per,
-                 length = tonumber(item:GetDuration()) }
+        if not (fps and rate and fps > 0 and rate > 0) then error("no frame rates") end
+        local per = fps / rate
+        local origin
+        if item.GetLeftOffset then
+            origin = tonumber(item:GetLeftOffset())
+        else
+            origin = tonumber(item:GetSourceStartFrame()) / per
+        end
+        local length = tonumber(item:GetDuration())
+        if not (origin and length) then error("no clip bounds") end
+        return { item = item, origin = math.floor(origin + 0.5), per = per, length = length }
     end)
-    return ok and clip or { item = item, origin = 0, per = 1 }
+    return ok and clip or { item = item, unreadable = true }
 end
 
 local function find_clip_path()
@@ -907,20 +914,28 @@ local MARK_TAG = "eternal2x"
 -- The frames marked on the clip, as source frames from its first frame,
 -- sorted, with those marked on a render of it stacked above. Every marker on
 -- the clip counts, whatever its colour. Markers on the timeline's ruler do
--- not, since editors keep beat markers there. nil if Resolve would not say.
+-- not, since editors keep beat markers there. A marker reads as the source
+-- frame its timeline frame shows. nil if Resolve would not say where they are.
 local function clip_marks(clip)
     if not clip then return {} end
     local out, seen = {}, {}
     for _, c in ipairs({ clip, clip.also }) do
         local ok = pcall(function()
-            for key in pairs(c.item:GetMarkers() or {}) do
+            local markers = c.item:GetMarkers()
+            if type(markers) ~= "table" then error("no markers table") end
+            for key in pairs(markers) do
                 local t = tonumber(key)
                 if t then
+                    if clip.unreadable or c.unreadable then error("no clip bounds") end
+                    -- In timeline frames from the clip's first frame, which the
+                    -- render shares with its original, then in the original's frames.
                     t = math.floor(t + 0.5) - c.origin
-                    local f = math.floor(t * c.per + 0.5)
-                    if t >= 0 and (not c.length or t < c.length) and not seen[f] then
-                        seen[f] = true
-                        out[#out + 1] = f
+                    if t >= 0 and t < clip.length then
+                        local f = math.floor(t * clip.per + 1e-6)
+                        if not seen[f] then
+                            seen[f] = true
+                            out[#out + 1] = f
+                        end
                     end
                 end
             end
@@ -932,20 +947,25 @@ local function clip_marks(clip)
 end
 
 -- Put a marker on each frame Analyse found, given as source frames from the
--- clip's first frame, after taking down the ones it put there last time.
+-- clip's first frame, after taking down the ones it put there last time. Each
+-- goes on the first timeline frame that shows it, so it reads back as that
+-- frame or a later one of the same drawing, never the drawing before.
 -- Returns how many it placed.
 local function mark_drawings(clip, marks)
     local placed = 0
+    if clip.unreadable then return placed end
     pcall(function()
         local item = clip.item
-        for key, info in pairs(item:GetMarkers() or {}) do
+        local markers = item:GetMarkers()
+        if type(markers) ~= "table" then return end
+        for key, info in pairs(markers) do
             if type(info) == "table" and info.customData == MARK_TAG then
                 item:DeleteMarkerAtFrame(tonumber(key))
             end
         end
         for f in marks:gmatch("%d+") do
-            local t = math.floor(tonumber(f) / clip.per + 0.5)
-            if (not clip.length or t < clip.length)
+            local t = math.ceil(tonumber(f) / clip.per - 1e-6)
+            if t < clip.length
                 and item:AddMarker(clip.origin + t, "Yellow", "Eternal2x",
                                    "Delete this marker to leave the frame out.", 1, MARK_TAG) then
                 placed = placed + 1
@@ -1299,6 +1319,8 @@ local function apply_status(st)
                 items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
                     .. " frames on the clip."
                 set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
+            elseif st.marks ~= "" and ANALYSED_ITEM and ANALYSED_ITEM.unreadable then
+                set_status("Analysis complete. Resolve would not say where the clip's frames are, so no markers were placed.")
             else
                 set_status("Analysis complete.")
             end
@@ -1512,13 +1534,14 @@ function win.On.SmoothBtn.Clicked(ev)
         return
     end
     if #marks > 0 then
+        -- A write can look fine and still fail as the file closes.
         local f = io.open(MARKS_PATH, "w")
-        if not f or not f:write(table.concat(marks, ",")) then
-            if f then f:close() end
+        local wrote = f and f:write(table.concat(marks, ","))
+        local closed = f and f:close()
+        if not (wrote and closed) then
             set_status("Could not write the marked frames to " .. MARKS_PATH .. ".")
             return
         end
-        f:close()
     end
     clear_status()
     IMPORTED = false
