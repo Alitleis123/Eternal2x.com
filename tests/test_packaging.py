@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 PACKAGED = ("Pipeline", "Stages", "Installer", "VERSION", "README.md", "requirements.txt")
-RELEASES = ("eternal2x-mac", "eternal2x-win")
+RELEASES = ("upflow2x-mac", "upflow2x-win")
 
 
 def read_version(path: Path) -> str:
@@ -28,8 +28,8 @@ def read_version(path: Path) -> str:
 @pytest.mark.parametrize("rel", [
     "VERSION",
     "update/latest.json",
-    "release/eternal2x-mac/VERSION",
-    "release/eternal2x-win/VERSION",
+    "release/upflow2x-mac/VERSION",
+    "release/upflow2x-win/VERSION",
 ])
 def test_shipped_text_files_have_no_byte_order_mark(repo_root, rel):
     """A UTF-8 BOM breaks both the version parser and the JSON update feed."""

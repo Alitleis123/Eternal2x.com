@@ -46,7 +46,7 @@ def install(tmp_path, repo_root, make_anime, folder):
 
     comp = tmp_path / "Comp"
     comp.mkdir()
-    shutil.copy2(plugin / "Installer" / "Eternal2xLauncher.lua", comp / "Eternal2x.lua")
+    shutil.copy2(plugin / "Installer" / "Eternal2xLauncher.lua", comp / "Upflow2x.lua")
     write_config(comp, plugin, sys.executable)
 
     def _open(holds=(2,) * 12, clip_name="scene 01.avi"):
@@ -63,7 +63,7 @@ def install(tmp_path, repo_root, make_anime, folder):
         # Lua accepts forward slashes on Windows.
         H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
         H.real_execute = True
-        H.load(str(comp / "Eternal2x.lua"), str(src))
+        H.load(str(comp / "Upflow2x.lua"), str(src))
         H.plugin_root = str(plugin)
         return H, src
 
@@ -105,7 +105,7 @@ def finish(H, timeout: float = FINISH_TIMEOUT):
 
 
 def outputs(src: Path):
-    folder = src.parent / "Eternal2x"
+    folder = src.parent / "Upflow2x"
     return sorted(folder.iterdir()) if folder.exists() else []
 
 
