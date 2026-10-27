@@ -77,8 +77,12 @@ class Upscaler:
             # mid-render. The CPU is slow, but the frames so far are 2x, so
             # the rest must be too.
             self.on_gpu = False
-            self.session = self._session()
-            return self.session.run(None, {self.input: x})[0]
+            try:
+                self.session = self._session()
+                return self.session.run(None, {self.input: x})[0]
+            except Exception as cpu_exc:  # onnxruntime raises its own exception types
+                raise AIUnavailable(f"The upscaler failed on the GPU ({exc}), then on the "
+                                    f"CPU ({cpu_exc}).") from cpu_exc
 
     def upscale(self, frame: np.ndarray) -> np.ndarray:
         """`frame` at twice its width and height, BGR in and out."""

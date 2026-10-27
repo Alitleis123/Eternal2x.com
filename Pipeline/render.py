@@ -457,19 +457,27 @@ def render_plan(
 
     cap = _open(source, frames, progress)
     state = {"writer": None, "written": 0, "width": 0, "height": 0, "upscaler": upscaler,
-             "upscale_note": upscale_note}
+             "upscale_note": upscale_note, "last_in": None, "last_out": None}
 
     def emit(frame: np.ndarray) -> None:
         """Upscale if asked, then write one output frame."""
         if state["upscaler"] is not None:
-            try:
-                frame = state["upscaler"].upscale(frame)
-            except AIUnavailable as exc:
-                # Past the first frame, the frames so far are 2x and the rest
-                # cannot be left at 1x, so the render stops and says why.
-                if state["written"]:
-                    raise
-                state["upscaler"], state["upscale_note"] = None, str(exc)
+            # A held drawing comes through once for every frame it is held,
+            # and the network would draw the same picture again each time.
+            if state["last_in"] is not None and np.array_equal(frame, state["last_in"]):
+                frame = state["last_out"]
+            else:
+                try:
+                    big = state["upscaler"].upscale(frame)
+                except AIUnavailable as exc:
+                    # Past the first frame, the frames so far are 2x and the rest
+                    # cannot be left at 1x, so the render stops and says why.
+                    if state["written"]:
+                        raise
+                    state["upscaler"], state["upscale_note"] = None, str(exc)
+                else:
+                    state["last_in"], state["last_out"] = frame, big
+                    frame = big
         if factor > 1:
             frame = upscale(frame, factor)
         if state["written"] and frame.shape[:2] != (state["height"], state["width"]):
@@ -505,7 +513,10 @@ def render_plan(
             state["writer"].write(frame)
         state["written"] += 1
         if progress and plan.source_frames:
-            progress("Rendering",
+            # A GPU that gave out mid-render leaves the rest to the CPU, which
+            # takes seconds a frame. A new stage name restarts the time left.
+            on_cpu = not getattr(state["upscaler"], "on_gpu", True)
+            progress("Rendering, upscaling on the CPU" if on_cpu else "Rendering",
                      min(1.0, state["written"] / float(plan.source_frames)))
 
     try:
