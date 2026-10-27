@@ -143,6 +143,20 @@ local function same_path(a, b)
     return norm(a) == norm(b)
 end
 
+-- A launcher that would run: the header, the call into the panel, and Lua
+-- that compiles, so one cut short anywhere is refused.
+local function complete_launcher(body)
+    return is_launcher(body) and body:find("pcall(dofile, ui_script)", 1, true) ~= nil
+        and (loadstring or load)(body) ~= nil
+end
+
+local function exists(path)
+    if read_file(path) then return true end
+    -- An unreadable file is still there. Renaming a file onto itself only
+    -- succeeds when it exists, on macOS and Linux.
+    return not is_windows() and os.rename(path, path) ~= nil
+end
+
 local function rename_launcher()
     if not _G.ETERNAL2X_CONF then return end
     local dir = CONF_PATH:match("^(.*)[/\\][^/\\]*$")
@@ -154,23 +168,27 @@ local function rename_launcher()
     local existing = read_file(new_path)
     if existing then
         -- Someone else's script, or one cut short: keep the old launcher.
-        if not (is_launcher(existing) and existing:find("pcall(dofile, ui_script)", 1, true)) then
-            return
-        end
+        if not complete_launcher(existing) then return end
+    elseif exists(new_path) then
+        return
     else
         local launcher = read_file(join_path(REPO_ROOT, "Installer/Eternal2xLauncher.lua"))
-        if not is_launcher(launcher) then return end
-        -- Written whole under another name first, so a full disk or a second
-        -- Resolve never finds half a launcher under the real one.
-        local temp = new_path .. ".part"
+        if not complete_launcher(launcher) then return end
+        -- Written whole under a name of its own first, so a full disk or a
+        -- second Resolve doing the same never finds half a launcher.
+        local temp = new_path .. "." .. os.time() .. (tostring({}):gsub("%W", "")) .. ".part"
         local out = io.open(temp, "wb")
         if not out then return end
         local wrote = out:write(launcher)
         local closed = out:close()
-        if not (wrote and closed) or read_file(temp) ~= launcher or not os.rename(temp, new_path) then
+        -- Windows refuses to rename onto a file that exists, but macOS
+        -- replaces it, so look once more just before.
+        if not (wrote and closed) or read_file(temp) ~= launcher or exists(new_path)
+                or not os.rename(temp, new_path) then
             os.remove(temp)
             return
         end
+        if read_file(new_path) ~= launcher then return end
     end
     os.remove(old_path)
 end

@@ -1492,7 +1492,7 @@ def test_an_old_launcher_is_renamed_so_the_menu_says_upflow2x(lua, tmp_path, rep
     utility, old = _old_install(tmp_path, repo_root)
     assert load(lua, old).window is not None
     assert not old.exists() and (utility / "Upflow2x.lua").exists()
-    assert not (utility / "Upflow2x.lua.part").exists()
+    assert not list(utility.glob("*.part")), "the temporary copy was left behind"
     assert load(lua, utility / "Upflow2x.lua").window is not None
 
 
@@ -1504,6 +1504,17 @@ def test_a_script_already_called_upflow2x_keeps_the_old_launcher(lua, tmp_path, 
     load(lua, old)
     assert old.exists()
     assert (utility / "Upflow2x.lua").read_text(encoding="utf-8") == there
+
+
+def test_a_launcher_cut_short_keeps_the_old_one(lua, tmp_path, repo_root):
+    """Header and call intact, the last line missing: it would not compile."""
+    utility, old = _old_install(tmp_path, repo_root)
+    launcher = (repo_root / "Installer" / "Eternal2xLauncher.lua").read_text(encoding="utf-8")
+    cut = launcher.rstrip()
+    assert cut.endswith("end")
+    (utility / "Upflow2x.lua").write_text(cut[:-3], encoding="utf-8")
+    load(lua, old)
+    assert old.exists()
 
 
 def test_a_launcher_that_cannot_be_written_keeps_the_old_one(lua, tmp_path, repo_root):
