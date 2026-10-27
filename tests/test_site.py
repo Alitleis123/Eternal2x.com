@@ -64,7 +64,8 @@ def test_internal_links_point_at_pages_that_exist(repo_root, name):
 
 @pytest.mark.parametrize("name", PAGES)
 def test_assets_referenced_exist(repo_root, name):
-    for src in re.findall(r'(?:src|href)="((?:assets|css|js)/[^"]+)"', page(repo_root, name)):
+    # A ?v= on the stylesheet or script names a version, not a different file.
+    for src in re.findall(r'(?:src|href)="((?:assets|css|js)/[^"?]+)', page(repo_root, name)):
         assert (repo_root / "docs" / src).exists(), f"{name} references missing {src}"
 
 
