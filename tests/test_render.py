@@ -380,6 +380,22 @@ def test_a_cut_between_calm_pairs_still_holds(monkeypatch, make_anime, tmp_path,
     assert held == [7], f"held {held}, expected only the in-between across the cut"
 
 
+def test_a_move_between_two_poses_is_judged_against_the_moves_around_it(
+        monkeypatch, make_anime, tmp_path, read_frames):
+    """A pose fills several slots with one drawing. Those repeats are not
+    changes, so they must not make the move between two poses stand out."""
+    from Pipeline import interpolate
+    given = iter([0.08, 0.13, 0.08])
+    monkeypatch.setattr(interpolate, "_disagreement", lambda a, b: next(given))
+    src = make_anime(holds=(2, 12, 12, 2))
+    plan, _, _ = analyse_video(src, cfg())
+    assert plan.output_indices == [0] + [2] * 6 + [14] * 6 + [26]
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    # Frame 13 is the in-between from the first pose to the second.
+    assert float(np.abs(out[13].astype(float) - out[12].astype(float)).mean()) > 0.5, (
+        "the move between the two poses was held as if the shot cut there")
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())
