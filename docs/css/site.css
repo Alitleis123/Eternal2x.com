@@ -655,7 +655,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
     transition: border-color .15s ease, box-shadow .15s ease;
 }
 .field textarea { resize: vertical; }
-.field ::placeholder { color: #707073; opacity: 1; }
+.field ::placeholder { color: #808084; opacity: 1; }
 .field input:hover, .field textarea:hover { border-color: #8a8b8f; }
 .field input:focus, .field textarea:focus { outline: none; border-color: var(--amber); box-shadow: 0 0 0 3px rgba(242, 169, 59, .2); }
 
