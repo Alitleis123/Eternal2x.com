@@ -226,9 +226,9 @@
     });
 })();
 
-// The contact card posts to Formspree, which emails the message to us.
-// Without script the form still posts there, and Formspree shows its own
-// thank-you page.
+// The contact card posts to FormSubmit, which emails the message to the
+// address in the form's action, hello@sideband.studio. Without script the
+// form still posts there, and FormSubmit shows its own thank-you page.
 (function () {
     var form = document.getElementById('contact-form');
     if (!form || !window.fetch || !window.FormData) return;
@@ -270,16 +270,22 @@
     form.addEventListener('submit', function (e) {
         e.preventDefault();
         // Read before locking, because disabled fields are left out.
-        var data = new FormData(form);
-        var replyTo = data.get('email');
+        var body = {};
+        new FormData(form).forEach(function (value, key) { body[key] = value; });
+        body._subject = 'Upflow2x site: ' + body.topic;
+        var replyTo = body.email;
         error.hidden = true;
         lock(true);
-        fetch(form.action, {
+        fetch(form.action.replace('formsubmit.co/', 'formsubmit.co/ajax/'), {
             method: 'POST',
-            body: data,
-            headers: { Accept: 'application/json' }
+            body: JSON.stringify(body),
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' }
         }).then(function (res) {
-            if (!res.ok) throw new Error('Formspree answered ' + res.status);
+            return res.json();
+        }).then(function (answer) {
+            // FormSubmit can answer without delivering, for example before
+            // the form is activated, so its success flag decides.
+            if (String(answer.success) !== 'true') throw new Error(answer.message);
             lock(false);
             document.getElementById('contact-sent-to').textContent = replyTo;
             form.reset();

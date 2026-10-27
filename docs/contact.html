@@ -49,7 +49,7 @@
 
     <div class="wrap">
         <div class="contact">
-            <form class="contact-form" id="contact-form" action="https://formspree.io/f/xkoperoj" method="POST">
+            <form class="contact-form" id="contact-form" action="https://formsubmit.co/hello@sideband.studio" method="POST">
                 <fieldset>
                     <legend class="label">What's it about?</legend>
                     <div class="choices">
@@ -61,8 +61,8 @@
                 </fieldset>
 
                 <div class="pair">
-                    <label class="field"><span>Name</span><input type="text" name="name" autocomplete="name"></label>
-                    <label class="field"><span>Email</span><input type="email" name="email" autocomplete="email" required></label>
+                    <label class="field"><span>Your name</span><input type="text" name="name" autocomplete="name"></label>
+                    <label class="field"><span>Your email</span><input type="email" name="email" autocomplete="email" required></label>
                 </div>
 
                 <fieldset class="bug" id="contact-bug">
@@ -78,8 +78,9 @@
 
                 <label class="field"><span id="contact-message-label">Message</span><textarea name="message" rows="6" required></textarea></label>
 
-                <input type="hidden" name="subject" value="Upflow2x site: {{ topic }}">
-                <input type="text" name="_gotcha" autocomplete="off" tabindex="-1" hidden>
+                <input type="hidden" name="_subject" value="Upflow2x site message">
+                <input type="hidden" name="_template" value="table">
+                <input type="text" name="_honey" autocomplete="off" tabindex="-1" hidden>
 
                 <div class="send">
                     <button class="btn btn-amber" type="submit">Send message</button>
@@ -90,7 +91,7 @@
             <div class="sent" id="contact-sent" hidden>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>
                 <h2 tabindex="-1">Message sent</h2>
-                <p>We'll answer at <strong id="contact-sent-to"></strong>.</p>
+                <p>It went to hello@sideband.studio. We'll reply to <strong id="contact-sent-to"></strong>.</p>
                 <button class="btn" type="button" id="contact-again">Send another</button>
             </div>
         </div>
@@ -111,6 +112,6 @@
     </div>
 </footer>
 
-<script src="js/site.js?v=20261027f"></script>
+<script src="js/site.js?v=20261027g"></script>
 </body>
 </html>

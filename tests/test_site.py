@@ -165,16 +165,17 @@ def test_the_contact_page_sends_the_message_itself(repo_root):
     parsed.feed(page(repo_root, "contact.html"))
     form, fields = parsed.form, parsed.fields
 
-    assert form.get("action", "").startswith("https://formspree.io/f/")
+    # Every message goes to the studio inbox, and the address lives here, not
+    # in some form service's settings.
+    assert form.get("action") == "https://formsubmit.co/hello@sideband.studio"
     assert form.get("method", "").lower() == "post"
-    # Formspree replies to the field called email.
+    # FormSubmit replies to the field called email.
     assert fields["email"].get("type") == "email" and "required" in fields["email"]
     assert "required" in fields["message"]
-    # Bots fill every field; people never see this one, and Formspree drops
+    # Bots fill every field; people never see this one, and FormSubmit drops
     # anything that arrives with it filled.
-    assert "_gotcha" in fields
-    # Formspree's documented subject field; the {{ topic }} works without script.
-    assert "{{ topic }}" in fields["subject"].get("value", "")
+    assert "_honey" in fields
+    assert fields["_subject"].get("value")
     # A bug report asks what the old checklist asked for.
     for question in ("resolve version", "plugin version", "computer", "panel said"):
         assert question in fields, f"the bug report never asks for {question!r}"
