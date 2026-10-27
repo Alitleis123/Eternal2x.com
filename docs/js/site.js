@@ -1,5 +1,31 @@
+// The home page's download buttons open the newest release on GitHub. Point
+// them at its zips instead. Releases before the rename to Upflow2x carry
+// eternal2x-*.zip.
+(function () {
+    var links = document.querySelectorAll('a[data-asset]');
+    if (!links.length || !window.fetch) return;
+    fetch('https://api.github.com/repos/sidebandstudio/Upflow2x/releases/latest')
+        .then(function (res) { return res.ok ? res.json() : null; })
+        .then(function (release) {
+            if (!release || !release.assets) return;
+            links.forEach(function (link) {
+                var name = link.getAttribute('data-asset');
+                var names = [name, name.replace('upflow2x', 'eternal2x')];
+                for (var n = 0; n < names.length; n++) {
+                    for (var i = 0; i < release.assets.length; i++) {
+                        if (release.assets[i].name === names[n]) {
+                            link.href = release.assets[i].browser_download_url;
+                            return;
+                        }
+                    }
+                }
+            });
+        })
+        .catch(function () {});
+})();
+
 // The demo on the home page: one video holds the original above the
-// Eternal2x render, and a canvas shows the original left of a divider and
+// Upflow2x render, and a canvas shows the original left of a divider and
 // the render right of it. One video keeps both sides on the same frame,
 // where two videos drift apart.
 (function () {

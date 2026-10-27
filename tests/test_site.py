@@ -123,6 +123,14 @@ def test_the_download_page_reads_releases_from_the_right_repo(repo_root):
 
 
 @pytest.mark.parametrize("name", PAGES)
+def test_download_buttons_never_name_a_zip_the_release_may_not_have(repo_root, name):
+    """Zips were renamed eternal2x-* to upflow2x-*, so a fixed link 404s on
+    one side of that release. Buttons open the release page, and a script
+    finds whichever zip it has."""
+    assert "/releases/latest/download/" not in page(repo_root, name)
+
+
+@pytest.mark.parametrize("name", PAGES)
 def test_anchor_links_point_at_ids_that_exist(repo_root, name):
     for target, anchor in re.findall(r'href="([a-z]*\.html)?#([\w-]+)"', page(repo_root, name)):
         html = page(repo_root, target or name)
