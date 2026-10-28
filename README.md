@@ -276,7 +276,9 @@ same checksums as the published ones.
 
 ## Licence
 
-Copyright 2026 Ali Tleis. Upflow2x is under the
+Required Notice: Copyright 2026 Ali Tleis (https://upflow2x.com)
+
+Upflow2x is under the
 [PolyForm Shield License 1.0.0](https://polyformproject.org/licenses/shield/1.0.0),
 with the full text and notice in
 [`LICENSE.md`](https://github.com/sidebandstudio/Upflow2x/blob/main/LICENSE.md).
