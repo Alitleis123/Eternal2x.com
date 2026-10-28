@@ -826,15 +826,14 @@ local START = themed([[
     QPushButton:pressed { background-color: $amber_down; }
     QPushButton:disabled { background-color: $raise; color: $mute; }
 ]])
--- On or off at a glance: the whole tile lights up when it is on.
+-- On or off at a glance: the whole tile lights up when it is on. They are
+-- checkable buttons, since a checkbox only takes a click on its dot and words.
 local TOGGLE = themed([[
-    QCheckBox { background-color: $raise; border: 1px solid $line; border-radius: 8px;
-        padding: 0px 12px; min-height: 34px; spacing: 10px; font-size: 13px; color: $soft; }
-    QCheckBox:hover { background-color: $hover; }
-    QCheckBox:checked { border-color: $amber; color: $text; }
-    QCheckBox::indicator { width: 12px; height: 12px; border-radius: 6px;
-        border: 1px solid $line; background-color: $field; }
-    QCheckBox::indicator:checked { border-color: $amber; background-color: $amber; }
+    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 8px;
+        padding: 0px 12px; min-height: 34px; font-size: 13px; color: $soft; text-align: left; }
+    QPushButton:hover { background-color: $hover; }
+    QPushButton:checked { border-color: $amber; color: $text; background-color: rgba(242, 169, 59, 40); }
+    QPushButton:checked:hover { background-color: rgba(242, 169, 59, 64); }
 ]])
 local BUTTON = themed([[
     QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 6px;
@@ -938,10 +937,10 @@ local win = disp:AddWindow({
         ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, Weight = 0,
                    ToolTip = TIPS.render, MinimumSize = { 96, 76 }, MaximumSize = { 96, 76 } },
         ui:VGroup{ Weight = 1, Spacing = 8,
-            ui:CheckBox{ ID = "UpscaleCB", Text = "Upscaling", Checked = DO_UPSCALE,
-                         StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
-            ui:CheckBox{ ID = "InterpCB", Text = "Drawing in-betweens", Checked = DO_INTERPOLATE,
-                         StyleSheet = TOGGLE, ToolTip = TIPS.interp },
+            ui:Button{ ID = "UpscaleCB", Text = "Upscaling", Checkable = true, Checked = DO_UPSCALE,
+                       StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
+            ui:Button{ ID = "InterpCB", Text = "Drawing in-betweens", Checkable = true,
+                       Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
         },
     },
 
@@ -980,7 +979,7 @@ local prefs = disp:AddWindow({
     Spacing = 10,
 
     row("Threshold", ui:HGroup{ Weight = 0.72, Spacing = 8,
-        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9,
+        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9, PageStep = 1,
                    Value = THRESHOLD, Orientation = "Horizontal" },
         ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
                   Weight = 0, MinimumSize = { 10, 0 },
@@ -1073,7 +1072,7 @@ local function refresh_source()
         SOURCE_PLACE = nil
         SOURCE_ITEM = nil
         items.SourceLabel.Text = err or "No clip under the playhead."
-        items.SourceLabel.ToolTip = ""
+        items.SourceLabel.ToolTip = TIPS.clip
         return false
     end
     -- Another clip, or another part of the file, makes the last analysis
@@ -1089,7 +1088,7 @@ local function refresh_source()
     SOURCE_PLACE = place
     SOURCE_ITEM = item
     items.SourceLabel.Text = short_name(basename(path)) .. "\n" .. range_text(range)
-    items.SourceLabel.ToolTip = path
+    items.SourceLabel.ToolTip = TIPS.clip .. "\n\n" .. path
     return true
 end
 
