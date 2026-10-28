@@ -221,6 +221,28 @@ def test_a_slow_pip_keeps_saying_it_is_working(monkeypatch):
     assert len(said) >= 3 and set(said) == {"Installing AI runtime"}
 
 
+def test_a_stop_during_the_install_lets_pip_finish(monkeypatch):
+    """Cut short, pip could leave the Python half installed."""
+    from Stages.resolve_smooth import Stopped
+
+    monkeypatch.setattr(rife, "HEARTBEAT_SECONDS", 0.05)
+    started = []
+
+    def stop(stage, fraction):
+        raise Stopped()
+
+    real_popen = rife.subprocess.Popen
+
+    def popen(*a, **k):
+        started.append(real_popen(*a, **k))
+        return started[-1]
+
+    monkeypatch.setattr(rife.subprocess, "Popen", popen)
+    with pytest.raises(Stopped):
+        rife._pip([sys.executable, "-c", "import time; time.sleep(0.4)"], stop)
+    assert started[0].poll() is not None, "pip was left running"
+
+
 class _FakeSession:
     def __init__(self, providers, fail_on_gpu_start=False, fail_on_gpu_run=False,
                  gpu_quietly_on_cpu=False):

@@ -8,6 +8,7 @@ needs Resolve open.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -63,6 +64,12 @@ def direct(tmp_path, repo_root):
     return root
 
 
+def follow(H):
+    """The card reads the clip once the playhead has stayed put for a tick."""
+    H.fire("PollTimer", "Timeout")
+    H.fire("PollTimer", "Timeout")
+
+
 def load(lua, script: Path, clip="/media/shot.mov"):
     # Forward slashes: a Windows path interpolated into Lua source turns
     # backslashes into escape sequences, and "D:\a\..." fails to parse.
@@ -87,9 +94,9 @@ def test_panel_loads(lua, direct):
 def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
-    for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
-                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo",
-                     "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
+    for expected in ("SmoothBtn", "AnalyseBtn", "RefreshStatusBtn",
+                     "CancelBtn", "UpdateBtn", "FormatCombo",
+                     "UpscaleCB", "InterpCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
 
@@ -97,11 +104,11 @@ def test_every_control_is_present(lua, direct):
 def test_every_control_has_a_handler(lua, direct):
     H = load(lua, ui_script(direct))
     handlers = set(H.handler_ids().split(","))
-    for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
+    for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "PollTimer.Timeout",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
                      "UpdateBtn.Clicked",
-                     "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
-                     "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
+                     "UpscaleCB.Clicked",
+                     "InterpCB.Clicked", "CompareBtn.Clicked",
                      "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
 
@@ -158,10 +165,12 @@ def test_every_render_plays_at_a_third_of_the_speed(lua, direct):
     assert "--slow-motion" not in H.last_command()
 
 
-def test_hold_pattern_choices_are_offered(lua, direct):
+def test_everything_is_in_one_window(lua, direct):
+    """A second window opened on top of the panel and had to be closed."""
     H = load(lua, ui_script(direct))
-    labels = H.combo_items("HoldCombo").split(",")
-    assert labels == ["Auto detect", "On 2s", "On 3s"]
+    assert list(H.windows.keys()) == ["Eternal2x"]
+    for control in ("ThresholdSlider", "FormatCombo", "UpdateBtn", "SubTitle"):
+        assert control in H.window.__items, f"{control} is not on the panel"
 
 
 def test_the_version_is_shown(lua, direct):
@@ -328,18 +337,15 @@ def test_interpolate_off_reaches_the_command(lua, direct):
     assert "--no-interpolate" in H.last_command()
 
 
-def test_hold_pattern_selection_reaches_the_command(lua, direct):
+def test_a_hold_pattern_or_grain_saved_before_is_not_sent(lua, direct):
+    """The panel no longer offers either, so a value an older version saved
+    would steer every run with no way to change it."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "base_hold=3\ngrain=true\n")
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 1)         # On 2s
-    H.click("AnalyseBtn")
-    assert "--base-hold 2" in H.last_command()
-
-
-def test_auto_hold_pattern_sends_no_override(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 0)         # Auto detect
     H.click("AnalyseBtn")
     assert "--base-hold" not in H.last_command()
+    assert "--grain" not in H.last_command()
 
 
 def test_unchecking_upscale_reaches_the_command(lua, direct):
@@ -356,22 +362,6 @@ def test_unchecking_interpolate_reaches_the_command(lua, direct):
     assert "--no-interpolate" in H.last_command()
 
 
-def test_grainy_source_is_off_unless_ticked(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.click("AnalyseBtn")
-    assert "--grain" not in H.last_command()
-    H.set_checkbox("GrainCB", True)
-    H.click("AnalyseBtn")
-    assert "--grain" in H.last_command()
-
-
-def test_grainy_source_is_remembered(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.set_checkbox("GrainCB", True)
-    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "grain=true" in conf
-    H = load(lua, ui_script(direct))
-    assert H.widgets["GrainCB"].Checked is True
 
 
 def test_defaults_send_no_opt_out_flags(lua, direct):
@@ -383,7 +373,7 @@ def test_defaults_send_no_opt_out_flags(lua, direct):
 
 def test_a_clip_path_with_spaces_is_quoted(lua, direct):
     H = load(lua, ui_script(direct), clip="/media/My Footage/shot 01.mov")
-    assert "My Footage" in H.widgets["Meta"].Text
+    assert "My Footage" in H.widgets["SourceLabel"].ToolTip
 
 
 def test_every_module_the_panel_calls_exists(lua, direct, repo_root):
@@ -420,7 +410,7 @@ def test_the_selected_clip_is_shown_on_open(lua, direct):
 
 def test_refresh_picks_up_the_selection(lua, direct):
     H = load(lua, ui_script(direct), clip="/media/shot.mov")
-    H.click("RefreshBtn")
+    follow(H)
     assert "shot.mov" in H.widgets["SourceLabel"].Text
     assert "Ready" in H.status()
 
@@ -450,14 +440,47 @@ def test_a_stage_at_zero_percent_is_still_named(lua, direct):
     assert "Installing AI runtime" in H.widgets["Progress"].Text
 
 
+def bar_fill(H):
+    """How far the amber runs in the progress bar's gradient, or None."""
+    stops = re.findall(r"stop: ([\d.]+) ", H.widgets["ProgressBar"].StyleSheet)
+    return float(stops[1]) if len(stops) > 1 else None
+
+
 def test_progress_bar_fills_as_it_goes(lua, direct):
     H = load(lua, ui_script(direct))
     filled = []
     for fraction in (0.1, 0.9):
         write_status(direct, fraction=fraction)
         H.click("RefreshStatusBtn")
-        filled.append(H.widgets["Progress"].Text.count("█"))
-    assert filled[1] > filled[0], "the progress bar did not grow"
+        filled.append(bar_fill(H))
+    assert filled == [0.1, 0.9], "the progress bar did not grow"
+
+
+def test_the_progress_bar_fills_under_a_decimal_comma_locale(lua, direct):
+    """Qt drops a gradient whose stops read 0,420."""
+    for name in ("de_DE.UTF-8", "de_DE", "German_Germany.1252"):
+        if lua.eval(f'os.setlocale("{name}", "numeric")'):
+            break
+    else:
+        pytest.skip("no decimal comma locale here")
+    try:
+        assert lua.eval('string.format("%.1f", 0.5)') == "0,5"
+        H = load(lua, ui_script(direct))
+        write_status(direct, fraction=0.42)
+        H.click("RefreshStatusBtn")
+        assert bar_fill(H) == 0.42
+    finally:
+        lua.eval('os.setlocale("C", "numeric")')
+
+
+def test_the_progress_bar_is_empty_until_a_run_starts(lua, direct):
+    H = load(lua, ui_script(direct))
+    assert bar_fill(H) is None
+    H.click("SmoothBtn")
+    assert bar_fill(H) is not None
+    (direct / ".eternal2x_exit").write_text("1\n")
+    H.click("CancelBtn")
+    assert bar_fill(H) is None
 
 
 def test_completion_message_is_surfaced(lua, direct):
@@ -531,11 +554,9 @@ def test_refreshing_with_no_run_says_so(lua, direct):
 
 def test_settings_are_saved(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 2)        # On 3s
     H.set_checkbox("UpscaleCB", False)
 
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "base_hold=3" in conf
     assert "upscale=false" in conf
 
 
@@ -560,20 +581,19 @@ def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
 
 def test_saved_settings_are_restored_next_time(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 1)        # On 2s
-    H.set_checkbox("GrainCB", True)
+    H.set_checkbox("UpscaleCB", False)
 
     H2 = load(lua, ui_script(direct))
     H2.click("AnalyseBtn")
-    cmd = H2.last_command()
-    assert "--grain" in cmd
-    assert "--base-hold 2" in cmd
+    assert "--no-upscale" in H2.last_command()
 
 
-def test_auto_update_toggle_persists(lua, direct):
+def test_a_config_that_turned_updates_off_keeps_them_off(lua, direct):
+    """The panel has no box for it now, but someone who turned it off before
+    keeps their choice."""
     H = load(lua, ui_script(direct))
-    H.set_checkbox("AutoUpdateCB", True)
-    assert "auto_update=true" in (direct / "Installer" / "Eternal2x.conf").read_text()
+    H.set_checkbox("UpscaleCB", False)
+    assert "auto_update=false" in (direct / "Installer" / "Eternal2x.conf").read_text()
 
 
 # --------------------------------------------------------------------------
@@ -604,7 +624,7 @@ def test_a_background_run_does_not_block(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
     assert not H.enabled("SmoothBtn"), "the panel should show it is busy"
-    assert "Resolve stays usable" in H.status()
+    assert "Rendering" in H.status()
 
 
 # --------------------------------------------------------------------------
@@ -662,6 +682,16 @@ def test_the_render_lines_up_on_a_new_track_above_the_original(lua, direct):
     assert "V2 above the original" in H.status()
 
 
+def test_a_finished_render_message_fits_the_status_box(lua, direct):
+    """In Resolve its three lines were cut off at the top and bottom of a
+    two-line box."""
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, message="Rendered 25 drawings into 337 smooth frames.")
+    status = H.widgets["Status"]
+    assert status.MinimumSize[2] >= 3 * 15, "the box is shorter than three lines of 11 px text"
+    assert status.ToolTip == status.Text, "a longer message has no other way to be read"
+
+
 def test_a_free_track_above_is_used_as_it_is(lua, direct):
     H = load(lua, ui_script(direct))
     lua.execute("local H = ...; H.tracks[2] = {}; H.tracks[3] = {}", H)
@@ -690,7 +720,7 @@ def test_a_sequence_is_placed_with_its_own_length(lua, direct):
 def test_without_the_placement_calls_it_goes_at_the_end(lua, direct):
     H = load(lua, ui_script(direct))
     H.no_place_api = True
-    H.click("RefreshBtn")
+    follow(H)
     finish_render(H, direct)
     assert len(H.placements) == 0
     assert H.appended == 1
@@ -777,7 +807,7 @@ def _with_source(lua, direct, **fields):
     sets = "; ".join(f"H.{k} = {str(v).lower() if isinstance(v, bool) else repr(v)}"
                      for k, v in fields.items())
     lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; {sets}", H)
-    H.click("RefreshBtn")
+    follow(H)
     return H
 
 
@@ -893,7 +923,7 @@ def _stacked(lua, direct, top, *under):
     paths = ", ".join("'" + p.replace("\\", "\\\\") + "'" for p in under)
     lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; "
                 f"H.item_track = {len(under) + 1}; H.under_paths = {{ {paths} }}", H)
-    H.click("RefreshBtn")
+    follow(H)
     return H
 
 
@@ -927,7 +957,7 @@ def _under_a_clip(lua, direct, setup=""):
     H = load(lua, ui_script(direct), clip="/media/B.mov")
     lua.execute("local H = ...; H.tracks = nil; H.src_span = nil; H.item_track = 2; "
                 "H.under_paths = { '/media/A.mov' }; H.playhead_tc = '01:00:00:10'; " + setup, H)
-    H.click("RefreshBtn")
+    follow(H)
     return H
 
 
@@ -1246,7 +1276,8 @@ package.preload.ffi = function()
                 return n
             end,
             CreateProcessW = function(app, line, pa, ta, inherit, flags, env, cwd, si, pi)
-                CREATED[#CREATED + 1] = { line = line.text, flags = flags }
+                CREATED[#CREATED + 1] = { line = line.text, flags = flags,
+                                          cwd = cwd and cwd.text }
                 return REFUSE and 0 or 1
             end,
             WaitForSingleObject = function()
@@ -1268,12 +1299,25 @@ def test_windows_commands_start_without_a_console_window(lua, direct):
     lua.execute('package.config = "\\\\" .. package.config:sub(2)')
     lua.execute(FAKE_FFI)
     H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    first = lua.eval("CREATED")[1]
+    assert first.flags == 0x08000000
+    assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
+
+
+def test_the_windows_run_opens_no_window(lua, direct):
+    """The render's minimised window could be opened and closed, which ended
+    the render. It now starts with no window, from the plugin folder."""
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    lua.execute(FAKE_FFI)
+    H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
     created = lua.eval("CREATED")
     last = created[len(created)]
     assert last.flags == 0x08000000
-    assert ' /c start "Upflow2x" /D ' in last.line
-    assert last.line.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd")
+    assert last.line.endswith(" /c .\\.eternal2x_run.cmd"), last.line
+    assert "start" not in last.line and "/MIN" not in last.line, last.line
+    assert last.cwd == str(direct).replace("/", "\\"), last.cwd
     assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
 
 
@@ -1320,14 +1364,6 @@ def test_the_windows_background_run_goes_through_a_script(lua, direct):
     assert "2>&1" in text
 
 
-def test_a_saved_on_1s_setting_falls_back_to_auto_detect(lua, direct):
-    conf = direct / "Installer" / "Eternal2x.conf"
-    conf.write_text(conf.read_text() + "base_hold=1\n")
-    H = load(lua, ui_script(direct))
-    H.click("AnalyseBtn")
-    assert "--base-hold" not in H.last_command()
-
-
 # --------------------------------------------------------------------------
 # reaching Resolve the way a real Scripts-menu run does
 # --------------------------------------------------------------------------
@@ -1344,7 +1380,7 @@ def test_the_panel_uses_a_resolve_global_when_there_is_one(lua, direct):
     lua.execute('resolve = nil')
     H.load(str(ui_script(direct)), "/media/first.mov")
     lua.execute('resolve = Resolve(); Resolve = nil')
-    H.click("RefreshBtn")
+    follow(H)
     assert "first.mov" in H.widgets["SourceLabel"].Text
 
 
@@ -1643,7 +1679,7 @@ def test_reset_does_not_drop_a_run_that_is_still_reporting(lua, direct):
     H.click("CancelBtn")
     assert (direct / ".eternal2x_status.json").exists()
     assert not H.enabled("SmoothBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
 
 
 def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
@@ -1653,7 +1689,7 @@ def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
     H.click("SmoothBtn")
     H.click("CancelBtn")
     assert not H.enabled("SmoothBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
 
 
 def test_a_heartbeat_from_before_the_clock_moved_back_is_not_a_live_run(lua, direct):
@@ -1675,7 +1711,7 @@ def test_the_panel_keeps_its_own_word_while_a_run_reports_progress(lua, direct):
     write_status(direct, fraction=0.52, message="Starting", updated=time.time())
     H.click("CancelBtn")
     H.click("RefreshStatusBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
     assert "52%" in H.widgets["Progress"].Text
 
 
@@ -1686,9 +1722,11 @@ def test_the_stall_warning_goes_once_progress_resumes(lua, direct):
     write_status(direct, fraction=0.3, updated=time.time() - 10 * 60)
     H.click("RefreshStatusBtn")
     assert "No progress" in H.status()
+    assert H.text_of("CancelBtn") == "Reset", "the warning says press Reset"
     write_status(direct, fraction=0.4, updated=time.time())
     H.click("RefreshStatusBtn")
     assert "No progress" not in H.status()
+    assert H.text_of("CancelBtn") == "Stop"
 
 
 def test_reset_clears_a_run_that_went_quiet(lua, direct):
@@ -1925,6 +1963,31 @@ def test_an_unwritable_run_script_does_not_rerun_the_last_one(lua, direct):
     assert H.enabled("SmoothBtn")
 
 
+def test_stop_ends_a_run_that_is_going(lua, direct):
+    """With no window to close, Stop is how a run ends early."""
+    import time
+    H = load(lua, ui_script(direct))
+    assert H.text_of("CancelBtn") == "Reset"
+    H.click("SmoothBtn")
+    assert H.text_of("CancelBtn") == "Stop"
+    write_status(direct, fraction=0.3, updated=time.time())
+    H.click("CancelBtn")
+    assert (direct / ".eternal2x_status.stop").exists()
+    assert "Stopping" in H.status()
+    write_status(direct, fraction=0.3, done=True, ok=False, message="Stopped.")
+    H.click("RefreshStatusBtn")
+    assert H.status() == "Stopped."
+    assert H.text_of("CancelBtn") == "Reset"
+    assert H.enabled("SmoothBtn")
+
+
+def test_a_stop_left_over_does_not_stop_the_next_run(lua, direct):
+    (direct / ".eternal2x_status.stop").write_text("")
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not (direct / ".eternal2x_status.stop").exists()
+
+
 def test_a_render_that_finished_while_the_panel_was_closed_is_offered(lua, direct):
     write_status(direct, fraction=1.0, done=True, ok=True, message="Done.",
                  import_path=str(direct / "shot_smooth.mp4"))
@@ -2015,7 +2078,7 @@ def test_render_hands_over_the_frames_marked_on_the_clip(lua, direct):
     H.click("SmoothBtn")
     assert "--marks-file" in H.last_command()
     assert marks_sent(direct) == "0,6,12"
-    assert "3 frames marked" in H.status()
+    assert "3 marked frames" in H.status()
 
 
 def test_render_without_markers_finds_the_drawings_itself(lua, direct):
@@ -2042,8 +2105,110 @@ def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,8"
     assert H.tagged_markers() == 4
-    assert "Marked 4 frames" in H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].Text == "Placed 4 markers. Animated on 2s."
+    assert "Marked 4 frames on the clip" in H.widgets["AnalysisLabel"].ToolTip
     assert "Render" in H.status()
+
+
+def _analysed(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(1.0, 3.0)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,8",
+                 message="12 frames, 4 unique drawings. Animated on 2s.")
+    H.click("RefreshStatusBtn")
+    return H
+
+
+def test_rendering_the_analysed_clip_keeps_its_analysis(lua, direct):
+    H = _analysed(lua, direct)
+    H.click("SmoothBtn")
+    assert H.widgets["AnalysisLabel"].Text == "Placed 4 markers. Animated on 2s."
+
+
+def test_another_part_of_the_file_clears_the_last_analysis(lua, direct):
+    H = _analysed(lua, direct)
+    H.source_range = lua.table(5.0, 7.0)
+    H.click("SmoothBtn")
+    assert "Placed" not in H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].ToolTip == ""
+
+
+def test_another_clip_from_the_same_part_of_the_file_clears_the_analysis(lua, direct):
+    H = _analysed(lua, direct)
+    H.item_id = "another-cut"
+    follow(H)
+    assert "Placed" not in H.widgets["AnalysisLabel"].Text
+
+
+def test_the_card_waits_while_the_playhead_moves(lua, direct):
+    """Playing back, the playhead moves every tick. Reading the clip under it
+    each time would cost Resolve, so the card catches up once it stops."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.under_playhead = True
+    for tc in ("01:00:00:01", "01:00:00:02", "01:00:00:03"):
+        H.playhead_tc = tc
+        H.fire("PollTimer", "Timeout")
+    assert "shot.mov" not in H.widgets["SourceLabel"].Text, "it read the clip mid-playback"
+    H.fire("PollTimer", "Timeout")
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+
+
+def test_finding_a_clip_clears_the_missing_clip_message(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    assert "playhead" in H.status()
+    H.under_playhead = True
+    follow(H)
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+    assert H.status() == "Ready."
+
+
+def test_refresh_progress_also_picks_up_the_clip(lua, direct):
+    """Without a timer, nothing else would move the card."""
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.under_playhead = True
+    H.click("RefreshStatusBtn")
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+
+
+def test_the_clip_card_follows_the_playhead_from_the_start(lua, direct):
+    """No button to press: the timer runs as soon as the panel opens."""
+    H = load(lua, ui_script(direct))
+    assert H.window.__items["PollTimer"].__running
+
+
+def test_the_clip_card_keeps_the_last_clip_in_a_gap(lua, direct):
+    """As Analyse and Render do, so moving off the clip does not lose it."""
+    H = load(lua, ui_script(direct))
+    H.under_playhead = False
+    follow(H)
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+    assert H.widgets["SourceLabel"].ToolTip.endswith("\n\n/media/shot.mov")
+    assert H.status() == "Ready.", "a gap reported itself in the status"
+
+
+def test_with_no_clip_the_card_has_no_path(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    assert "shot.mov" not in H.widgets["SourceLabel"].ToolTip
+    assert "playhead" in H.widgets["SourceLabel"].ToolTip
+
+
+def test_a_clip_kept_from_before_keeps_its_tip(lua, direct):
+    """The playhead in a gap: Analyse keeps the last clip, and its path."""
+    H = load(lua, ui_script(direct))
+    H.under_playhead = False
+    H.click("AnalyseBtn")
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+    assert H.widgets["SourceLabel"].ToolTip.endswith("/media/shot.mov")
 
 
 def test_analysing_again_replaces_only_its_own_markers(lua, direct):
@@ -2061,6 +2226,7 @@ def test_the_threshold_slider_sets_how_big_a_change_counts(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("AnalyseBtn")
     assert "--threshold" not in H.last_command(), "the default should send nothing"
+    assert "ThresholdSlider" in H.window.__items, "the threshold should be on the panel"
     H.set_slider("ThresholdSlider", 7)
     assert H.widgets["ThresholdValue"].Text == "7"
     H.click("AnalyseBtn")
@@ -2074,7 +2240,7 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
     into a clip trimmed 20 frames in reads back as frame 30."""
     H = load(lua, ui_script(direct))
     H.left_offset, H.source_frames = 20, lua.table(20, 67)
-    H.click("RefreshBtn")
+    follow(H)
     for key in (30, 20, 5, 75):
         H.add_marker(key)
     H.click("SmoothBtn")
@@ -2084,7 +2250,7 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
 def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset, H.source_frames = 20, lua.table(20, 67)
-    H.click("RefreshBtn")
+    follow(H)
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2096,7 +2262,7 @@ def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
     H.left_offset, H.source_frames = 47, lua.table(59, 118)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(47)
     H.add_marker(57)
     H.click("SmoothBtn")
@@ -2132,7 +2298,7 @@ def test_markers_on_a_render_above_its_original_count_too(lua, direct):
     """The editor sees the render on top and may mark that instead."""
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_markers[1][0] = {}; H.under_markers[1][12] = {}", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(6)
     H.click("SmoothBtn")
     assert "shot.mov" in H.last_command()
@@ -2149,7 +2315,7 @@ def test_markers_on_a_slowed_render_count_as_the_frames_they_show(lua, direct):
     H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000143].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_markers[1][0] = {}; "
                 "H.src_span[2] = H.src_span[1] + 144", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(6)
     H.add_marker(120)
     H.click("SmoothBtn")
@@ -2171,7 +2337,7 @@ def test_a_marker_near_the_end_of_a_slowed_render_counts(lua, direct):
     H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000356].png", "/media/shot.mov")
     lua.execute("local H = ...; H.clip_fps = '60'; H.src_span[2] = H.src_span[1] + 142; "
                 "H.under_spans[1][2] = H.under_spans[1][1] + 47", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(141)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "117"
@@ -2201,7 +2367,7 @@ def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
     H.clip_fps, H.timeline_fps, H.item_duration, H.left_offset = "30", "23.976", 200, 47
     H.source_frames = lua.table(59, 308)
     lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,125,127,129", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2217,7 +2383,7 @@ def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, dire
     """Guessing the left offset would read every marker as the wrong frame."""
     H = load(lua, ui_script(direct))
     H.left_offset_fails = True
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(30)
     before = H.last_command()
     H.click("SmoothBtn")
@@ -2230,7 +2396,7 @@ def test_markers_on_a_trimmed_clip_without_its_source_range_stop_the_render(lua,
     counted from the clip's left edge would keep the wrong frames."""
     H = load(lua, ui_script(direct))
     H.left_offset = 20
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(30)
     before = H.last_command()
     H.click("SmoothBtn")
@@ -2241,7 +2407,7 @@ def test_markers_on_a_trimmed_clip_without_its_source_range_stop_the_render(lua,
 def test_analyse_places_no_markers_on_a_trimmed_clip_without_its_source_range(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset = 20
-    H.click("RefreshBtn")
+    follow(H)
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2261,7 +2427,7 @@ def test_markers_on_an_untrimmed_clip_without_its_source_range_still_render(lua,
 def test_an_unmarked_clip_whose_bounds_cannot_be_read_still_renders(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset_fails = True
-    H.click("RefreshBtn")
+    follow(H)
     H.click("SmoothBtn")
     assert "--marks-file" not in H.last_command()
     assert "No markers" in H.status()
@@ -2301,7 +2467,7 @@ def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, d
     render's marker 12 timeline frames in is the original's frame 15."""
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_fps = '30'; H.under_markers[1][0] = {}", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(12)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "0,15"
@@ -2310,7 +2476,7 @@ def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, d
 def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_spans[1][2] = H.under_spans[1][1] + 24", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(30)
     H.click("SmoothBtn")
     assert "--marks-file" not in H.last_command()
@@ -2322,12 +2488,12 @@ def test_found_frames_that_share_a_timeline_frame_are_reported(lua, direct):
     share timeline frame 4. The panel says so rather than dropping one."""
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
-    H.click("RefreshBtn")
+    follow(H)
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,6"
-    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].Text
+    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].ToolTip
 
 
 def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
@@ -2336,7 +2502,7 @@ def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "24", 1200
     lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
-    H.click("RefreshBtn")
+    follow(H)
     H.add_marker(1001)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "1000"
@@ -2350,9 +2516,9 @@ def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
 def test_several_shared_frames_read_as_a_plural(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "60", "24"
-    H.click("RefreshBtn")
+    follow(H)
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3,5,6,7", message="On 1s.")
     H.click("RefreshStatusBtn")
-    text = H.widgets["AnalysisLabel"].Text
+    text = H.widgets["AnalysisLabel"].ToolTip
     assert "2 more found frames share timeline frames with others, as the clip runs faster" in text

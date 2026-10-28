@@ -127,7 +127,9 @@ def test_analyse_reports_the_real_pattern(installation):
     H.click("AnalyseBtn")
     finish(H)
 
-    summary = H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].Text == "Placed 12 markers. Animated on 2s."
+    # The whole report is in the line's tip.
+    summary = H.widgets["AnalysisLabel"].ToolTip
     assert "12 unique drawings" in summary, f"panel showed: {summary!r}"
     assert "on 2s" in summary
     # The drawings it found are marked on the clip, ready to edit.
@@ -225,14 +227,6 @@ def test_settings_chosen_in_the_panel_reach_the_render(installation, read_frames
     out = rendered_output(src)
     assert out.suffix == ".mp4", f"got {out.name}"
     assert H.property_of("Super Scale") is None, "Super Scale was applied anyway"
-
-
-def test_forcing_a_hold_pattern_reaches_the_render(installation):
-    H, _src = installation(holds=(2,) * 12)
-    H.set_combo("HoldCombo", 2)          # On 3s
-    H.click("AnalyseBtn")
-    finish(H)
-    assert "on 3s" in H.widgets["AnalysisLabel"].Text
 
 
 def test_a_second_run_does_not_overwrite_the_first(installation):

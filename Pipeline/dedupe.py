@@ -49,7 +49,7 @@ class DedupePlan:
     # One source frame index per intermediate frame, in order.
     output_indices: List[int] = field(default_factory=list)
     # Every frame came out new, but the scores look like grain on held
-    # frames: worth turning on Grainy source and analysing again.
+    # frames, so the drawings are best marked by hand.
     grain_suspected: bool = False
     # Made from the frames the editor marked, not from detection. Every frame
     # between two marks is then an in-between, however long the gap.

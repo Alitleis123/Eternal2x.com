@@ -41,6 +41,17 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "rife_v4.25.onn
 # multiple of this. The frame is padded by repeating its edge, then cropped.
 _PAD = 64
 
+# Asked for a frame close to a drawing, the network hands back the drawing
+# itself: on Hero's walk, every t up to 0.1 came back as the first drawing
+# exactly and every t from 0.9 as the second, and the motion stayed uneven to
+# about 0.2 and from 0.8. Slowed three times, that held each drawing for about
+# six extra frames, a pause at every drawing. Between 0.25 and 0.75 it is even,
+# so it is only ever asked for those. A frame nearer a drawing is drawn between
+# the drawing and the halfway frame, and so on until it falls inside.
+_EVEN_FROM = 0.25
+# A millionth of a gap: closer to a drawing than any real frame can be.
+_ROUNDING = 1e-6
+
 ProgressFn = Callable[[str, float], None]
 
 
@@ -83,7 +94,13 @@ def _pip(cmd: List[str], progress: Optional[ProgressFn]) -> subprocess.Completed
             return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
         except subprocess.TimeoutExpired:
             if progress:
-                progress("Installing AI runtime", 0.0)
+                try:
+                    progress("Installing AI runtime", 0.0)
+                except BaseException:
+                    # Stopped. Cut short, pip could leave this Python half
+                    # installed, so it finishes before the run ends.
+                    proc.communicate()
+                    raise
 
 
 def ensure_runtime(progress: Optional[ProgressFn] = None):
@@ -163,6 +180,12 @@ def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,
 
 class Rife:
     """One loaded model, reused for every pair of drawings in a render."""
+
+    # The pair being drawn and the halfway frames drawn for it, by where they
+    # sit between its drawings. A render asks for a pair's in-betweens a few
+    # at a time, so they are kept until the next pair.
+    _pair = None
+    _known = None
 
     def __init__(self, progress: Optional[ProgressFn] = None):
         ort = ensure_runtime(progress)
@@ -256,10 +279,32 @@ class Rife:
         out: List[np.ndarray] = []
         for t in times:
             t = float(min(1.0, max(0.0, t)))
-            if t <= 0.0:
+            # This close to a drawing is rounding in the time map, not a frame.
+            if t <= _ROUNDING:
                 out.append(a.copy())
-            elif t >= 1.0:
+            elif t >= 1.0 - _ROUNDING:
                 out.append(b.copy())
             else:
-                out.append(self._run(a, b, t))
+                out.append(self._between(a, b, t))
         return out
+
+    def _between(self, a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+        """The frame at t between a and b, asking the network only for 0.25 to 0.75."""
+        if self._pair is None or self._pair[0] is not a or self._pair[1] is not b:
+            self._pair, self._known = (a, b), {0.0: a, 1.0: b}
+        known = self._known
+        lo, hi = 0.0, 1.0
+        while True:
+            local = (t - lo) / (hi - lo)
+            # Every t strictly inside lands here: each halving doubles its
+            # distance from the nearer end. A gap of 5000 frames slowed three
+            # times needs 12 halvings and keeps 23 halfway frames.
+            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM:
+                return self._run(known[lo], known[hi], local)
+            if hi - lo < 2.0 ** -30:
+                # Only rounding gets here, where both ends are one picture.
+                return (known[lo] if local < 0.5 else known[hi]).copy()
+            mid = (lo + hi) / 2.0
+            if mid not in known:
+                known[mid] = self._run(known[lo], known[hi], 0.5)
+            lo, hi = (lo, mid) if local < 0.5 else (mid, hi)
