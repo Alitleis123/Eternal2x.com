@@ -8,6 +8,7 @@ needs Resolve open.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -450,14 +451,30 @@ def test_a_stage_at_zero_percent_is_still_named(lua, direct):
     assert "Installing AI runtime" in H.widgets["Progress"].Text
 
 
+def bar_fill(H):
+    """How far the amber runs in the progress bar's gradient, or None."""
+    stops = re.findall(r"stop: ([\d.]+) ", H.widgets["ProgressBar"].StyleSheet)
+    return float(stops[1]) if len(stops) > 1 else None
+
+
 def test_progress_bar_fills_as_it_goes(lua, direct):
     H = load(lua, ui_script(direct))
     filled = []
     for fraction in (0.1, 0.9):
         write_status(direct, fraction=fraction)
         H.click("RefreshStatusBtn")
-        filled.append(H.widgets["Progress"].Text.count("█"))
-    assert filled[1] > filled[0], "the progress bar did not grow"
+        filled.append(bar_fill(H))
+    assert filled == [0.1, 0.9], "the progress bar did not grow"
+
+
+def test_the_progress_bar_is_empty_until_a_run_starts(lua, direct):
+    H = load(lua, ui_script(direct))
+    assert bar_fill(H) is None
+    H.click("SmoothBtn")
+    assert bar_fill(H) is not None
+    (direct / ".eternal2x_exit").write_text("1\n")
+    H.click("CancelBtn")
+    assert bar_fill(H) is None
 
 
 def test_completion_message_is_surfaced(lua, direct):

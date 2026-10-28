@@ -51,9 +51,12 @@ end
 -- UIManager: ui:VGroup{...}, ui:Label{...} etc. all just build descriptors.
 local ui = setmetatable({}, {
     __index = function(_, kind)
-        return function(_self, spec)
-            local w = new_widget(spec or {})
+        return function(_self, spec, ...)
+            -- ui:VGap(size) and ui:HGap(size, weight) take numbers.
+            local gap = type(spec) ~= "table" and { spec, ... } or nil
+            local w = new_widget(gap and {} or spec or {})
             w.__kind = kind
+            w.__gap = gap
             return w
         end
     end,
