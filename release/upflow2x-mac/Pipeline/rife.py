@@ -293,7 +293,11 @@ class Rife:
         lo, hi = 0.0, 1.0
         while True:
             local = (t - lo) / (hi - lo)
-            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM or hi - lo < 1.0 / 64:
+            # Every t strictly inside lands here: each halving doubles its
+            # distance from the nearer end. A gap of 5000 frames slowed three
+            # times needs 12 halvings and keeps 23 halfway frames. The width
+            # only stops a loop that rounding could leave going.
+            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM or hi - lo < 2.0 ** -30:
                 return self._run(known[lo], known[hi], local)
             mid = (lo + hi) / 2.0
             if mid not in known:

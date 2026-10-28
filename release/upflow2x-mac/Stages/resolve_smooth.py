@@ -73,8 +73,8 @@ class StatusFile:
             return
         # A Stop pressed after the last frame, while the writes finished,
         # still counts: the run reports Stopped, not a result to import.
-        if done and ok and self.stop_path.exists():
-            raise Stopped()
+        if done and ok:
+            self.check_stop()
         if message is not None:
             # The panel parses this file with simple pattern matching, so keep
             # the text on one line and free of quotes and backslashes.
@@ -113,9 +113,13 @@ class StatusFile:
                 if attempt + 1 < attempts:
                     time.sleep(0.02)
 
-    def progress(self, stage: str, fraction: float) -> None:
+    def check_stop(self) -> None:
+        """Raise Stopped if the panel's Stop was pressed."""
         if self.stop_path is not None and self.stop_path.exists():
             raise Stopped()
+
+    def progress(self, stage: str, fraction: float) -> None:
+        self.check_stop()
         self.stage = stage
         self.fraction = fraction
         self.write()
@@ -436,6 +440,8 @@ def _run(args, summary: dict) -> int:
         summary["error"] = str(exc)
         status.write(done=True, ok=False, message=str(exc))
         return 2
+    # Stopped while the last frames were written: nothing goes into Resolve.
+    status.check_stop()
 
     print(f"Wrote {result.frames_written} frames at {result.fps:.3f} fps.")
     if result.note:
@@ -519,6 +525,9 @@ def _run_reporting(args, summary: dict) -> int:
         return _run(args, summary)
     except Stopped:
         print("Stopped.")
+        # It may have stopped after the summary already said it worked.
+        summary["ok"] = False
+        summary.pop("import_path", None)
         summary["error"] = "Stopped."
         status = StatusFile(args.status_file)
         with contextlib.suppress(OSError):
