@@ -202,6 +202,8 @@ local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] 
 local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
+-- Stop creates this, and the run ends at its next frame.
+local STOP_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.stop")
 -- The frames marked on the clip go to the stage in this file. A long clip's
 -- list does not fit on a Windows command line.
 local MARKS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_marks.txt")
@@ -590,6 +592,7 @@ end
 -- minimised window through `start`. UTF-16 also carries non-ASCII paths that
 -- os.execute's ANSI code page cannot. Without LuaJIT's ffi, os.execute runs.
 local hidden_execute = nil
+local hidden_start = nil
 if is_windows() then
     pcall(function()
         local ffi = require("ffi")
@@ -636,6 +639,28 @@ if is_windows() then
             k32.CloseHandle(pi.process)
             return true, tonumber(code[0])
         end
+        -- Starts `cmd` in `dir` and leaves it running, with no window.
+        hidden_start = function(cmd, dir)
+            local function wide(s)
+                local size = k32.MultiByteToWideChar(65001, 0, s, #s, nil, 0)
+                if size <= 0 then return nil end
+                local out = ffi.new("wchar_t[?]", size + 1)
+                k32.MultiByteToWideChar(65001, 0, s, #s, out, size)
+                return out
+            end
+            local line = wide((os.getenv("ComSpec") or "cmd.exe") .. " /c " .. cmd)
+            local cwd = wide(dir)
+            if not line or not cwd then return false end
+            local si = ffi.new("E2X_STARTUPINFOW")
+            si.cb = ffi.sizeof(si)
+            local pi = ffi.new("E2X_PROCESS_INFORMATION")
+            if k32.CreateProcessW(nil, line, nil, nil, 0, 0x08000000, nil, cwd, si, pi) == 0 then
+                return false
+            end
+            k32.CloseHandle(pi.thread)
+            k32.CloseHandle(pi.process)
+            return true
+        end
     end)
 end
 
@@ -655,11 +680,25 @@ local function run_blocking(module_name, args, log)
     return (ok == true or ok == 0)
 end
 
+-- Runs a script in the plugin folder by name, as a render does. With no
+-- window, there is none to close by mistake, which would end the run without
+-- a word. Where that cannot start, `fallback` opens a minimised one.
+local function start_script(script, fallback)
+    if hidden_start then
+        local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
+        local ok, started = pcall(hidden_start, ".\\" .. basename(script), dir)
+        if ok and started then return true end
+    end
+    local ok = execute(fallback)
+    return (ok == true or ok == 0)
+end
+
 -- True once the run is on its way. Python reports from then on.
 local function run_background(module_name, args)
     local cmd = build_command(module_name, args, true)
     if not cmd then return false end
     print("[Upflow2x] " .. cmd)
+    if is_windows() then return start_script(RUN_SCRIPT, cmd) end
     local ok = execute(cmd)
     return (ok == true or ok == 0)
 end
@@ -761,6 +800,7 @@ end
 local function clear_status()
     os.remove(STATUS_PATH)
     os.remove(EXIT_PATH)
+    os.remove(STOP_PATH)
 end
 
 -- The exit code of the last background run, or nil while it is still going.
@@ -913,11 +953,12 @@ local function row(name, control, tip)
 end
 
 -- Top to bottom in the order you use it: the clip, Analyse and its
--- threshold, the two switches, then Render. The rest waits in Settings.
+-- threshold, the two switches and the output, then Render. All in one
+-- window, so nothing opens on top of it.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 380, 450 },
+    Geometry = { 100, 100, 380, 490 },
     StyleSheet = WINDOW,
 }, ui:VGroup{
     Spacing = 8,
@@ -927,7 +968,9 @@ local win = disp:AddWindow({
         ui:Label{ ID = "Badge", Text = "2X", StyleSheet = BADGE, Weight = 0,
                   Alignment = { AlignCenter = true } },
         ui:HGap(0, 1),
-        ui:Button{ ID = "SettingsBtn", Text = "Settings", StyleSheet = LINK, Weight = 0 },
+        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
     },
 
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
@@ -951,6 +994,7 @@ local win = disp:AddWindow({
         ui:Button{ ID = "InterpCB", Text = "Interpolate", Checkable = true,
                    Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
     },
+    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
     ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, ToolTip = TIPS.render,
                MinimumSize = { 0, 44 }, MaximumSize = { 16777215, 44 } },
 
@@ -974,29 +1018,11 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
 })
 
-local prefs = disp:AddWindow({
-    ID = "Settings",
-    WindowTitle = "Upflow2x Settings",
-    Geometry = { 140, 140, 340, 130 },
-    StyleSheet = WINDOW,
-}, ui:VGroup{
-    Spacing = 10,
-
-    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
-    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
-    ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = BUTTON, Weight = 0 },
-        ui:HGap(0, 1),
-        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
-    },
-})
 
 local items = win:GetItems()
-local prefs_items = prefs:GetItems()
 
-for _, label in ipairs(FORMAT_LABELS) do prefs_items.FormatCombo:AddItem(label) end
-prefs_items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
+for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
+items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 -- ---------------------------------------------------------------------------
 -- state
@@ -1044,8 +1070,11 @@ local function set_busy(busy)
     RUNNING = busy
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
-    prefs_items.UpdateBtn.Enabled = not busy
+    items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
+    items.CancelBtn.Text = busy and "Stop" or "Reset"
+    items.CancelBtn.ToolTip = busy and "End the run now. Frames it has written stay in its folder."
+        or "Clear a run that stopped without finishing."
 end
 
 -- Seconds as text that Python's float() reads, whatever the locale.
@@ -1183,7 +1212,7 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local fmt = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+    local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
     -- --network-upscale tells the stage this panel skips Super Scale for a
     -- render that comes back already 2x.
@@ -1704,16 +1733,7 @@ end
 
 function win.On.Eternal2x.Close(ev)
     save_conf()
-    prefs:Hide()
     disp:ExitLoop()
-end
-
-function win.On.SettingsBtn.Clicked(ev)
-    prefs:Show()
-end
-
-function prefs.On.Settings.Close(ev)
-    prefs:Hide()
 end
 
 -- Work on the clip under the playhead now, not the one there when the panel
@@ -1839,7 +1859,11 @@ function win.On.FolderBtn.Clicked(ev)
               shell_quote(LAST_OUTPUT:match("^(.+)/") or ".") .. " >/dev/null 2>&1 &"
     end
     print("[Upflow2x] " .. cmd)
-    execute(cmd)
+    if is_windows() then
+        start_script(REVEAL_SCRIPT, cmd)
+    else
+        execute(cmd)
+    end
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)
@@ -1858,10 +1882,12 @@ end
 
 function win.On.CancelBtn.Clicked(ev)
     if run_in_progress() then
+        -- The run sees this at its next frame, then reports Stopped.
+        local f = io.open(STOP_PATH, "w")
+        if f then f:close() end
         set_busy(true)
         start_polling()
-        set_status("It is still running, so Reset leaves it alone. If its window was closed, "
-            .. "Reset works once it has been quiet for 3 minutes.")
+        set_status(f and "Stopping..." or "Could not stop the run.")
         return
     end
     clear_status()
@@ -1878,8 +1904,8 @@ function win.On.ThresholdSlider.ValueChanged(ev)
     save_conf()
 end
 
-function prefs.On.FormatCombo.CurrentIndexChanged(ev)
-    FORMAT = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+function win.On.FormatCombo.CurrentIndexChanged(ev)
+    FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     save_conf()
 end
 
@@ -1933,7 +1959,7 @@ local function run_update(auto_mode)
     end
 end
 
-function prefs.On.UpdateBtn.Clicked(ev)
+function win.On.UpdateBtn.Clicked(ev)
     run_update(false)
 end
 
