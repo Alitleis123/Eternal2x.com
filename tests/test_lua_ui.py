@@ -384,7 +384,7 @@ def test_defaults_send_no_opt_out_flags(lua, direct):
 
 def test_a_clip_path_with_spaces_is_quoted(lua, direct):
     H = load(lua, ui_script(direct), clip="/media/My Footage/shot 01.mov")
-    assert "My Footage" in H.widgets["Meta"].Text
+    assert "My Footage" in H.widgets["SourceLabel"].ToolTip
 
 
 def test_every_module_the_panel_calls_exists(lua, direct, repo_root):
@@ -638,7 +638,7 @@ def test_a_background_run_does_not_block(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
     assert not H.enabled("SmoothBtn"), "the panel should show it is busy"
-    assert "Resolve stays usable" in H.status()
+    assert "Rendering" in H.status()
 
 
 # --------------------------------------------------------------------------
@@ -2049,7 +2049,7 @@ def test_render_hands_over_the_frames_marked_on_the_clip(lua, direct):
     H.click("SmoothBtn")
     assert "--marks-file" in H.last_command()
     assert marks_sent(direct) == "0,6,12"
-    assert "3 frames marked" in H.status()
+    assert "3 marked frames" in H.status()
 
 
 def test_render_without_markers_finds_the_drawings_itself(lua, direct):
@@ -2076,7 +2076,8 @@ def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,8"
     assert H.tagged_markers() == 4
-    assert "Marked 4 frames" in H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].Text == "Marked 4 drawings, on 2s."
+    assert "Marked 4 frames on the clip" in H.widgets["AnalysisLabel"].ToolTip
     assert "Render" in H.status()
 
 
@@ -2361,7 +2362,7 @@ def test_found_frames_that_share_a_timeline_frame_are_reported(lua, direct):
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,6"
-    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].Text
+    assert "1 more found frame shares a timeline frame" in H.widgets["AnalysisLabel"].ToolTip
 
 
 def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
@@ -2388,5 +2389,5 @@ def test_several_shared_frames_read_as_a_plural(lua, direct):
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3,5,6,7", message="On 1s.")
     H.click("RefreshStatusBtn")
-    text = H.widgets["AnalysisLabel"].Text
+    text = H.widgets["AnalysisLabel"].ToolTip
     assert "2 more found frames share timeline frames with others, as the clip runs faster" in text

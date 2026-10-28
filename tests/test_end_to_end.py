@@ -127,7 +127,9 @@ def test_analyse_reports_the_real_pattern(installation):
     H.click("AnalyseBtn")
     finish(H)
 
-    summary = H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].Text == "Marked 12 drawings, on 2s."
+    # The whole report is in the line's tip.
+    summary = H.widgets["AnalysisLabel"].ToolTip
     assert "12 unique drawings" in summary, f"panel showed: {summary!r}"
     assert "on 2s" in summary
     # The drawings it found are marked on the clip, ready to edit.
