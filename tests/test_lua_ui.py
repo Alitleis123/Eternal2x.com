@@ -165,25 +165,12 @@ def test_every_render_plays_at_a_third_of_the_speed(lua, direct):
     assert "--slow-motion" not in H.last_command()
 
 
-def test_settings_open_in_their_own_window(lua, direct):
+def test_everything_is_in_one_window(lua, direct):
+    """A second window opened on top of the panel and had to be closed."""
     H = load(lua, ui_script(direct))
-    settings = H.windows["Settings"]
-    assert not settings.__shown
-    H.click("SettingsBtn")
-    assert settings.__shown
-    H.fire("Settings", "Close")
-    assert not settings.__shown
-    assert H.window.__shown and not H.exits, "closing Settings closed the panel"
-    H.click("SettingsBtn")
-    assert settings.__shown, "Settings did not open again after it was closed"
-
-
-def test_closing_the_panel_closes_its_settings(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.click("SettingsBtn")
-    H.fire("Eternal2x", "Close")
-    assert not H.windows["Settings"].__shown
-    assert H.exits == 1
+    assert list(H.windows.keys()) == ["Eternal2x"]
+    for control in ("ThresholdSlider", "FormatCombo", "UpdateBtn", "SubTitle"):
+        assert control in H.window.__items, f"{control} is not on the panel"
 
 
 def test_the_version_is_shown(lua, direct):

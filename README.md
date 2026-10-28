@@ -162,8 +162,7 @@ Whole file when Resolve does not report one.
 
 ### Settings
 
-The panel remembers them between sessions. Threshold, Upscaling and
-Interpolate are on the panel, and Output is under **Settings**. Rest the
+They are all on the panel, and it remembers them between sessions. Rest the
 pointer on one to see what it does.
 
 | Setting | What it does |

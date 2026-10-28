@@ -913,11 +913,12 @@ local function row(name, control, tip)
 end
 
 -- Top to bottom in the order you use it: the clip, Analyse and its
--- threshold, the two switches, then Render. The rest waits in Settings.
+-- threshold, the two switches and the output, then Render. All in one
+-- window, so nothing opens on top of it.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 380, 450 },
+    Geometry = { 100, 100, 380, 490 },
     StyleSheet = WINDOW,
 }, ui:VGroup{
     Spacing = 8,
@@ -927,7 +928,9 @@ local win = disp:AddWindow({
         ui:Label{ ID = "Badge", Text = "2X", StyleSheet = BADGE, Weight = 0,
                   Alignment = { AlignCenter = true } },
         ui:HGap(0, 1),
-        ui:Button{ ID = "SettingsBtn", Text = "Settings", StyleSheet = LINK, Weight = 0 },
+        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
     },
 
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
@@ -951,6 +954,7 @@ local win = disp:AddWindow({
         ui:Button{ ID = "InterpCB", Text = "Interpolate", Checkable = true,
                    Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
     },
+    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
     ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, ToolTip = TIPS.render,
                MinimumSize = { 0, 44 }, MaximumSize = { 16777215, 44 } },
 
@@ -974,29 +978,11 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
 })
 
-local prefs = disp:AddWindow({
-    ID = "Settings",
-    WindowTitle = "Upflow2x Settings",
-    Geometry = { 140, 140, 340, 130 },
-    StyleSheet = WINDOW,
-}, ui:VGroup{
-    Spacing = 10,
-
-    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
-    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
-    ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = BUTTON, Weight = 0 },
-        ui:HGap(0, 1),
-        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
-    },
-})
 
 local items = win:GetItems()
-local prefs_items = prefs:GetItems()
 
-for _, label in ipairs(FORMAT_LABELS) do prefs_items.FormatCombo:AddItem(label) end
-prefs_items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
+for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
+items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 -- ---------------------------------------------------------------------------
 -- state
@@ -1044,7 +1030,7 @@ local function set_busy(busy)
     RUNNING = busy
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
-    prefs_items.UpdateBtn.Enabled = not busy
+    items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
 end
 
@@ -1183,7 +1169,7 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local fmt = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+    local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
     -- --network-upscale tells the stage this panel skips Super Scale for a
     -- render that comes back already 2x.
@@ -1704,16 +1690,7 @@ end
 
 function win.On.Eternal2x.Close(ev)
     save_conf()
-    prefs:Hide()
     disp:ExitLoop()
-end
-
-function win.On.SettingsBtn.Clicked(ev)
-    prefs:Show()
-end
-
-function prefs.On.Settings.Close(ev)
-    prefs:Hide()
 end
 
 -- Work on the clip under the playhead now, not the one there when the panel
@@ -1878,8 +1855,8 @@ function win.On.ThresholdSlider.ValueChanged(ev)
     save_conf()
 end
 
-function prefs.On.FormatCombo.CurrentIndexChanged(ev)
-    FORMAT = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+function win.On.FormatCombo.CurrentIndexChanged(ev)
+    FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     save_conf()
 end
 
@@ -1933,7 +1910,7 @@ local function run_update(auto_mode)
     end
 end
 
-function prefs.On.UpdateBtn.Clicked(ev)
+function win.On.UpdateBtn.Clicked(ev)
     run_update(false)
 end
 
