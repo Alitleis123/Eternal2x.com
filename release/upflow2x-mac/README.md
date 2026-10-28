@@ -161,6 +161,9 @@ Whole file when Resolve does not report one.
 
 ### Settings
 
+The panel remembers them between sessions. Rest the pointer on the (i) beside
+one to see what it does.
+
 | Setting | What it does |
 |---|---|
 | **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
