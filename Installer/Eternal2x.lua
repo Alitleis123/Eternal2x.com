@@ -1083,7 +1083,16 @@ local function refresh_source()
         SOURCE_PLACE = nil
         SOURCE_ITEM = nil
         items.SourceLabel.Text = err or "No clip under the playhead."
+        items.SourceLabel.ToolTip = ""
         return false
+    end
+    -- Another clip, or another part of the file, makes the last analysis
+    -- say nothing about this one.
+    local was = SOURCE_RANGE
+    if path ~= SOURCE_PATH or (range and range.start) ~= (was and was.start)
+            or (range and range.finish) ~= (was and was.finish) then
+        items.AnalysisLabel.Text = ANALYSIS_HINT
+        items.AnalysisLabel.ToolTip = ""
     end
     SOURCE_PATH = path
     SOURCE_RANGE = range
@@ -1531,8 +1540,8 @@ local function apply_status(st)
                         .. ", as the clip runs faster than the timeline."
                 end
                 local on = st.message:match("[Oo]n (%d)s")
-                items.AnalysisLabel.Text = "Marked " .. placed .. " drawings"
-                    .. (on and (", on " .. on .. "s.") or ".")
+                items.AnalysisLabel.Text = "Placed " .. placed .. " markers."
+                    .. (on and (" Animated on " .. on .. "s.") or "")
             elseif st.message ~= "" then
                 items.AnalysisLabel.Text = st.message
             end
@@ -1700,7 +1709,7 @@ end
 local function pick_source()
     local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
                                           SOURCE_PLACE
-    local clip = SOURCE_ITEM
+    local clip, tip = SOURCE_ITEM, items.SourceLabel.ToolTip
     if refresh_source() then return true end
     if previous then
         SOURCE_PATH = previous
@@ -1708,6 +1717,7 @@ local function pick_source()
         SOURCE_PLACE = place
         SOURCE_ITEM = clip
         items.SourceLabel.Text = label
+        items.SourceLabel.ToolTip = tip
         return true
     end
     set_status(items.SourceLabel.Text)

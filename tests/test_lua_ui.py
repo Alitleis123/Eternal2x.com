@@ -2076,9 +2076,51 @@ def test_analyse_marks_the_drawings_it_found_on_the_clip(lua, direct):
     H.click("RefreshStatusBtn")
     assert H.marker_frames() == "0,2,4,8"
     assert H.tagged_markers() == 4
-    assert H.widgets["AnalysisLabel"].Text == "Marked 4 drawings, on 2s."
+    assert H.widgets["AnalysisLabel"].Text == "Placed 4 markers. Animated on 2s."
     assert "Marked 4 frames on the clip" in H.widgets["AnalysisLabel"].ToolTip
     assert "Render" in H.status()
+
+
+def _analysed(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.source_range = lua.table(1.0, 3.0)
+    H.load(str(ui_script(direct)), "/media/shot.mov")
+    H.click("AnalyseBtn")
+    write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,8",
+                 message="12 frames, 4 unique drawings. Animated on 2s.")
+    H.click("RefreshStatusBtn")
+    return H
+
+
+def test_rendering_the_analysed_clip_keeps_its_analysis(lua, direct):
+    H = _analysed(lua, direct)
+    H.click("SmoothBtn")
+    assert H.widgets["AnalysisLabel"].Text == "Placed 4 markers. Animated on 2s."
+
+
+def test_another_part_of_the_file_clears_the_last_analysis(lua, direct):
+    H = _analysed(lua, direct)
+    H.source_range = lua.table(5.0, 7.0)
+    H.click("SmoothBtn")
+    assert "Placed" not in H.widgets["AnalysisLabel"].Text
+    assert H.widgets["AnalysisLabel"].ToolTip == ""
+
+
+def test_the_clip_tip_goes_when_no_clip_is_found(lua, direct):
+    H = load(lua, ui_script(direct))
+    assert H.widgets["SourceLabel"].ToolTip == "/media/shot.mov"
+    H.under_playhead = False
+    H.click("RefreshBtn")
+    assert H.widgets["SourceLabel"].ToolTip == ""
+
+
+def test_a_clip_kept_from_before_keeps_its_tip(lua, direct):
+    """The playhead in a gap: Analyse keeps the last clip, and its path."""
+    H = load(lua, ui_script(direct))
+    H.under_playhead = False
+    H.click("AnalyseBtn")
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+    assert H.widgets["SourceLabel"].ToolTip == "/media/shot.mov"
 
 
 def test_analysing_again_replaces_only_its_own_markers(lua, direct):
