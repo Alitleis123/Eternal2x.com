@@ -27,7 +27,8 @@ Every drawing starts on the same frame it did in the source, so cuts and lip
 sync stay where the edit put them.
 
 The result has the same length and frame rate as the clip you started with, so
-it drops straight back into your edit.
+it drops straight back into your edit. Set **Length** to 2x, 3x or 4x instead
+for slow motion with every new frame drawn, ready to time remap.
 
 ## What it does
 
@@ -160,6 +161,7 @@ Whole file when Resolve does not report one.
 | **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
+| **Length** | `Same as clip` keeps the clip's length, so the render lines up with the edit and its audio. `2x`, `3x` and `4x longer` draw that many frames for every frame of the clip at the same frame rate, so the render plays that many times slower, ready to time remap or slow further with optical flow. Rendering takes that much longer and an image sequence takes that much more disk. The last drawing has nothing after it to move toward, so it holds for its stretched length. |
 | **Upscale 2x** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
 | **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
 | **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |

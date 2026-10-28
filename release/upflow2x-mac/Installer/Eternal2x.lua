@@ -202,6 +202,8 @@ local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 -- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
 local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
+-- How many times longer the render is than the clip, 1 to 4.
+local SLOW = math.max(1, math.min(4, math.floor(tonumber(conf["slow_motion"] or "1") or 1)))
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
 -- The frames marked on the clip go to the stage in this file. A long clip's
@@ -234,6 +236,7 @@ local function save_conf()
     f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
+    f:write("slow_motion=" .. tostring(SLOW) .. "\n")
     f:close()
 end
 
@@ -332,11 +335,11 @@ local function render_name(path)
 end
 
 -- Whether `name` is what Stages/resolve_smooth.py calls a render of a file
--- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, then
--- _smooth, then _<nn> for the second render and on.
+-- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, _<n>x
+-- if it was slowed, then _smooth, then _<nn> for the second render and on.
 local function rendered_from(name, stem)
     if stem == "" or name:sub(1, #stem) ~= stem then return false end
-    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1)
+    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1):gsub("^_%dx", "", 1)
     return rest == "_smooth" or rest:match("^_smooth_%d%d+$") ~= nil
 end
 
@@ -781,6 +784,8 @@ local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
 -- saved avi from an older version falls back to the image sequence.
 local FORMATS = { "png", "mp4", "mkv" }
 local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "MKV (lossless)" }
+local LENGTHS = { 1, 2, 3, 4 }
+local LENGTH_LABELS = { "Same as clip", "2x longer", "3x longer", "4x longer" }
 
 local function index_of(list, value)
     for i, v in ipairs(list) do
@@ -882,6 +887,11 @@ local win = disp:AddWindow({
                      ToolTip = "Image sequence is lossless and imports most reliably. All outputs are 8-bit RGB." },
     },
     ui:HGroup{ Spacing = 6,
+        ui:Label{ Text = "Length", Weight = 0.4 },
+        ui:ComboBox{ ID = "LengthCombo", Weight = 0.6,
+                     ToolTip = "Same as clip drops the render back into the edit in sync.\nLonger draws 2, 3 or 4 frames for every frame of the clip at the same frame rate, so it plays in slow motion, ready to time remap." },
+    },
+    ui:HGroup{ Spacing = 6,
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
                      ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
@@ -921,6 +931,8 @@ for _, label in ipairs(HOLD_LABELS) do items.HoldCombo:AddItem(label) end
 for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
 items.HoldCombo.CurrentIndex = index_of(HOLDS, BASE_HOLD)
 items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
+for _, label in ipairs(LENGTH_LABELS) do items.LengthCombo:AddItem(label) end
+items.LengthCombo.CurrentIndex = index_of(LENGTHS, SLOW)
 
 -- ---------------------------------------------------------------------------
 -- state
@@ -936,6 +948,8 @@ local ANALYSED_ITEM = nil
 -- clip sat when it started, since the playhead can move while it renders.
 local SOURCE_PLACE = nil
 local RUN_PLACE = nil
+-- How many times longer than its clip the running render is.
+local RUN_SLOW = 1
 -- The last render on disk, and the clip it became on the timeline.
 local LAST_OUTPUT = nil
 local LAST_ITEM = nil
@@ -1095,6 +1109,8 @@ local function current_args(extra)
     end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
+    local slow = LENGTHS[(items.LengthCombo.CurrentIndex or 0) + 1] or 1
+    if slow > 1 then args = args .. " --slow-motion " .. tostring(slow) end
     -- --network-upscale tells the stage this panel skips Super Scale for a
     -- render that comes back already 2x.
     if items.UpscaleCB.Checked then
@@ -1239,7 +1255,7 @@ local function place_above(pool, project, mpi, frames)
         if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
         local at = find_source(timeline, place)
         if not at then return nil end
-        local count = frames_covering(timeline, mpi, place.duration, frames)
+        local count = frames_covering(timeline, mpi, place.duration * RUN_SLOW, frames)
         return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
     if not (ok and timeline and at and count and count > 0 and length) then return nil end
@@ -1261,7 +1277,7 @@ local function place_above(pool, project, mpi, frames)
     if added then pcall(function() timeline:SetTrackName("video", track, "Upflow2x") end) end
     -- Where it really ends, in case this Resolve counts frames differently.
     local over = 0
-    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration * RUN_SLOW) end)
     return track, item, over
 end
 
@@ -1658,6 +1674,7 @@ function win.On.SmoothBtn.Clicked(ev)
     ANALYSING = false
     STAGE.name = nil
     RUN_PLACE = SOURCE_PLACE
+    RUN_SLOW = LENGTHS[(items.LengthCombo.CurrentIndex or 0) + 1] or 1
     LAST_ITEM = nil
     items.CompareBtn.Enabled = false
     set_busy(true)
@@ -1759,6 +1776,11 @@ end
 
 function win.On.FormatCombo.CurrentIndexChanged(ev)
     FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+    save_conf()
+end
+
+function win.On.LengthCombo.CurrentIndexChanged(ev)
+    SLOW = LENGTHS[(items.LengthCombo.CurrentIndex or 0) + 1] or 1
     save_conf()
 end
 
