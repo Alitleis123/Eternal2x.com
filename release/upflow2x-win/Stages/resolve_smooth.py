@@ -46,6 +46,9 @@ class StatusFile:
         self.path = Path(path) if path else None
         # The panel's Stop creates this, and the run ends at its next frame.
         self.stop_path = self.path.with_suffix(".stop") if self.path else None
+        # Set once the result is going into Resolve. Stopped halfway there it
+        # would be imported but not placed, so from then on the run finishes.
+        self.committed = False
         self.stage = ""
         self.fraction = 0.0
         self.message = ""
@@ -71,10 +74,6 @@ class StatusFile:
               message: Optional[str] = None) -> None:
         if self.path is None:
             return
-        # A Stop pressed after the last frame, while the writes finished,
-        # still counts: the run reports Stopped, not a result to import.
-        if done and ok:
-            self.check_stop()
         if message is not None:
             # The panel parses this file with simple pattern matching, so keep
             # the text on one line and free of quotes and backslashes.
@@ -106,6 +105,11 @@ class StatusFile:
         # but losing the final write leaves the panel waiting forever.
         attempts = 100 if done else 3
         for attempt in range(attempts):
+            # A Stop pressed after the last frame, while the writes finished
+            # or while this waits for the panel to let go of the file, still
+            # counts: the run reports Stopped, not a result to import.
+            if done and ok:
+                self.check_stop()
             try:
                 temp.replace(self.path)
                 return
@@ -114,8 +118,8 @@ class StatusFile:
                     time.sleep(0.02)
 
     def check_stop(self) -> None:
-        """Raise Stopped if the panel's Stop was pressed."""
-        if self.stop_path is not None and self.stop_path.exists():
+        """Raise Stopped if the panel's Stop was pressed in time."""
+        if not self.committed and self.stop_path is not None and self.stop_path.exists():
             raise Stopped()
 
     def progress(self, stage: str, fraction: float) -> None:
@@ -474,6 +478,8 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=True, message=_finished(plan, result))
         return 0
 
+    # Too late to stop from here, or the clip would be left half placed.
+    status.committed = True
     media_item, imported = bridge.import_media(project, result.output,
                                                frame_count=result.frames_written,
                                                fps=result.fps)

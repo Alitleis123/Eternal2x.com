@@ -49,6 +49,8 @@ _PAD = 64
 # so it is only ever asked for those. A frame nearer a drawing is drawn between
 # the drawing and the halfway frame, and so on until it falls inside.
 _EVEN_FROM = 0.25
+# A millionth of a gap: closer to a drawing than any real frame can be.
+_ROUNDING = 1e-6
 
 ProgressFn = Callable[[str, float], None]
 
@@ -277,9 +279,10 @@ class Rife:
         out: List[np.ndarray] = []
         for t in times:
             t = float(min(1.0, max(0.0, t)))
-            if t <= 0.0:
+            # This close to a drawing is rounding in the time map, not a frame.
+            if t <= _ROUNDING:
                 out.append(a.copy())
-            elif t >= 1.0:
+            elif t >= 1.0 - _ROUNDING:
                 out.append(b.copy())
             else:
                 out.append(self._between(a, b, t))
@@ -295,10 +298,12 @@ class Rife:
             local = (t - lo) / (hi - lo)
             # Every t strictly inside lands here: each halving doubles its
             # distance from the nearer end. A gap of 5000 frames slowed three
-            # times needs 12 halvings and keeps 23 halfway frames. The width
-            # only stops a loop that rounding could leave going.
-            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM or hi - lo < 2.0 ** -30:
+            # times needs 12 halvings and keeps 23 halfway frames.
+            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM:
                 return self._run(known[lo], known[hi], local)
+            if hi - lo < 2.0 ** -30:
+                # Only rounding gets here, where both ends are one picture.
+                return (known[lo] if local < 0.5 else known[hi]).copy()
             mid = (lo + hi) / 2.0
             if mid not in known:
                 known[mid] = self._run(known[lo], known[hi], 0.5)
