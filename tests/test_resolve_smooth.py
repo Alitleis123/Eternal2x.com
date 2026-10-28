@@ -514,6 +514,7 @@ def test_a_stop_once_the_import_has_begun_lets_it_finish(anime_in_resolve, monke
                              "--output-dir", str(tmp_path / "out")]) == 0
     assert pool.imported, "nothing was imported"
     assert json.loads(status.read_text())["ok"] is True
+    assert not status.with_suffix(".stop").exists(), "it would stop the next run"
 
 
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):
