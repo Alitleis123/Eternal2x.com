@@ -1067,9 +1067,11 @@ local function show_source(text, tip)
     if items.SourceLabel.ToolTip ~= tip then items.SourceLabel.ToolTip = tip end
 end
 
-local function refresh_source()
+-- With keep, a playhead in a gap leaves the last clip, and the card, as they are.
+local function refresh_source(keep)
     local path, err, range, place, item = selected_clip_path()
     if not path then
+        if keep and SOURCE_PATH then return false end
         SOURCE_PATH = nil
         SOURCE_RANGE = nil
         SOURCE_PLACE = nil
@@ -1077,11 +1079,13 @@ local function refresh_source()
         show_source(err or "No clip under the playhead.", TIPS.clip)
         return false
     end
-    -- Another clip, or another part of the file, makes the last analysis
-    -- say nothing about this one.
-    local was = SOURCE_RANGE
+    -- Another clip, even one cut from the same part of the same file, or
+    -- another part of the file, makes the last analysis say nothing about it.
+    local was, at = SOURCE_RANGE, SOURCE_PLACE
     if path ~= SOURCE_PATH or (range and range.start) ~= (was and was.start)
-            or (range and range.finish) ~= (was and was.finish) then
+            or (range and range.finish) ~= (was and was.finish)
+            or (place and place.item) ~= (at and at.item)
+            or (place and place.timeline) ~= (at and at.timeline) then
         items.AnalysisLabel.Text = ANALYSIS_HINT
         items.AnalysisLabel.ToolTip = ""
     end
@@ -1637,13 +1641,32 @@ local have_timer = pcall(function()
     timer = ui:Timer({ ID = "PollTimer", Interval = 500 })
 end)
 
+-- Where the playhead is, or nil. Cheap enough to read every tick.
+local function playhead_spot()
+    local ok, spot = pcall(function()
+        local timeline = get_resolve():GetProjectManager():GetCurrentProject():GetCurrentTimeline()
+        return timeline:GetUniqueId() .. " " .. tostring(timeline:GetCurrentTimecode())
+    end)
+    return ok and spot or nil
+end
+
 -- Between runs the card follows the playhead, so there is nothing to press.
+-- During playback the playhead moves every tick, and reading the clip under
+-- it each time would cost Resolve, so the card catches up once it stops.
 local pick_source
+local last_spot = nil
 local function on_timeout(ev)
     if RUNNING then
         poll()
-    else
-        pick_source(true)
+        return
+    end
+    local spot = playhead_spot()
+    local still = spot == last_spot
+    last_spot = spot
+    if not still then return end
+    local missing = not SOURCE_PATH and items.SourceLabel.Text
+    if pick_source(true) and missing and items.Status.Text == missing then
+        set_status("Ready.")
     end
 end
 
@@ -1697,18 +1720,7 @@ end
 -- opened. If the playhead has moved off every clip, keep the last one.
 -- With quiet, as the timer calls it, a gap says nothing.
 function pick_source(quiet)
-    local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
-                                          SOURCE_PLACE
-    local clip, tip = SOURCE_ITEM, items.SourceLabel.ToolTip
-    if refresh_source() then return true end
-    if previous then
-        SOURCE_PATH = previous
-        SOURCE_RANGE = range
-        SOURCE_PLACE = place
-        SOURCE_ITEM = clip
-        show_source(label, tip)
-        return true
-    end
+    if refresh_source(true) or SOURCE_PATH then return true end
     if not quiet then set_status(items.SourceLabel.Text) end
     return false
 end
@@ -1836,6 +1848,8 @@ function win.On.RefreshStatusBtn.Clicked(ev)
     -- A run this panel started is polled even before Python reports, so one
     -- that never started is caught.
     if not read_status() and not RUNNING then
+        -- Without a timer, this is also how the card catches up.
+        pick_source(true)
         set_status("No run in progress.")
         return
     end

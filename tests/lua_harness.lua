@@ -219,7 +219,7 @@ function H.make_resolve(clip_file_path)
         item.GetStart = function(_self) return H.src_span[1] end
         item.GetEnd = function(_self) return H.src_span[2] end
         item.GetDuration = function(_self) return H.src_span[2] - H.src_span[1] end
-        item.GetUniqueId = function(_self) return "source-item" end
+        item.GetUniqueId = function(_self) return H.item_id or "source-item" end
         item.GetTrackTypeAndIndex = function(_self)
             return resolve_list({ "video", H.item_track or 1 })
         end
