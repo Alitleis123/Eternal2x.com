@@ -745,9 +745,12 @@ def test_slow_motion_renders_three_times_the_frames_under_its_own_name(
         make_anime, monkeypatch, tmp_path):
     src = make_anime(holds=(2,) * 6, fps=24.0)
     out = tmp_path / "out"
+    status = tmp_path / "status.json"
     assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
-                             "--marks", "0,2,4,6,8,10", "--slow-motion", "3"]) == 0
+                             "--marks", "0,2,4,6,8,10", "--slow-motion", "3",
+                             "--status-file", str(status)]) == 0
     assert len(list((out / f"{src.stem}_3x_smooth").glob("frame_*.png"))) == 36
+    assert json.loads(status.read_text(encoding="utf-8"))["slow_motion"] == 3
 
 
 @pytest.mark.parametrize("marks", [[], ["--marks", ",".join(str(f) for f in range(12))]])

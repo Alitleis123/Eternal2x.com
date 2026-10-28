@@ -827,9 +827,8 @@ def test_a_placement_that_runs_past_the_original_says_so(lua, direct):
 def test_a_slowed_render_is_placed_at_its_full_length(lua, direct):
     """Three times longer than the original, so none of it is cut to fit."""
     H = load(lua, ui_script(direct))
-    H.set_combo("LengthCombo", 2)
     H.media_frames = "144"
-    finish_render(H, direct)
+    finish_render(H, direct, slow_motion=3)
     assert H.placements[1].endFrame == 144
     assert "past it" not in H.status()
 
@@ -838,20 +837,20 @@ def test_a_slowed_render_at_another_rate_is_placed_whole(lua, direct):
     """119 frames at 60 fps cover 47 frames of a 24 fps timeline. Three times
     that, rounded, cut three of the render's 357 frames off its end."""
     H = _with_source(lua, direct, item_duration=47)
-    H.set_combo("LengthCombo", 2)
     finish_render(H, direct, import_path="/tmp/out/frame_000000.png",
-                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=357, fps=60.0)
+                  sequence_pattern="/tmp/out/frame_%06d.png", sequence_frames=357, fps=60.0,
+                  slow_motion=3)
     assert H.placements[1].endFrame == 357
     assert "past it" not in H.status()
 
 
 def test_a_slowed_render_cannot_be_compared(lua, direct):
     """It runs longer than the original, so switched off it shows whatever
-    comes after the original instead."""
+    comes after the original instead. The render says how much slower it is,
+    since a panel opened again while it ran is back on Same as clip."""
     H = load(lua, ui_script(direct))
-    H.set_combo("LengthCombo", 2)
     H.media_frames = "144"
-    finish_render(H, direct)
+    finish_render(H, direct, slow_motion=3)
     assert not H.enabled("CompareBtn")
 
 
@@ -2150,12 +2149,34 @@ def test_markers_on_a_slowed_render_count_as_the_frames_they_show(lua, direct):
     """Three times longer, its frame 6 shows the original's frame 2, and its
     frame 120 the original's frame 40, past the original's own end."""
     H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000143].png", "/media/shot.mov")
-    lua.execute("local H = ...; H.under_markers[1][0] = {}", H)
+    lua.execute("local H = ...; H.under_markers[1][0] = {}; "
+                "H.src_span[2] = H.src_span[1] + 144", H)
     H.click("RefreshBtn")
     H.add_marker(6)
     H.add_marker(120)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "0,2,40"
+
+
+def test_a_render_of_a_file_named_3x_is_not_taken_for_a_slowed_one(lua, direct):
+    H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000047].png",
+                 "/media/shot_3x.mov")
+    H.add_marker(12)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "12"
+
+
+def test_a_marker_near_the_end_of_a_slowed_render_counts(lua, direct):
+    """119 frames at 60 fps cover 47 frames of a 24 fps timeline, rounded
+    down, and three times as many 142. The render's frame 141 shows the
+    original's frame 117."""
+    H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000356].png", "/media/shot.mov")
+    lua.execute("local H = ...; H.clip_fps = '60'; H.src_span[2] = H.src_span[1] + 142; "
+                "H.under_spans[1][2] = H.under_spans[1][1] + 47", H)
+    H.click("RefreshBtn")
+    H.add_marker(141)
+    H.click("SmoothBtn")
+    assert marks_sent(direct) == "117"
 
 
 def test_a_long_clip_name_leaves_room_for_its_range(lua, direct):
