@@ -473,6 +473,49 @@ def test_a_late_stop_puts_nothing_into_resolve(anime_in_resolve, monkeypatch, tm
     assert not pool.imported, "a stopped render was imported"
 
 
+def test_a_stop_while_the_final_status_waits_for_the_panel_still_counts(make_anime,
+                                                                         monkeypatch,
+                                                                         tmp_path):
+    """The panel holds the status file open as it polls, so the last write can
+    wait a while, and Stop can come in that time."""
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    real_replace = Path.replace
+    held = []
+
+    def held_once(self, target):
+        if Path(target) == status and not held and '"ok": true' in self.read_text():
+            held.append(True)
+            status.with_suffix(".stop").write_text("")
+            raise PermissionError("the panel has it open")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", held_once)
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "o")]) == 1
+    payload = json.loads(status.read_text())
+    assert payload["ok"] is False and payload["message"] == "Stopped."
+
+
+def test_a_stop_once_the_import_has_begun_lets_it_finish(anime_in_resolve, monkeypatch,
+                                                         tmp_path):
+    """Stopped halfway into Resolve, the clip would be imported but not placed."""
+    _src, resolve, timeline, _items, _ = anime_in_resolve()
+    status = tmp_path / "status.json"
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    real_import = pool.ImportMedia
+
+    def import_then_stop(*a, **k):
+        status.with_suffix(".stop").write_text("")
+        return real_import(*a, **k)
+
+    monkeypatch.setattr(pool, "ImportMedia", import_then_stop)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")]) == 0
+    assert pool.imported, "nothing was imported"
+    assert json.loads(status.read_text())["ok"] is True
+
+
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):
     """The panel polls this file, so it must always parse."""
     src = make_anime(holds=(2,) * 8)

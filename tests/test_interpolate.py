@@ -107,6 +107,15 @@ def test_a_long_gap_never_asks_the_network_for_its_ends(texture):
     assert all(0.25 <= t <= 0.75 for t in rife.asked), rife.asked
 
 
+def test_rounding_in_the_time_map_is_not_drawn(texture):
+    """7.000000000000001 in the time map is drawing 7, not an in-between."""
+    b = shifted(texture, 12)
+    rife = SnappingRife()
+    first, last = rife.interpolate_pair(texture, b, [8.881784197001252e-16, 1 - 1e-12])
+    assert np.array_equal(first, texture) and np.array_equal(last, b)
+    assert rife.asked == []
+
+
 def test_a_pair_asked_for_a_few_at_a_time_draws_its_halfway_frames_once(texture):
     b = shifted(texture, 12)
     rife = SnappingRife()
