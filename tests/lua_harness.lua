@@ -78,19 +78,19 @@ local dispatcher = {}
 dispatcher.__index = dispatcher
 
 function dispatcher:AddWindow(attrs, layout)
-    -- The panel's first window is H.window. A later one, such as Settings,
-    -- shares its handler table and widget list, so tests reach every control
-    -- the same way.
+    -- The panel's first window is H.window. Each window keeps its own
+    -- widgets and handlers, as in Resolve, and H.widgets lists them all.
     local first = H.window
     local win = {
         __attrs = attrs,
         __layout = layout,
         __shown = false,
         __extra = {},
-        On = first and first.On or auto_table(),
+        On = auto_table(),
     }
     local items = {}
     collect(layout, items)
+    win.__items = items
     if first then
         for id, w in pairs(items) do H.widgets[id] = w end
         H.windows[attrs.ID] = win
@@ -107,13 +107,14 @@ function dispatcher:AddWindow(attrs, layout)
         if child and child.ID then items[child.ID] = child end
         table.insert(self.__extra, child)
     end
-    H.widgets = items
+    H.widgets = {}
+    for id, w in pairs(items) do H.widgets[id] = w end
     H.window = win
     return win
 end
 
 function dispatcher:RunLoop() end
-function dispatcher:ExitLoop() end
+function dispatcher:ExitLoop() H.exits = (H.exits or 0) + 1 end
 
 local bmd = {}
 function bmd.UIDispatcher(_ui)
@@ -463,8 +464,16 @@ end
 
 -- Inspection helpers used from the Python tests ---------------------------
 
+-- The handlers of the window that holds this control, or that is it.
+local function on(id)
+    for _, win in pairs(H.windows) do
+        if win.__items[id] or win.__attrs.ID == id then return win.On[id] end
+    end
+    return {}
+end
+
 function H.fire(id, event)
-    local handler = H.window.On[id] and H.window.On[id][event]
+    local handler = on(id)[event]
     if not handler then
         error("no " .. tostring(event) .. " handler for " .. tostring(id))
     end
@@ -479,7 +488,7 @@ function H.fire(id, event)
 end
 
 function H.click(id)
-    local handler = H.window.On[id] and H.window.On[id].Clicked
+    local handler = on(id).Clicked
     if not handler then error("no Clicked handler for " .. tostring(id)) end
     local real_execute = os.execute
     local real_print = print
@@ -493,19 +502,19 @@ end
 
 function H.set_slider(id, value)
     H.widgets[id].Value = value
-    local handler = H.window.On[id] and H.window.On[id].ValueChanged
+    local handler = on(id).ValueChanged
     if handler then handler({}) end
 end
 
 function H.set_combo(id, index)
     H.widgets[id].CurrentIndex = index
-    local handler = H.window.On[id] and H.window.On[id].CurrentIndexChanged
+    local handler = on(id).CurrentIndexChanged
     if handler then handler({}) end
 end
 
 function H.set_checkbox(id, value)
     H.widgets[id].Checked = value
-    local handler = H.window.On[id] and H.window.On[id].Clicked
+    local handler = on(id).Clicked
     if handler then handler({}) end
 end
 
@@ -554,9 +563,11 @@ function H.widget_ids()
 end
 function H.handler_ids()
     local ids = {}
-    for id, events in pairs(H.window.On) do
-        for ev, _ in pairs(events) do
-            table.insert(ids, id .. "." .. ev)
+    for _, win in pairs(H.windows) do
+        for id, events in pairs(win.On) do
+            for ev, _ in pairs(events) do
+                table.insert(ids, id .. "." .. ev)
+            end
         end
     end
     table.sort(ids)

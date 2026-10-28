@@ -167,7 +167,9 @@ def test_settings_open_in_their_own_window(lua, direct):
     assert settings.__shown
     H.fire("Settings", "Close")
     assert not settings.__shown
-    assert H.window.__shown, "closing Settings closed the panel"
+    assert H.window.__shown and not H.exits, "closing Settings closed the panel"
+    H.click("SettingsBtn")
+    assert settings.__shown, "Settings did not open again after it was closed"
 
 
 def test_closing_the_panel_closes_its_settings(lua, direct):
@@ -175,6 +177,7 @@ def test_closing_the_panel_closes_its_settings(lua, direct):
     H.click("SettingsBtn")
     H.fire("Eternal2x", "Close")
     assert not H.windows["Settings"].__shown
+    assert H.exits == 1
 
 
 def test_the_version_is_shown(lua, direct):
@@ -2090,10 +2093,11 @@ def test_another_part_of_the_file_clears_the_last_analysis(lua, direct):
 
 def test_the_clip_tip_goes_when_no_clip_is_found(lua, direct):
     H = load(lua, ui_script(direct))
-    assert H.widgets["SourceLabel"].ToolTip == "/media/shot.mov"
+    assert H.widgets["SourceLabel"].ToolTip.endswith("\n\n/media/shot.mov")
     H.under_playhead = False
     H.click("RefreshBtn")
-    assert H.widgets["SourceLabel"].ToolTip == ""
+    assert "shot.mov" not in H.widgets["SourceLabel"].ToolTip
+    assert "playhead" in H.widgets["SourceLabel"].ToolTip, "the card's own tip went too"
 
 
 def test_a_clip_kept_from_before_keeps_its_tip(lua, direct):
@@ -2102,7 +2106,7 @@ def test_a_clip_kept_from_before_keeps_its_tip(lua, direct):
     H.under_playhead = False
     H.click("AnalyseBtn")
     assert "shot.mov" in H.widgets["SourceLabel"].Text
-    assert H.widgets["SourceLabel"].ToolTip == "/media/shot.mov"
+    assert H.widgets["SourceLabel"].ToolTip.endswith("/media/shot.mov")
 
 
 def test_analysing_again_replaces_only_its_own_markers(lua, direct):
