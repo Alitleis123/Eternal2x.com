@@ -12,7 +12,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 FILM = HERE / "film"
-SOUND = FILM / "assets" / "sound" / "eternal2x-sound.wav"
+SOUND = FILM / "assets" / "sound" / "upflow2x-sound.wav"
 RENDER = HERE / "out" / "film.render.mp4"
 TARGET = HERE.parent / "docs" / "assets" / "demo" / "promo.mp4"
 

@@ -1,11 +1,12 @@
-"""Sound design for the Eternal2x promo film (48 kHz stereo, 21.5 s).
+"""Sound design for the Upflow2x site film (48 kHz stereo, 34 s).
 
-Writes promo/film/assets/sound/eternal2x-sound.wav. Desert wind, sand and a coat
-flutter are made here from noise. His footsteps, the two mouse clicks and the paper
-sounds on the frame flips are Kenney CC0 samples in promo/sound/samples/. Needs
-numpy and ffmpeg.
+Writes promo/film/assets/sound/upflow2x-sound.wav. Desert wind, sand and a coat
+flutter are made here from noise. His footsteps, the mouse clicks, the key taps for
+the markers and the paper sounds are Kenney CC0 samples in promo/sound/samples/.
+Needs numpy and ffmpeg.
 Times come from the composition (index.html) and from the walk clip's foot contacts:
-frames 4, 32, 84 and 108 of the 24 fps clip (right, left, right, left).
+frames 4, 32, 84 and 108 of the 24 fps clip (right, left, right, left). The walk plays
+twice, from 0 s and from 25.5 s.
 """
 import subprocess
 import tempfile
@@ -16,10 +17,10 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 SAMPLES = HERE / "samples"
-OUT = HERE.parent / "film" / "assets" / "sound" / "eternal2x-sound.wav"
+OUT = HERE.parent / "film" / "assets" / "sound" / "upflow2x-sound.wav"
 
 SR = 48000
-DUR = 21.5
+DUR = 34.0
 N = int(SR * DUR)
 
 
@@ -70,16 +71,17 @@ def synth(mag, seed):
         out[m * HOP:m * HOP + NFFT] += frames[m]
         norm[m * HOP:m * HOP + NFFT] += WIN ** 2
     out = (out / np.maximum(norm, 1e-3))[NFFT // 2:NFFT // 2 + N]
-    # Scale so the desert part (0 to 5.6 s) has an RMS of 1; the shape over time stays.
-    return out / np.sqrt(np.mean(out[:int(5.6 * SR)] ** 2))
+    # Scale so the desert part (0 to 4.7 s) has an RMS of 1; the shape over time stays.
+    return out / np.sqrt(np.mean(out[:int(4.7 * SR)] ** 2))
 
 
 t = np.arange(N) / SR
 
-# Gust strength, 0 calm to 1 strong. A gust carries the divider in at 2.6 s, and the
-# wind comes back under the logo at 17.9 s.
-GUST = [(0, .35), (1.0, .62), (1.9, .40), (2.4, .45), (3.05, .90), (3.9, .48), (4.8, .62),
-        (5.6, .45), (7, .32), (16.4, .32), (17.9, .74), (19.2, .46), (21.5, .30)]
+# Gust strength, 0 calm to 1 strong. A gust carries the divider in at 2.1 s, the wind
+# returns with the walk at 25.5 s, and again under the logo at 30.2 s.
+GUST = [(0, .35), (1.0, .62), (1.7, .40), (2.1, .45), (2.65, .90), (3.5, .48), (4.2, .60),
+        (4.7, .45), (6, .32), (24.7, .32), (25.9, .70), (27.1, .48), (28.9, .58), (30.2, .74),
+        (31.5, .46), (34, .30)]
 g = np.clip(curve(GUST, TC) + 0.07 * wobble(TC, 0.9, 1) + 0.03 * wobble(TC, 3.1, 2), 0, 1)
 
 fc = 280 + 900 * g
@@ -103,12 +105,13 @@ coat = synth(0.5 * bump(np.full(M, 1100.0), 0.7), 14)
 rate = 10.5 + 2.5 * wobble(t, 0.7, 4)
 beat = (0.5 + 0.5 * np.sin(2 * np.pi * np.cumsum(rate) / SR)) ** 3
 gs = np.interp(t, TC, g)
-coat = coat * beat * gs * curve([(0, 0), (0.6, 1), (5.4, 1), (6.0, 0)], t)
+coat = coat * beat * gs * curve([(0, 0), (0.6, 1), (4.2, 1), (4.8, 0), (25.5, 0), (26.0, 1),
+                                 (29.7, 1), (30.3, 0)], t)
 coat = np.stack([coat * 0.9, coat * 1.0], 1)
 
-# Overall wind level: full in the desert, low under the app, back for the logo.
-level = curve([(0, -60), (0.55, 0), (5.6, 0), (6.2, -13), (16.4, -13), (17.8, -3),
-               (19.4, -4), (21.45, -60)], t)
+# Overall wind level: full in the desert, low under the app, back for the walk and logo.
+level = curve([(0, -60), (0.55, 0), (4.5, 0), (5.2, -13), (25.1, -13), (25.8, 0), (29.8, 0),
+               (30.3, -3), (31.9, -4), (33.95, -60)], t)
 amb = (0.048 * wind + 0.016 * sand + 0.010 * coat) * db(level)[:, None]
 
 
@@ -181,30 +184,41 @@ def sand_spray(dur, seed):
     return highpass(lowpass(grains * env, 6500), 1800)
 
 
-SLOW = 0.84  # he walks at half speed on screen, so his steps sit a little lower and heavier
+SLOW = 0.84  # a little lower and heavier than the sample, for a big man in a coat
 thud = speed(highpass(lowpass(load("footstep_concrete_000"), 900), 55), SLOW)
-for i, (at, gain, p, crunch) in enumerate([(0.167, -6, 0.12, "footstep_snow_003"),
-                                            (1.333, -3, -0.12, "footstep_snow_001"),
-                                            (3.500, -1, 0.12, "footstep_snow_002"),
-                                            (4.500, 0, -0.12, "footstep_snow_004")]):
-    place(thud, at, gain - 8, p)
-    place(speed(highpass(lowpass(load(crunch), 7000), 350), SLOW), at + 0.012, gain + 4, p)
-    place(sand_spray(0.22, 20 + i), at + 0.03, gain - 14, p)
+for walk in (0.0, 25.5):
+    for i, (at, gain, p, crunch) in enumerate([(0.167, -6, 0.12, "footstep_snow_003"),
+                                                (1.333, -3, -0.12, "footstep_snow_001"),
+                                                (3.500, -1, 0.12, "footstep_snow_002"),
+                                                (4.500, 0, -0.12, "footstep_snow_004")]):
+        place(thud, walk + at, gain - 8, p)
+        place(speed(highpass(lowpass(load(crunch), 7000), 350), SLOW), walk + at + 0.012,
+              gain + 4, p)
+        place(sand_spray(0.22, 20 + i + int(walk)), walk + at + 0.03, gain - 14, p)
 
-# Two clicks for each button: press, then a quieter release.
+# Two clicks for each button: press, then a quieter release. Workspace, then Render.
 body = 0.35 * lowpass(load("click1"), 5000)
 press = np.pad(load("mouseclick1"), ((0, len(body)), (0, 0)))[:len(body)] + body
-for at, p in [(6.9, -0.25), (8.4, -0.35)]:
+for at, p in [(8.05, 0.08), (20.05, -0.4)]:
     place(press, at, -6, p)
     place(speed(press, 1.12), at + 0.11, -12, p)
 
-# A drawing laid down for each tile that turns into a new in-between.
-for (at, p, name) in [(11.6, -0.25, "card-place-1"), (12.13, 0.08, "card-place-2"),
-                      (12.65, 0.4, "card-place-4")]:
-    place(highpass(lowpass(load(name), 7000), 150), at, -9, p)
+# A key tap as each marker appears. The wipe in index.html uncovers the clip's marker
+# band (x 260 to 564 in the screenshot) from 11.4 s over 2.6 s, and the clip has 2.611 px
+# a frame from x 262. These are the 25 frames Ali marked.
+tap = highpass(lowpass(speed(load("click1"), 1.5), 6000), 400)
+rng = np.random.default_rng(7)
+for f in (0, 5, 8, 16, 24, 28, 32, 36, 44, 48, 56, 61, 65, 68, 72, 76, 80, 84, 88, 92, 96,
+          100, 104, 108, 112):
+    x = 262 + 2.611 * f
+    place(tap, 11.4 + 2.6 * (x - 260) / 304, -17 + rng.uniform(-2, 1.5), -0.7 + 0.0021 * (x - 260))
+
+# Paper for the panel opening, and for the render landing on V2.
+place(highpass(lowpass(load("card-place-2"), 7000), 150), 8.6, -16, -0.3)
+place(highpass(lowpass(load("card-place-4"), 7000), 150), 23.3, -8, 0.1)
 
 # ---- master ----------------------------------------------------------------------
-out *= curve([(0, 1), (21.3, 1), (21.5, 0)], t)[:, None]
+out *= curve([(0, 1), (33.8, 1), (34.0, 0)], t)[:, None]
 peak = np.abs(out).max()
 out *= db(-1.5) / peak
 pcm = (np.clip(out, -1, 1) * 32767).astype(np.int16)
