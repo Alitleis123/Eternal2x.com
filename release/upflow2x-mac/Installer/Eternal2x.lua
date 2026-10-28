@@ -958,7 +958,7 @@ end
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 380, 490 },
+    Geometry = { 100, 100, 380, 506 },
     StyleSheet = WINDOW,
 }, ui:VGroup{
     Spacing = 8,
@@ -1001,8 +1001,10 @@ local win = disp:AddWindow({
     ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
               MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS, WordWrap = true },
+    -- Three lines, as long as a finished render's message runs. Resolve does
+    -- not grow a wrapped label to fit, so two lines cut it off top and bottom.
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = NOTE, WordWrap = true,
-              MinimumSize = { 0, 30 } },
+              MinimumSize = { 0, 46 } },
 
     ui:HGroup{ Weight = 0, Spacing = 2,
         ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = LINK, Enabled = false, Weight = 0,
@@ -1050,6 +1052,8 @@ local ANALYSING = false
 
 local function set_status(msg)
     items.Status.Text = msg or ""
+    -- The whole message, for one too long for the box.
+    items.Status.ToolTip = msg or ""
     print("[Upflow2x] " .. (msg or ""))
 end
 
@@ -1583,10 +1587,10 @@ local function apply_status(st)
             items.CompareBtn.Text = "Show Original"
             if ok then
                 set_status(st.message .. " " .. notes)
-                -- Two lines of status leave no room for a tip as well.
+                -- Three lines of status leave no room for a tip as well.
                 if hint then items.Meta.Text = hint end
             elseif where then
-                -- The status box fits two lines, too few for a path as well.
+                -- The status box fits three lines, too few for a path as well.
                 items.Meta.Text = short_path(where, 68)
                 print("[Upflow2x] The render is at " .. where)
                 set_status(st.message .. " " .. notes .. " Drag it in from the path below.")
