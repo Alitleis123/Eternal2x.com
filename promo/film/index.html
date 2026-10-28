@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>Eternal2x</title>
+    <script src="assets/js/gsap.min.js"></script>
+    <style>
+      @font-face { font-family: "Inter"; font-weight: 400; src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 500; src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 600; src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); }
+      :root {
+        --bg: #080808;
+        --card: #0e0e0e;
+        --border: #1a1a1a;
+        --text: #e0e0e0;
+        --dim: #8c8c8c;
+        --accent: #7c6fef;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
+      #root {
+        position: relative; width: 100%; height: 100%; overflow: hidden;
+        background: var(--bg); color: var(--text); font-family: "Inter", sans-serif;
+      }
+      .scene { position: absolute; inset: 0; }
+      .fill { position: absolute; inset: 0; }
+
+      /* scene A: the walk, as drawn and from Eternal2x */
+      .footage { position: absolute; left: 0; top: 138px; width: 1920px; height: 804px; }
+      .footage video { position: absolute; left: 0; top: 0; width: 1920px; height: 804px; display: block; }
+      #divider { position: absolute; left: 0; top: 138px; width: 4px; height: 804px; background: #fff; }
+      .bar-top { position: absolute; left: 0; top: 0; width: 1920px; height: 138px;
+                 display: flex; align-items: center; justify-content: center; }
+      .bar-bottom { position: absolute; left: 0; top: 942px; width: 1920px; height: 138px;
+                    display: flex; align-items: center; justify-content: center; }
+      .headline { position: absolute; font-size: 60px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+      .subline { position: absolute; font-size: 30px; font-weight: 400; color: var(--dim); white-space: nowrap; }
+      .pill { position: absolute; top: 862px; height: 60px; padding: 0 24px; border-radius: 30px; line-height: 1;
+              display: flex; align-items: center; justify-content: center; white-space: nowrap; font-size: 28px; font-weight: 600;
+              background: rgba(8, 8, 8, 0.82); border: 1px solid #2a2a2a; }
+      #pillDrawn { left: 40px; width: 190px; }
+      #pillE2x { left: 1712px; width: 168px; color: #fff; background: var(--accent); border-color: var(--accent); }
+
+      /* scene B: the panel */
+      #bgShot { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover;
+                }
+      .panel { position: absolute; left: 250px; top: 84px; width: 578px; height: 913px;
+               border-radius: 10px; border: 1px solid #2a2a2a; box-shadow: 0 30px 80px rgba(0,0,0,0.7); }
+      #cursor { position: absolute; left: 0; top: 0; width: 40px; height: 40px; }
+      .ring { position: absolute; left: 0; top: 0; width: 80px; height: 80px; border-radius: 40px;
+              border: 3px solid var(--accent); }
+      .step { position: absolute; left: 990px; width: 840px; height: 170px; }
+      .step-num { position: absolute; left: 0; top: 4px; width: 56px; height: 56px; border-radius: 28px;
+                  background: var(--accent); color: #fff; font-size: 30px; font-weight: 800;
+                  display: flex; align-items: center; justify-content: center; }
+      .step-title { position: absolute; left: 84px; top: 0; font-size: 54px; font-weight: 600; letter-spacing: -0.02em; }
+      .step-sub { position: absolute; left: 84px; top: 82px; width: 760px; font-size: 32px; color: var(--dim); line-height: 1.35; }
+
+      /* scene C: the frames */
+      .tile { position: absolute; top: 330px; width: 230px; height: 412px; border-radius: 6px; overflow: hidden;
+              border: 2px solid var(--border); }
+      .tile img { position: absolute; left: 0; top: 0; width: 230px; height: 412px; }
+      .tile-ring { position: absolute; top: 330px; width: 230px; height: 412px; border-radius: 6px;
+                   border: 3px solid var(--accent); }
+      .tile-label { position: absolute; top: 764px; width: 230px; height: 44px; text-align: center;
+                    font-size: 30px; font-weight: 500; }
+      .frame-num { position: absolute; top: 280px; width: 230px; text-align: center; font-size: 28px; color: #9a9a9a; }
+
+      /* scene D: the timeline */
+      #shotWrap { position: absolute; left: 0; top: 23px; width: 1920px; height: 1034px; transform-origin: 693px 792px; }
+      #shotWrap img { position: absolute; left: 0; top: 0; width: 1920px; height: 1034px; }
+      #v2box { position: absolute; left: 514px; top: 766px; width: 359px; height: 52px;
+               border: 4px solid var(--accent); border-radius: 4px; }
+      #capCard { position: absolute; left: 1060px; top: 110px; width: 800px; height: 210px; padding: 36px 44px;
+                 border-radius: 12px; background: rgba(8, 8, 8, 0.94); border: 1px solid #2a2a2a; }
+      #capCard .t { font-size: 48px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
+      #capCard .s { margin-top: 18px; font-size: 28px; color: var(--dim); white-space: nowrap; }
+
+      /* scene E: outro */
+      #logo { position: absolute; left: 735px; top: 130px; width: 450px; height: 300px; mix-blend-mode: screen; }
+      #brand { position: absolute; left: 0; top: 440px; width: 1920px; text-align: center;
+               font-size: 120px; font-weight: 800; letter-spacing: -0.03em; }
+      #tagline { position: absolute; left: 0; top: 610px; width: 1920px; text-align: center; font-size: 36px; color: var(--dim); }
+      #url { position: absolute; left: 0; top: 690px; width: 1920px; text-align: center; font-size: 40px;
+             font-weight: 600; color: var(--accent); }
+      #credits { position: absolute; left: 0; top: 986px; width: 1920px; text-align: center; font-size: 22px; color: var(--dim); }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="21.5" data-fps="24"
+         data-width="1920" data-height="1080">
+
+      <!-- Scene A: the same Hero walk, as drawn and from Eternal2x, both at half speed -->
+      <div id="aDrawn" class="footage">
+        <video id="walkDrawn" src="assets/media/walk_drawn.mp4" data-start="0" data-duration="6"
+               data-track-index="0" muted playsinline></video>
+      </div>
+      <div id="aE2x" class="footage">
+        <video id="walkE2x" src="assets/media/walk_e2x.mp4" data-start="0" data-duration="6"
+               data-track-index="1" muted playsinline></video>
+      </div>
+      <section id="sA" class="scene clip" data-start="0" data-duration="6" data-track-index="2">
+        <div id="aText" class="fill">
+          <div id="divider"></div>
+          <div class="bar-top">
+            <div id="hookLine" class="headline">Drawn on 2s.</div>
+            <div id="revealLine" class="headline">Eternal2x draws the frames in between.</div>
+          </div>
+          <div class="bar-bottom">
+            <div id="hookSub" class="subline">Every drawing is held for two frames.</div>
+            <div id="revealSub" class="subline">Shown at half speed.</div>
+          </div>
+          <div id="pillDrawn" class="pill">As drawn</div>
+          <div id="pillE2x" class="pill">Eternal2x</div>
+        </div>
+      </section>
+
+      <!-- Scene B: the real panel, from Resolve Studio 20.3.1 -->
+      <section id="sB" class="scene clip" data-start="5.6" data-duration="5.1" data-track-index="3">
+        <div id="bIn" class="fill">
+          <img id="bgShot" src="assets/img/resolve_bg.jpg" alt="" />
+          <img id="panelReady" class="panel" src="assets/img/panel_ready.png" alt="The Eternal2x panel" />
+          <img id="panelDone" class="panel" src="assets/img/panel_done.png" alt="The Eternal2x panel after a render" />
+          <div id="ringA" class="ring"></div>
+          <div id="ringS" class="ring"></div>
+          <div id="step1" class="step" style="top: 300px">
+            <div class="step-num">1</div>
+            <div class="step-title">Analyse</div>
+            <div class="step-sub">66 frames, 34 unique drawings. Animated on 2s.</div>
+          </div>
+          <div id="step2" class="step" style="top: 560px">
+            <div class="step-num">2</div>
+            <div class="step-title">Smooth Clip</div>
+            <div class="step-sub">Rendered 34 drawings into 66 smooth frames.</div>
+          </div>
+          <svg id="cursor" viewBox="0 0 24 24">
+            <path d="M3 2 L3 19 L7.5 15 L10.5 22 L13.5 20.8 L10.6 14 L17 14 Z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </section>
+
+      <!-- Scene C: six frames of the walk; the held repeats become new in-betweens -->
+      <section id="sC" class="scene clip" data-start="10.3" data-duration="4.3" data-track-index="4">
+        <div id="cIn" class="fill">
+          <div class="bar-top" style="top: 66px">
+            <div id="cLine" class="headline">The repeats become new in-betweens.</div>
+          </div>
+          <div class="bar-top" style="top: 196px; height: 50px">
+            <div id="cSub" class="subline">Drawn by the RIFE network, which keeps a moving character in one piece.</div>
+          </div>
+          <div class="frame-num" style="left: 220px">frame 1</div>
+          <div class="frame-num" style="left: 470px">frame 2</div>
+          <div class="frame-num" style="left: 720px">frame 3</div>
+          <div class="frame-num" style="left: 970px">frame 4</div>
+          <div class="frame-num" style="left: 1220px">frame 5</div>
+          <div class="frame-num" style="left: 1470px">frame 6</div>
+          <div class="tile" style="left: 220px"><img src="assets/img/out0.jpg" alt="" /></div>
+          <div class="tile" style="left: 470px"><img src="assets/img/src1.jpg" alt="" /><img id="new1" data-layout-allow-overflow src="assets/img/out1.jpg" alt="" /></div>
+          <div class="tile" style="left: 720px"><img src="assets/img/out2.jpg" alt="" /></div>
+          <div class="tile" style="left: 970px"><img src="assets/img/src3.jpg" alt="" /><img id="new3" data-layout-allow-overflow src="assets/img/out3.jpg" alt="" /></div>
+          <div class="tile" style="left: 1220px"><img src="assets/img/out4.jpg" alt="" /></div>
+          <div class="tile" style="left: 1470px"><img src="assets/img/src5.jpg" alt="" /><img id="new5" data-layout-allow-overflow src="assets/img/out5.jpg" alt="" /></div>
+          <div id="ring1" class="tile-ring" style="left: 470px"></div>
+          <div id="ring3" class="tile-ring" style="left: 970px"></div>
+          <div id="ring5" class="tile-ring" style="left: 1470px"></div>
+          <div class="tile-label" style="left: 220px">drawing 1</div>
+          <div id="held1" data-layout-allow-overlap class="tile-label" style="left: 470px; color: var(--dim)">held</div>
+          <div id="lab1" data-layout-allow-overlap class="tile-label" style="left: 470px; color: var(--accent); font-weight: 800">new</div>
+          <div class="tile-label" style="left: 720px">drawing 2</div>
+          <div id="held3" data-layout-allow-overlap class="tile-label" style="left: 970px; color: var(--dim)">held</div>
+          <div id="lab3" data-layout-allow-overlap class="tile-label" style="left: 970px; color: var(--accent); font-weight: 800">new</div>
+          <div class="tile-label" style="left: 1220px">drawing 3</div>
+          <div id="held5" data-layout-allow-overlap class="tile-label" style="left: 1470px; color: var(--dim)">held</div>
+          <div id="lab5" data-layout-allow-overlap class="tile-label" style="left: 1470px; color: var(--accent); font-weight: 800">new</div>
+        </div>
+      </section>
+
+      <!-- Scene D: the render on V2, above the original, in Resolve -->
+      <section id="sD" class="scene clip" data-start="14.2" data-duration="3.9" data-track-index="5">
+        <div id="dIn" class="fill">
+          <div id="shotWrap">
+            <img src="assets/img/resolve_result.png" alt="DaVinci Resolve with the Eternal2x render on V2 above the original" />
+            <div id="v2box"></div>
+          </div>
+          <div id="capCard">
+            <div class="t">Placed on V2 above the original.</div>
+            <div class="s">Same length and frame rate, with Super Scale 2x on.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Scene E: outro -->
+      <section id="sE" class="scene clip" data-start="17.7" data-duration="3.8" data-track-index="6">
+        <div id="eIn" class="fill">
+          <img id="logo" src="assets/img/logo_e2x.png" alt="Eternal2x" />
+          <div id="brand">Eternal2x</div>
+          <div id="tagline">Smooth 2x for hand-drawn animation, in DaVinci Resolve Studio.</div>
+          <div id="url">eternal2x.com</div>
+          <div id="credits" data-layout-ignore>Hero © Blender Foundation, CC BY 4.0. Sounds: Kenney, CC0.</div>
+        </div>
+      </section>
+
+      <!-- Sound: desert wind, his footsteps, the two clicks and paper on the frame flips.
+           Built by promo/sound/make_sound.py. -->
+      <audio id="sound" src="assets/sound/eternal2x-sound.wav"
+             data-start="0" data-duration="21.5" data-track-index="10" data-volume="1"></audio>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      const fade = (sel, at, d = 0.4) => tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: d, ease: "power2.out" }, at);
+      const out = (sel, at, d = 0.4) => tl.to(sel, { opacity: 0, duration: d, ease: "power2.in" }, at);
+
+      // Scene A. Hook, then the wipe brings Eternal2x in on the right half.
+      tl.fromTo("#aE2x", { clipPath: "inset(0% 0% 0% 100%)" },
+                { clipPath: "inset(0% 0% 0% 50%)", duration: 0.7, ease: "power3.inOut" }, 2.6);
+      tl.fromTo("#divider", { x: 1920, opacity: 0 }, { x: 958, opacity: 1, duration: 0.7, ease: "power3.inOut" }, 2.6);
+      tl.fromTo("#hookLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 0.2);
+      fade("#hookSub", 0.5);
+      fade("#pillDrawn", 0.4);
+      out("#hookLine", 2.45, 0.3);
+      out("#hookSub", 2.45, 0.3);
+      tl.fromTo("#revealLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 2.9);
+      fade("#revealSub", 3.1);
+      fade("#pillE2x", 3.1);
+      // Crossfade into the panel, centred on the 5.8 s cue.  // beat-locked: 5.80s
+      out("#aDrawn", 5.6);
+      out("#aE2x", 5.6);
+      out("#aText", 5.6);
+
+      // Scene B. The panel; a cursor presses Analyse, then Smooth Clip.
+      fade("#bIn", 5.6);
+      tl.fromTo("#cursor", { x: 1300, y: 900 }, { x: 676, y: 336, duration: 0.8, ease: "power2.inOut" }, 6.0);
+      tl.to("#cursor", { scale: 0.82, duration: 0.08, yoyo: true, repeat: 1 }, 6.9);
+      tl.fromTo("#ringA", { x: 636, y: 296, scale: 0.4, opacity: 0 }, { keyframes: [{ opacity: 0.9, duration: 0.01 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.out" }] }, 6.9);
+      tl.fromTo("#step1", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 7.0);
+      tl.to("#cursor", { x: 537, y: 666, duration: 0.6, ease: "power2.inOut" }, 7.8);
+      tl.to("#cursor", { scale: 0.82, duration: 0.08, yoyo: true, repeat: 1 }, 8.4);
+      tl.fromTo("#ringS", { x: 497, y: 626, scale: 0.4, opacity: 0 }, { keyframes: [{ opacity: 0.9, duration: 0.01 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.out" }] }, 8.4);
+      fade("#panelDone", 8.5, 0.5);
+      tl.fromTo("#step2", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 8.6);
+      out("#cursor", 9.4, 0.3);
+      out("#bIn", 10.3);
+
+      // Scene C. The three held repeats become new in-betweens, one per beat.
+      fade("#cIn", 10.3);
+      tl.fromTo("#cLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 10.5);
+      fade("#cSub", 10.8);
+      // beat-grid: flips at 11.60s, 12.13s, 12.65s (12.65 s is a strong cue)
+      [["1", 11.6], ["3", 12.13], ["5", 12.65]].forEach(([k, at]) => {
+        tl.fromTo("#new" + k, { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 0.35, ease: "power2.out" }, at);
+        tl.fromTo("#ring" + k, { opacity: 0 }, { opacity: 1, duration: 0.25 }, at);
+        out("#held" + k, at, 0.2);
+        tl.fromTo("#lab" + k, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, at + 0.05);
+      });
+      out("#cIn", 14.2);
+
+      // Scene D. Close on the render above the original, then out to the whole window.
+      fade("#dIn", 14.2);
+      tl.fromTo("#shotWrap", { scale: 1.9 }, { scale: 1, duration: 2.2, ease: "power2.inOut" }, 14.5);
+      tl.fromTo("#v2box", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 14.4);
+      tl.fromTo("#capCard", { y: -16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 14.7);
+      out("#dIn", 17.7);
+
+      // Scene E. Logo lands on the cue.  // beat-locked: 17.91s
+      fade("#eIn", 17.7);
+      tl.fromTo("#logo", { scale: 0.86, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 17.91);
+      tl.fromTo("#brand", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 18.0);
+      fade("#tagline", 18.2, 0.4);
+      fade("#url", 18.4, 0.4);
+      fade("#credits", 18.6, 0.4);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
