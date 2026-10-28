@@ -211,7 +211,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"No duplicate frames. This clip is already on 1s."</summary>
                         <div class="answer">
-                            <p>Analyse found nothing to do. The clip has no repeated frames, so there is nothing to recover. It's live action or animation already drawn on 1s, and smoothing it would only invent motion that was never there, so Upflow2x stops.</p>
+                            <p>Analyse found nothing to do. The clip has no repeated frames, so there are no held drawings to recover. It's live action or animation already drawn on 1s. Render still slows it to a third of the speed, with two new frames drawn between every pair. With Interpolate off it stops instead, since there is nothing to draw.</p>
                             <p>If the panel says instead that every frame differs but the differences look like grain, tick Grainy source and analyse again. Leave it off for clean animation.</p>
                         </div>
                     </details>
