@@ -517,6 +517,30 @@ def test_a_stop_once_the_import_has_begun_lets_it_finish(anime_in_resolve, monke
     assert not status.with_suffix(".stop").exists(), "it would stop the next run"
 
 
+def test_a_stop_during_an_import_resolve_refuses_does_not_stop_the_next_run(
+        anime_in_resolve, monkeypatch, tmp_path):
+    """The render is finished either way, so the Stop came too late to use."""
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    status = tmp_path / "status.json"
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    pool.import_mode = "none"
+    real_import = pool.ImportMedia
+
+    def import_then_stop(*a, **k):
+        status.with_suffix(".stop").write_text("")
+        return real_import(*a, **k)
+
+    monkeypatch.setattr(pool, "ImportMedia", import_then_stop)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")]) == 0
+    assert not status.with_suffix(".stop").exists(), "it would stop the next run"
+
+    monkeypatch.setattr(pool, "ImportMedia", real_import)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "again")]) == 0
+    assert json.loads(status.read_text())["message"] != "Stopped."
+
+
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):
     """The panel polls this file, so it must always parse."""
     src = make_anime(holds=(2,) * 8)
