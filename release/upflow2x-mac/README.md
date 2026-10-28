@@ -146,6 +146,8 @@ Then:
 
 - **Show Original** switches the smoothed clip off so the original shows
   through, and **Show Upflow2x** switches it back. Scrub or play to compare.
+  It is off for a render set longer than its clip, which has no original to
+  line up with.
 - **Show in Folder** opens the render's location.
 
 Only the part of the file the timeline clip uses is analysed and rebuilt. To
