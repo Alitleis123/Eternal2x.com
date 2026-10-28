@@ -1266,7 +1266,8 @@ package.preload.ffi = function()
                 return n
             end,
             CreateProcessW = function(app, line, pa, ta, inherit, flags, env, cwd, si, pi)
-                CREATED[#CREATED + 1] = { line = line.text, flags = flags }
+                CREATED[#CREATED + 1] = { line = line.text, flags = flags,
+                                          cwd = cwd and cwd.text }
                 return REFUSE and 0 or 1
             end,
             WaitForSingleObject = function()
@@ -1288,12 +1289,25 @@ def test_windows_commands_start_without_a_console_window(lua, direct):
     lua.execute('package.config = "\\\\" .. package.config:sub(2)')
     lua.execute(FAKE_FFI)
     H = load(lua, ui_script(direct))
+    H.click("AnalyseBtn")
+    first = lua.eval("CREATED")[1]
+    assert first.flags == 0x08000000
+    assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
+
+
+def test_the_windows_run_opens_no_window(lua, direct):
+    """The render's minimised window could be opened and closed, which ended
+    the render. It now starts with no window, from the plugin folder."""
+    lua.execute('package.config = "\\\\" .. package.config:sub(2)')
+    lua.execute(FAKE_FFI)
+    H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
     created = lua.eval("CREATED")
     last = created[len(created)]
     assert last.flags == 0x08000000
-    assert ' /c start "Upflow2x" /D ' in last.line
-    assert last.line.endswith(" /MIN cmd /c .\\.eternal2x_run.cmd")
+    assert last.line.endswith(" /c .\\.eternal2x_run.cmd"), last.line
+    assert "start" not in last.line and "/MIN" not in last.line, last.line
+    assert last.cwd == str(direct).replace("/", "\\"), last.cwd
     assert not any("start" in c for c in H.commands.values()), "os.execute ran it as well"
 
 
@@ -1655,7 +1669,7 @@ def test_reset_does_not_drop_a_run_that_is_still_reporting(lua, direct):
     H.click("CancelBtn")
     assert (direct / ".eternal2x_status.json").exists()
     assert not H.enabled("SmoothBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
 
 
 def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
@@ -1665,7 +1679,7 @@ def test_reset_does_not_drop_a_run_that_has_not_reported_yet(lua, direct):
     H.click("SmoothBtn")
     H.click("CancelBtn")
     assert not H.enabled("SmoothBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
 
 
 def test_a_heartbeat_from_before_the_clock_moved_back_is_not_a_live_run(lua, direct):
@@ -1687,7 +1701,7 @@ def test_the_panel_keeps_its_own_word_while_a_run_reports_progress(lua, direct):
     write_status(direct, fraction=0.52, message="Starting", updated=time.time())
     H.click("CancelBtn")
     H.click("RefreshStatusBtn")
-    assert "still running" in H.status()
+    assert "Stopping" in H.status()
     assert "52%" in H.widgets["Progress"].Text
 
 
@@ -1935,6 +1949,31 @@ def test_an_unwritable_run_script_does_not_rerun_the_last_one(lua, direct):
     assert "Could not start the run" in H.status()
     assert "Could not start the run" in H.text_of("AnalysisLabel")
     assert H.enabled("SmoothBtn")
+
+
+def test_stop_ends_a_run_that_is_going(lua, direct):
+    """With no window to close, Stop is how a run ends early."""
+    import time
+    H = load(lua, ui_script(direct))
+    assert H.text_of("CancelBtn") == "Reset"
+    H.click("SmoothBtn")
+    assert H.text_of("CancelBtn") == "Stop"
+    write_status(direct, fraction=0.3, updated=time.time())
+    H.click("CancelBtn")
+    assert (direct / ".eternal2x_status.stop").exists()
+    assert "Stopping" in H.status()
+    write_status(direct, fraction=0.3, done=True, ok=False, message="Stopped.")
+    H.click("RefreshStatusBtn")
+    assert H.status() == "Stopped."
+    assert H.text_of("CancelBtn") == "Reset"
+    assert H.enabled("SmoothBtn")
+
+
+def test_a_stop_left_over_does_not_stop_the_next_run(lua, direct):
+    (direct / ".eternal2x_status.stop").write_text("")
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert not (direct / ".eternal2x_status.stop").exists()
 
 
 def test_a_render_that_finished_while_the_panel_was_closed_is_offered(lua, direct):

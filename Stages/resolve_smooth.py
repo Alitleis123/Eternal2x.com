@@ -29,6 +29,10 @@ else:
     IMPORT_ERROR = None
 
 
+class Stopped(BaseException):
+    """The panel's Stop. Not an Exception, so nothing on the way out catches it."""
+
+
 class StatusFile:
     """Progress the panel can poll while the render runs in the background.
 
@@ -40,6 +44,8 @@ class StatusFile:
 
     def __init__(self, path: Optional[str]) -> None:
         self.path = Path(path) if path else None
+        # The panel's Stop creates this, and the run ends at its next frame.
+        self.stop_path = self.path.with_suffix(".stop") if self.path else None
         self.stage = ""
         self.fraction = 0.0
         self.message = ""
@@ -104,6 +110,8 @@ class StatusFile:
                     time.sleep(0.02)
 
     def progress(self, stage: str, fraction: float) -> None:
+        if self.stop_path is not None and self.stop_path.exists():
+            raise Stopped()
         self.stage = stage
         self.fraction = fraction
         self.write()
@@ -505,6 +513,14 @@ def _run_reporting(args, summary: dict) -> int:
         return 3
     try:
         return _run(args, summary)
+    except Stopped:
+        print("Stopped.")
+        summary["error"] = "Stopped."
+        status = StatusFile(args.status_file)
+        with contextlib.suppress(OSError):
+            status.stop_path.unlink()
+        status.write(done=True, ok=False, message="Stopped.")
+        return 1
     except Exception as exc:
         traceback.print_exc()
         message = f"Upflow2x hit an unexpected error: {exc}"

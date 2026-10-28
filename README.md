@@ -135,7 +135,7 @@ rendered from the drawings Upflow2x finds on its own.
 ![The Upflow2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://upflow2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
-left, so Resolve stays usable while it works. When it finishes, the rebuilt
+left, so Resolve stays usable while it works. **Stop** ends it early. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
 same frame. With Interpolate on it runs three times as long, up to the last
 marker if the clip has any. It goes on the lowest

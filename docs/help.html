@@ -144,7 +144,7 @@ python3 Installer/gui_installer.py</code></div>
                     </li>
                     <li>
                         <h3>Render</h3>
-                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Interpolate on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
+                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Interpolate on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. <strong>Stop</strong> ends it early. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
                         <p>When it's done, the result is imported, at 2x if Upscaling is on, and placed above the original, starting on the same frame, at the same frame rate with three frames for every one of the clip's, up to the last marker if it has any, so it plays at a third of the speed, ready to time remap. With Interpolate off it keeps the clip's length. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
                         <p>If another timeline is open when it finishes, or the original was deleted or retrimmed, it goes at the end of the timeline instead. An image sequence whose frame rate Resolve won't set stays in the media pool, since it would play at the wrong speed.</p>
                     </li>
@@ -230,7 +230,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>Progress seems stuck</summary>
                         <div class="answer">
-                            <p>Press Refresh Progress. If the panel says Python hasn't started, or that there's been no progress for a few minutes, the run stopped, often because its window was closed. Press Reset and run it again.</p>
+                            <p>Press Refresh Progress. If the panel says Python hasn't started, or that there's been no progress for a few minutes, the run stopped. Press Reset and run it again.</p>
                             <p>For anything else, email us the panel's status text and the <code>.eternal2x_last_run.log</code> file from the plugin folder.</p>
                         </div>
                     </details>

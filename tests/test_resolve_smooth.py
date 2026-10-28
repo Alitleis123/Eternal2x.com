@@ -403,6 +403,24 @@ def test_status_file_records_failures(install_fake_resolve, monkeypatch, tmp_pat
     assert "missing" in payload["message"]
 
 
+def test_the_panels_stop_ends_the_run(make_anime, monkeypatch, tmp_path):
+    """The run has no window to close, so the panel's Stop file ends it."""
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    stop = tmp_path / "status.stop"
+    stop.write_text("")
+    out = tmp_path / "o"
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(out)]) == 1
+
+    payload = json.loads(status.read_text())
+    assert payload["done"] is True
+    assert payload["ok"] is False
+    assert payload["message"] == "Stopped."
+    assert not stop.exists(), "a Stop left behind would end the next run too"
+    assert not list(out.rglob("*.mp4")) and not list(out.rglob("*.png"))
+
+
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):
     """The panel polls this file, so it must always parse."""
     src = make_anime(holds=(2,) * 8)
