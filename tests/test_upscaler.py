@@ -227,8 +227,8 @@ def test_the_progress_says_when_the_cpu_takes_over(monkeypatch, make_anime, tmp_
     render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
                 upscale_enabled=False), sequence=True,
                 progress=lambda stage, fraction: stages.append(stage))
-    assert stages[:3] == ["Drawing in-betweens and upscaling"] * 3
-    assert stages[-1] == "Drawing in-betweens and upscaling on the CPU"
+    assert stages[:3] == ["Interpolating and upscaling"] * 3
+    assert stages[-1] == "Interpolating and upscaling on the CPU"
 
 
 def test_an_upscale_alone_says_upscaling(monkeypatch, make_anime, tmp_path):

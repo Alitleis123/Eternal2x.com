@@ -2188,6 +2188,7 @@ def test_the_threshold_slider_sets_how_big_a_change_counts(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("AnalyseBtn")
     assert "--threshold" not in H.last_command(), "the default should send nothing"
+    assert "ThresholdSlider" in H.window.__items, "the threshold should be on the panel"
     H.set_slider("ThresholdSlider", 7)
     assert H.widgets["ThresholdValue"].Text == "7"
     H.click("AnalyseBtn")

@@ -905,19 +905,19 @@ end
 -- Name, control, (i): the same three columns on every row.
 local function row(name, control, tip)
     return ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Label{ Text = name, StyleSheet = FIELD_LABEL, Weight = 0.28,
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
+        ui:Label{ Text = name, StyleSheet = FIELD_LABEL, Weight = 0.2,
+                  Alignment = { AlignLeft = true, AlignVCenter = true } },
         control,
         info(tip),
     }
 end
 
--- Top to bottom in the order you use it: the clip, Analyse, the two
--- switches, then Render. The rest waits in Settings.
+-- Top to bottom in the order you use it: the clip, Analyse and its
+-- threshold, the two switches, then Render. The rest waits in Settings.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 380, 420 },
+    Geometry = { 100, 100, 380, 450 },
     StyleSheet = WINDOW,
 }, ui:VGroup{
     Spacing = 8,
@@ -934,6 +934,13 @@ local win = disp:AddWindow({
               WordWrap = true, MinimumSize = { 0, 46 }, ToolTip = TIPS.clip },
 
     ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
+    row("Threshold", ui:HGroup{ Weight = 0.8, Spacing = 8,
+        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9, PageStep = 1,
+                   Value = THRESHOLD, Orientation = "Horizontal" },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
+                  Weight = 0, MinimumSize = { 10, 0 },
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+    }, TIPS.threshold),
     ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true },
 
     ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
@@ -941,7 +948,7 @@ local win = disp:AddWindow({
     ui:HGroup{ Weight = 0, Spacing = 8,
         ui:Button{ ID = "UpscaleCB", Text = "Upscaling", Checkable = true, Checked = DO_UPSCALE,
                    StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
-        ui:Button{ ID = "InterpCB", Text = "Drawing in-betweens", Checkable = true,
+        ui:Button{ ID = "InterpCB", Text = "Interpolate", Checkable = true,
                    Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
     },
     ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, ToolTip = TIPS.render,
@@ -970,19 +977,12 @@ local win = disp:AddWindow({
 local prefs = disp:AddWindow({
     ID = "Settings",
     WindowTitle = "Upflow2x Settings",
-    Geometry = { 140, 140, 340, 170 },
+    Geometry = { 140, 140, 340, 130 },
     StyleSheet = WINDOW,
 }, ui:VGroup{
     Spacing = 10,
 
-    row("Threshold", ui:HGroup{ Weight = 0.72, Spacing = 8,
-        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9, PageStep = 1,
-                   Value = THRESHOLD, Orientation = "Horizontal" },
-        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
-                  Weight = 0, MinimumSize = { 10, 0 },
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
-    }, TIPS.threshold),
-    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.72 }, TIPS.format),
+    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
     ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
     ui:HGroup{ Weight = 0, Spacing = 8,
         ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = BUTTON, Weight = 0 },
@@ -1872,9 +1872,9 @@ function win.On.CancelBtn.Clicked(ev)
     set_status("Ready.")
 end
 
-function prefs.On.ThresholdSlider.ValueChanged(ev)
-    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(prefs_items.ThresholdSlider.Value) or 5) + 0.5)))
-    prefs_items.ThresholdValue.Text = tostring(THRESHOLD)
+function win.On.ThresholdSlider.ValueChanged(ev)
+    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(items.ThresholdSlider.Value) or 5) + 0.5)))
+    items.ThresholdValue.Text = tostring(THRESHOLD)
     save_conf()
 end
 
