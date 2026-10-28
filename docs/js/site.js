@@ -184,7 +184,7 @@
             if (done) return;
             sweeping = true;
             frame = requestAnimationFrame(step);
-        }, 700);
+        }, 100);
     }
     window.addEventListener('pointerdown', input, true);
     window.addEventListener('keydown', input, true);
