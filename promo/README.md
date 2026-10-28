@@ -22,7 +22,7 @@ cd promo/film
 npx --yes hyperframes@0.8.193 preview
 ```
 
-The site shows `docs/assets/demo/promo-resolve.jpg` as the film's poster. It is the film's frame at 24.4 s, when the render has landed on V2. Make it again if that part of the film changes.
+The site shows `docs/assets/demo/promo-resolve.jpg` as the film's poster. It is the film's frame at 5.8 s. Its line "How to use it in Resolve" sits above the middle, so the site's play button doesn't cover it. Make it again if that part of the film changes.
 
 ## The footage
 
