@@ -302,7 +302,8 @@ def output_time_map(plan: DedupePlan, slow: int = 1) -> List[float]:
 
     With `slow`, every source frame becomes that many, so the clip plays that
     many times slower at the same rate, with every frame between two drawings
-    drawn.
+    drawn. A slowed clip with marks ends on its last marked drawing: nothing
+    after it counts, and a freeze there is no use to time remap.
     """
     if plan.output_frames == 0 or plan.source_frames == 0:
         return []
@@ -313,9 +314,11 @@ def output_time_map(plan: DedupePlan, slow: int = 1) -> List[float]:
 
     positions: List[float] = []
     slot = 0
-    for hold in plan.holds:
+    for n, hold in enumerate(plan.holds):
         repeats = 1 if plan.marked else hold_repeats(hold, plan.base_hold, plan.fps)
         frames = hold.length * slow
+        if plan.marked and slow > 1 and n == len(plan.holds) - 1:
+            frames = 1
         step = repeats / float(frames)
         positions.extend(min(last, slot + k * step) for k in range(frames))
         slot += repeats

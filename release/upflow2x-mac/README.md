@@ -26,9 +26,10 @@ has the moving version, with a divider to drag between the two.*
 The result has the clip's frame rate and three times its length, so it plays
 at a third of the speed with every new frame drawn, ready to time remap or
 slow further with optical flow. Every drawing lands on three times the frame
-it was on in the source, so the shot keeps its timing, only slower. The last
-drawing has nothing after it to move toward, so it holds for three times its
-length.
+it was on in the source, so the shot keeps its timing, only slower. On a clip
+with markers the render ends on the last one, since nothing after it counts.
+Without markers, the last drawing has nothing after it to move toward, so it
+holds for three times its length.
 
 ## What it does
 
@@ -123,7 +124,8 @@ move it.
 5. Click **Render**.
 
 Render keeps every marked frame as drawn and draws every frame between two
-markers fresh, so a part you leave unmarked never counts. Every marker on the
+markers fresh, so a part you leave unmarked never counts. The render ends on
+the last marker, so mark the last drawing you want in it. Every marker on the
 clip counts, whatever its colour, and the clip's first frame always does.
 Markers on the timeline's ruler do not, so beat markers are safe there. You can
 skip Analyse and mark the frames yourself. A clip with no markers at all is
