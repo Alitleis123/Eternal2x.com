@@ -97,6 +97,16 @@ def test_the_network_is_only_asked_for_the_middle_of_a_pair(texture):
     assert all(0.25 <= t <= 0.75 for t in rife.asked), rife.asked
 
 
+def test_a_long_gap_never_asks_the_network_for_its_ends(texture):
+    """600 frames between two markers, slowed 3 times, start at t = 1/1800. A
+    blend that close to a drawing rounds to it, so what counts is that the
+    network is never asked for its snapping ends."""
+    times = [1 / 1800, 2 / 1800, 1 - 2 / 1800, 1 - 1 / 1800]
+    rife = SnappingRife()
+    rife.interpolate_pair(texture, shifted(texture, 12), times)
+    assert all(0.25 <= t <= 0.75 for t in rife.asked), rife.asked
+
+
 def test_a_pair_asked_for_a_few_at_a_time_draws_its_halfway_frames_once(texture):
     b = shifted(texture, 12)
     rife = SnappingRife()
