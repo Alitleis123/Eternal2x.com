@@ -65,16 +65,10 @@
         ctx.stroke();
     }
 
-    var tick = 0;
     function loop() {
         draw();
-        tick = video.requestVideoFrameCallback ? video.requestVideoFrameCallback(loop)
-                                              : requestAnimationFrame(loop);
-    }
-    function restart() {
-        if (video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(tick);
-        else cancelAnimationFrame(tick);
-        loop();
+        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(loop);
+        else requestAnimationFrame(loop);
     }
 
     function setPos(value) {
@@ -142,43 +136,6 @@
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
 
-    // Speed picks one of two 60 fps renders of the same shots. The new one
-    // picks up at the same moment, playing or paused as the last was.
-    var controls = document.getElementById('compare-controls');
-    if (controls) {
-        var speed = 'half';
-        var pending = null;
-        controls.hidden = false;
-        controls.addEventListener('click', function (e) {
-            var button = e.target.closest('button[data-speed]');
-            if (!button || button.dataset.speed === speed) return;
-            speed = button.dataset.speed;
-            controls.querySelectorAll('[data-speed]').forEach(function (b) {
-                b.setAttribute('aria-pressed', String(b === button));
-            });
-            // A second switch before the first render has loaded keeps the
-            // first one's moment. By then the video reads as paused at 0.
-            if (!pending) {
-                pending = { playing: !video.paused,
-                            at: video.duration ? video.currentTime / video.duration : 0 };
-            }
-            // The page's ?v= on the first video carries over, so a browser
-            // holding older renders fetches these.
-            var version = (video.getAttribute('src').split('?')[1] || '');
-            video.src = 'assets/demo/compare-60-' + speed + '.mp4'
-                + (version ? '?' + version : '');
-        });
-        video.addEventListener('loadedmetadata', function () {
-            if (!pending) return;
-            var resume = pending;
-            pending = null;
-            video.currentTime = resume.at * video.duration;
-            restart();
-            if (resume.playing) setPlaying(true);
-            else label();
-        });
-    }
-
     video.addEventListener('loadeddata', draw);
     video.addEventListener('seeked', draw);
     loop();
@@ -187,36 +144,32 @@
     label();
     setPlaying(!still);
 
-    // The first time the demo is on screen, the divider shows off both sides
-    // once, in about three seconds: over to the right to show the original,
-    // all the way left to show Upflow2x, then back to the middle. Touching the
-    // demo first skips that, and any press or key during it puts the divider
-    // straight back.
+    // Start with the original, then reveal the comparison once. Touching the
+    // demo first skips the reveal, and any press or key during it puts the
+    // divider in the middle.
     if (still || !window.IntersectionObserver) return;
+    setPos(1);
     var figure = box.closest('figure') || box;
-    var sweeping = false, done = false, frame = 0, began = 0, from = pos, path = [];
-    function stop() {
+    var sweeping = false, done = false, frame = 0, began = 0;
+    function stop(keepPosition) {
         if (done) return;
         done = true;
         seen.disconnect();
         cancelAnimationFrame(frame);
         window.removeEventListener('pointerdown', input, true);
         window.removeEventListener('keydown', input, true);
-        if (sweeping) setPos(from);
+        if (!keepPosition) setPos(.5);
         sweeping = false;
     }
     function input(e) {
         if (sweeping || figure.contains(e.target)) stop();
     }
-    // Eases from each [seconds, divider] stop in path to the next.
     function step(now) {
         if (!began) began = now;
-        var s = (now - began) / 1000, i = 1;
-        while (i < path.length - 1 && s >= path[i][0]) i++;
-        var a = path[i - 1], b = path[i];
-        var t = Math.min(1, (s - a[0]) / (b[0] - a[0]));
-        setPos(a[1] + (b[1] - a[1]) * (1 - Math.cos(Math.PI * t)) / 2);
-        if (s < b[0]) frame = requestAnimationFrame(step);
+        var t = Math.min(1, (now - began) / 1100);
+        var eased = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        setPos(1 - .5 * eased);
+        if (t < 1) frame = requestAnimationFrame(step);
         else stop();
     }
     function sweep() {
@@ -226,16 +179,17 @@
             video.addEventListener('loadeddata', sweep, { once: true });
             return;
         }
-        from = pos;
-        // 5% and 95% keep the grip whole on screen.
-        path = [[0, from], [.7, .95], [.9, .95], [2.1, .05], [2.3, .05], [3, from]];
-        sweeping = true;
-        frame = requestAnimationFrame(step);
+        // Hold the original briefly once its first frame is ready.
+        setTimeout(function () {
+            if (done) return;
+            sweeping = true;
+            frame = requestAnimationFrame(step);
+        }, 100);
     }
     window.addEventListener('pointerdown', input, true);
     window.addEventListener('keydown', input, true);
     // Assistive tech can set the range with no press or key. Its value stays.
-    slider.addEventListener('input', function () { sweeping = false; stop(); });
+    slider.addEventListener('input', function () { stop(true); });
     // Asking for less motion later stops it too, and puts the divider back.
     var less = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
     if (less && less.addEventListener) {
@@ -244,8 +198,7 @@
     var seen = new IntersectionObserver(function (entries) {
         if (!entries[0].isIntersecting) return;
         seen.disconnect();
-        // As the hero finishes coming in.
-        setTimeout(sweep, 400);
+        sweep();
     }, { threshold: .6 });
     seen.observe(box);
 })();
