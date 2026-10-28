@@ -682,6 +682,16 @@ def test_the_render_lines_up_on_a_new_track_above_the_original(lua, direct):
     assert "V2 above the original" in H.status()
 
 
+def test_a_finished_render_message_fits_the_status_box(lua, direct):
+    """In Resolve its three lines were cut off at the top and bottom of a
+    two-line box."""
+    H = load(lua, ui_script(direct))
+    finish_render(H, direct, message="Rendered 25 drawings into 337 smooth frames.")
+    status = H.widgets["Status"]
+    assert status.MinimumSize[2] >= 3 * 15, "the box is shorter than three lines of 11 px text"
+    assert status.ToolTip == status.Text, "a longer message has no other way to be read"
+
+
 def test_a_free_track_above_is_used_as_it_is(lua, direct):
     H = load(lua, ui_script(direct))
     lua.execute("local H = ...; H.tracks[2] = {}; H.tracks[3] = {}", H)
