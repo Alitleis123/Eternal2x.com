@@ -799,99 +799,146 @@ local function index_of(list, value)
     return 0
 end
 
+-- Resolve's own greys, so the panel sits beside the Inspector without
+-- standing out, and the amber from upflow2x.com for what is pressed or on.
+local C = {
+    panel = "#28282e", field = "#1d1d21", raise = "#37363c", hover = "#423f47",
+    line = "#45444b", hair = "#35343a",
+    text = "#dcdcd8", soft = "#a3a2a8", mute = "#7a7b80",
+    amber = "#f2a93b", amber_hover = "#f6bd63", amber_down = "#d9932c", on_amber = "#17171a",
+}
+-- "$name" in a style sheet becomes that colour.
+local function themed(sheet)
+    return (sheet:gsub("%$([%w_]+)", C))
+end
+
 -- Resolve's UI Manager ignores #name selectors in a window's style sheet, so
 -- every widget that looks different from the rest carries its own.
-local TITLE = "QLabel { font-size: 20px; font-weight: 700; color: #ededf4; }"
-local SUBTITLE = "QLabel { color: #6e6e82; font-size: 11px; padding-bottom: 4px; }"
-local SECTION = [[QLabel { color: #9a9ab0; font-size: 10px; font-weight: 700;
-    padding-top: 8px; letter-spacing: 0.6px; }]]
-local CARD = [[QLabel { background-color: #121216; border: 1px solid #1e1e26;
-    border-radius: 6px; padding: 6px 9px; color: #c8c8d6; font-size: 11px; }]]
-local META = "QLabel { color: #5c5c70; font-size: 10px; }"
-local PROGRESS = "QLabel { color: #7c6fef; font-size: 11px; font-family: monospace; }"
-local START = [[
-    QPushButton { background-color: #7c6fef; border: 1px solid #9b90f5; border-radius: 7px;
-        color: #0b0b0f; font-size: 13px; font-weight: 700; min-height: 34px; }
-    QPushButton:hover { background-color: #9b90f5; }
-    QPushButton:disabled { background-color: #2a2740; color: #6a6a80; border-color: #2a2740; }
-]]
-local GHOST = [[
-    QPushButton { background-color: #121216; border: 1px solid #1e1e26; border-radius: 6px;
-        min-height: 22px; padding: 3px 10px; font-size: 11px; font-weight: 500; color: #b4b4c6; }
-    QPushButton:hover { background-color: #1a1a22; border-color: #7c6fef; color: #e2e2ea; }
-    QPushButton:disabled { background-color: #0f0f13; border-color: #18181f; color: #4a4a5a; }
-]]
+local TITLE = themed("QLabel { font-size: 17px; font-weight: 600; color: $text; }")
+local BADGE = themed([[QLabel { background-color: $amber; color: $on_amber; border-radius: 4px;
+    padding: 1px 5px; font-family: Consolas, Menlo, monospace; font-size: 10px; font-weight: 700; }]])
+local VERSION = themed("QLabel { color: $mute; font-size: 11px; }")
+local SECTION = themed([[QLabel { color: $text; font-size: 12px; font-weight: 600;
+    padding-top: 10px; padding-bottom: 4px; border-bottom: 1px solid $hair; }]])
+local CARD = themed([[QLabel { background-color: $field; border: 1px solid $hair;
+    border-radius: 5px; padding: 6px 9px; color: $text; font-size: 11px; }]])
+local NOTE = themed("QLabel { color: $soft; font-size: 11px; padding: 1px; }")
+local FIELD_LABEL = themed("QLabel { color: $soft; font-size: 11px; }")
+local META = themed("QLabel { color: $mute; font-size: 10px; }")
+local PROGRESS = themed("QLabel { color: $soft; font-size: 11px; font-family: Consolas, Menlo, monospace; }")
+local START = themed([[
+    QPushButton { background-color: $amber; border: none; border-radius: 5px;
+        color: $on_amber; font-size: 13px; font-weight: 600; min-height: 32px; }
+    QPushButton:hover { background-color: $amber_hover; }
+    QPushButton:pressed { background-color: $amber_down; }
+    QPushButton:disabled { background-color: $raise; color: $mute; }
+]])
+local BUTTON = themed([[
+    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 5px;
+        min-height: 24px; padding: 3px 10px; font-size: 11px; color: $text; }
+    QPushButton:hover { background-color: $hover; }
+    QPushButton:pressed { background-color: $field; }
+    QPushButton:disabled { background-color: $panel; border-color: $hair; color: $mute; }
+]])
+local LINK = themed([[
+    QPushButton { background-color: transparent; border: none; padding: 2px 4px;
+        min-height: 18px; font-size: 11px; color: $soft; }
+    QPushButton:hover { color: $amber; }
+    QPushButton:disabled { color: $mute; }
+]])
+-- A thin bar, amber up to how far the run has got. Empty, it keeps its
+-- space but shows nothing, so the panel doesn't jump when a run starts.
+local function bar_style(fraction)
+    if not fraction then
+        return "QLabel { background-color: transparent; }"
+    end
+    local f = math.max(0.001, math.min(0.998, fraction))
+    return themed(string.format([[QLabel { border-radius: 2px; background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 $amber, stop: %.3f $amber,
+        stop: %.3f $field, stop: 1 $field); }]], f, f + 0.001))
+end
 
-local RENDER_LABEL = "\xE2\x96\xB2  Render"
+local RENDER_LABEL = "Render"
 local ANALYSIS_HINT = "Analyse marks the drawings on the clip. Or mark the frames yourself with M. Render uses the marked frames."
+
+local function field_label(text)
+    return ui:Label{ Text = text, StyleSheet = FIELD_LABEL, Weight = 0.3,
+                     Alignment = { AlignRight = true, AlignVCenter = true } }
+end
 
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 460, 700 },
-    StyleSheet = [[
-        QWidget { background-color: #0b0b0f; color: #e2e2ea; font-size: 12px; }
-        QPushButton {
-            background-color: #16161e; border: 1px solid #28283a; border-radius: 7px;
-            min-height: 32px; padding: 6px 14px; font-weight: 600; color: #e2e2ea;
-        }
-        QPushButton:hover { background-color: #1e1e28; border-color: #7c6fef; }
-        QPushButton:pressed { background-color: #121218; }
-        QPushButton:disabled { color: #4a4a5a; border-color: #1e1e26; background-color: #101014; }
+    Geometry = { 100, 100, 440, 680 },
+    StyleSheet = themed([[
+        QWidget { background-color: $panel; color: $text; font-size: 12px; }
         QComboBox {
-            background-color: #16161e; border: 1px solid #28283a; border-radius: 6px;
-            padding: 5px 8px; min-height: 24px; color: #e2e2ea;
+            background-color: $field; border: 1px solid $hair; border-radius: 5px;
+            padding: 4px 8px; min-height: 18px; color: $text; font-size: 11px;
         }
-        QComboBox:hover { border-color: #7c6fef; }
+        QComboBox:hover { border-color: $line; }
         QComboBox QAbstractItemView {
-            background-color: #16161e; border: 1px solid #28283a;
-            selection-background-color: #7c6fef; selection-color: #0b0b0f;
+            background-color: $field; border: 1px solid $line; outline: none;
+            selection-background-color: $amber; selection-color: $on_amber;
         }
-        QCheckBox { color: #c8c8d6; font-size: 11px; spacing: 7px; }
+        QCheckBox { color: $text; font-size: 11px; spacing: 6px; }
         QCheckBox::indicator {
-            width: 15px; height: 15px; border-radius: 3px;
-            border: 1px solid #28283a; background: #121216;
+            width: 13px; height: 13px; border-radius: 3px;
+            border: 1px solid $line; background-color: $field;
         }
-        QCheckBox::indicator:checked { background: #7c6fef; border-color: #9b90f5; }
-    ]],
+        QCheckBox::indicator:hover { border-color: $soft; }
+        QCheckBox::indicator:checked { background-color: $amber; border-color: $amber; }
+        QSlider::groove:horizontal { height: 3px; border-radius: 1px; background-color: $field; }
+        QSlider::sub-page:horizontal { border-radius: 1px; background-color: $amber; }
+        QSlider::handle:horizontal {
+            width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background-color: $text;
+        }
+        QSlider::handle:horizontal:hover { background-color: #ffffff; }
+        QToolTip { background-color: $field; color: $text; border: 1px solid $line; padding: 4px; }
+    ]]),
 }, ui:VGroup{
-    Spacing = 2,
+    Spacing = 5,
 
-    ui:Label{ ID = "Title", Text = "Upflow2x", StyleSheet = TITLE },
-    ui:Label{ ID = "SubTitle", StyleSheet = SUBTITLE,
-              Text = "Smooth 2x for hand-drawn animation  \xC2\xB7  v" .. CURRENT_VERSION },
+    ui:HGroup{ Weight = 0, Spacing = 6,
+        ui:Label{ ID = "Title", Text = "Upflow", StyleSheet = TITLE, Weight = 0 },
+        ui:Label{ ID = "Badge", Text = "2X", StyleSheet = BADGE, Weight = 0,
+                  Alignment = { AlignCenter = true } },
+        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 1,
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+    },
 
-    ui:Label{ ID = "SourceSection", Text = "SOURCE CLIP", StyleSheet = SECTION },
+    ui:Label{ ID = "SourceSection", Text = "Clip", StyleSheet = SECTION },
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
-              WordWrap = true, MinimumSize = { 0, 46 } },
+              WordWrap = true, MinimumSize = { 0, 44 } },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = GHOST,
+        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = BUTTON,
                    ToolTip = "Read the clip under the playhead. Resolve does not tell scripts which clip is selected." },
-        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = GHOST,
+        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON,
                    ToolTip = "Find the drawings and mark them on the clip. Delete a marker to leave a frame out, or add your own with M." },
     },
     ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT,
-              StyleSheet = CARD, WordWrap = true, MinimumSize = { 0, 46 } },
+              StyleSheet = NOTE, WordWrap = true, MinimumSize = { 0, 32 } },
 
-    ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Threshold", Weight = 0.4 },
-        ui:Slider{ ID = "ThresholdSlider", Weight = 0.5, Minimum = 1, Maximum = 9,
+    ui:Label{ ID = "SettingsSection", Text = "Settings", StyleSheet = SECTION },
+    ui:HGroup{ Spacing = 8,
+        field_label("Threshold"),
+        ui:Slider{ ID = "ThresholdSlider", Weight = 0.62, Minimum = 1, Maximum = 9,
                    Value = THRESHOLD, Orientation = "Horizontal",
                    ToolTip = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones." },
-        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), Weight = 0.1 },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
+                  Weight = 0.08, Alignment = { AlignRight = true, AlignVCenter = true } },
     },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Hold pattern", Weight = 0.4 },
-        ui:ComboBox{ ID = "HoldCombo", Weight = 0.6,
+    ui:HGroup{ Spacing = 8,
+        field_label("Hold pattern"),
+        ui:ComboBox{ ID = "HoldCombo", Weight = 0.7,
                      ToolTip = "Leave on Auto detect unless a clip's timing trips the detector." },
     },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Output", Weight = 0.4 },
-        ui:ComboBox{ ID = "FormatCombo", Weight = 0.6,
+    ui:HGroup{ Spacing = 8,
+        field_label("Output"),
+        ui:ComboBox{ ID = "FormatCombo", Weight = 0.7,
                      ToolTip = "Image sequence is lossless and imports most reliably. All outputs are 8-bit RGB." },
     },
-    ui:HGroup{ Spacing = 6,
+    ui:HGroup{ Spacing = 12,
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
                      ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
@@ -900,29 +947,33 @@ local win = disp:AddWindow({
                      ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
 
-    ui:Label{ ID = "RunSection", Text = "RUN", StyleSheet = SECTION },
+    ui:Label{ ID = "RunSection", Text = "Render", StyleSheet = SECTION },
     ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START,
-               MinimumSize = { 0, 38 }, MaximumSize = { 16777215, 38 } },
+               MinimumSize = { 0, 34 }, MaximumSize = { 16777215, 34 } },
+    ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
+              MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = CARD, WordWrap = true,
-              MinimumSize = { 0, 60 } },
+              MinimumSize = { 0, 52 } },
     ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = GHOST,
+        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = BUTTON,
                    Enabled = false,
                    ToolTip = "Switch the smoothed clip off and on to compare it with the original under it." },
-        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = GHOST,
+        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = BUTTON,
                    Enabled = false, ToolTip = "Open the folder the render was saved to." },
     },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = GHOST },
-        ui:Button{ ID = "CancelBtn", Text = "Reset", StyleSheet = GHOST },
-    },
 
-    ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "UpdateBtn", Text = "\xE2\x86\xBB  Check for Updates", StyleSheet = GHOST },
-        ui:CheckBox{ ID = "AutoUpdateCB", Text = "Auto-update", Checked = AUTO_UPDATE },
+    ui:VGap(6),
+    ui:HGroup{ Weight = 0, Spacing = 4,
+        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
+        ui:CheckBox{ ID = "AutoUpdateCB", Text = "Auto-update", Checked = AUTO_UPDATE, Weight = 0 },
+        ui:HGap(0, 1),
+        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = LINK, Weight = 0,
+                   ToolTip = "Read how far the run has got, if the panel stopped updating." },
+        ui:Button{ ID = "CancelBtn", Text = "Reset", StyleSheet = LINK, Weight = 0,
+                   ToolTip = "Clear a run that stopped without finishing." },
     },
+    ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
 })
 
 local items = win:GetItems()
@@ -966,14 +1017,12 @@ end
 local function set_progress(fraction, stage)
     if not fraction or (fraction <= 0 and (stage or "") == "") then
         items.Progress.Text = ""
+        items.ProgressBar.StyleSheet = bar_style(nil)
         return
     end
-    local width = 24
-    local filled = math.floor(fraction * width + 0.5)
-    if filled > width then filled = width end
-    local bar = string.rep("\xE2\x96\x88", filled) .. string.rep("\xE2\x96\x91", width - filled)
-    items.Progress.Text = string.format("%s  %d%%  %s", bar, math.floor(fraction * 100 + 0.5),
-                                        stage or "")
+    fraction = math.min(1, fraction)
+    items.ProgressBar.StyleSheet = bar_style(fraction)
+    items.Progress.Text = string.format("%d%%  %s", math.floor(fraction * 100 + 0.5), stage or "")
 end
 
 local function set_busy(busy)
