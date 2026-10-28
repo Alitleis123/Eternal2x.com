@@ -514,6 +514,10 @@ def _run(args, summary: dict) -> int:
     summary["ok"] = True
     print("Done.")
     status.write(done=True, ok=True, message=_finished(plan, result))
+    # A Stop that came too late was not used, and would end the next run.
+    if status.stop_path is not None:
+        with contextlib.suppress(OSError):
+            status.stop_path.unlink()
     return 0
 
 
