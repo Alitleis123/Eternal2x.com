@@ -284,7 +284,7 @@ def plan_from_marks(marks: Sequence[int], source_frames: int, fps: float) -> Ded
     )
 
 
-def output_time_map(plan: DedupePlan) -> List[float]:
+def output_time_map(plan: DedupePlan, slow: int = 1) -> List[float]:
     """Where each final frame sits in the intermediate clip, as a float index.
 
     The integer part picks the pair of drawings an in-between goes between,
@@ -299,19 +299,27 @@ def output_time_map(plan: DedupePlan) -> List[float]:
     held rather than interpolated. That is the one place where the source's
     original hold survives, and it is unavoidable without inventing motion
     past the end of the clip.
+
+    With `slow`, every source frame becomes that many, so the clip plays that
+    many times slower at the same rate, with every frame between two drawings
+    drawn. A slowed clip with marks ends on its last marked drawing: nothing
+    after it counts, and a freeze there is no use to time remap.
     """
     if plan.output_frames == 0 or plan.source_frames == 0:
         return []
     last = plan.output_frames - 1
     if not plan.holds:
-        rate = plan.output_frames / float(plan.source_frames)
-        return [min(last, n * rate) for n in range(plan.source_frames)]
+        rate = plan.output_frames / float(plan.source_frames * slow)
+        return [min(last, n * rate) for n in range(plan.source_frames * slow)]
 
     positions: List[float] = []
     slot = 0
-    for hold in plan.holds:
+    for n, hold in enumerate(plan.holds):
         repeats = 1 if plan.marked else hold_repeats(hold, plan.base_hold, plan.fps)
-        step = repeats / float(hold.length)
-        positions.extend(min(last, slot + k * step) for k in range(hold.length))
+        frames = hold.length * slow
+        if plan.marked and slow > 1 and n == len(plan.holds) - 1:
+            frames = 1
+        step = repeats / float(frames)
+        positions.extend(min(last, slot + k * step) for k in range(frames))
         slot += repeats
     return positions

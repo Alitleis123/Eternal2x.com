@@ -233,20 +233,25 @@ class Rife:
         rgb = np.clip(y[0, :, :h, :w].transpose(1, 2, 0) * 255.0 + 0.5, 0, 255)
         return cv2.cvtColor(rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
 
-    def interpolate_pair(self, a: np.ndarray, b: np.ndarray,
-                         times: List[float]) -> List[np.ndarray]:
+    def interpolate_pair(self, a: np.ndarray, b: np.ndarray, times: List[float],
+                         unrelated: Optional[bool] = None) -> List[np.ndarray]:
         """In-betweens for `times` (each in 0..1) between drawings a and b.
 
         t == 0 returns `a` untouched and t == 1 returns `b` untouched, so real
         drawings are never resampled. Across a cut the first drawing is held
         until the next one starts, since the network would otherwise morph one
-        shot into the other.
+        shot into the other. `unrelated` is the renderer's verdict on whether
+        the pair is two shots, made with the pairs around it in view, or False
+        where the editor's markers already said. Without it the pair is judged
+        on its own.
         """
         if not times:
             return []
         if np.array_equal(a, b):
             return [a.copy() for _ in times]
-        if frames_are_a_cut(a, b) or frames_are_unrelated(a, b):
+        if unrelated is None:
+            unrelated = frames_are_a_cut(a, b) or frames_are_unrelated(a, b)
+        if unrelated:
             return [(a.copy() if t < 1.0 else b.copy()) for t in times]
         out: List[np.ndarray] = []
         for t in times:

@@ -57,6 +57,9 @@ class StatusFile:
         self.marks = ""
         # The render is already 2x, so the panel must not add Super Scale.
         self.upscaled = False
+        # How many times longer than its clip the render is, so the panel
+        # places all of it, even opened again since the render started.
+        self.slow_motion = 1
 
     def write(self, *, done: bool = False, ok: bool = False,
               message: Optional[str] = None) -> None:
@@ -76,6 +79,7 @@ class StatusFile:
             "fps": round(self.fps, 3),
             "marks": self.marks,
             "upscaled": self.upscaled,
+            "slow_motion": self.slow_motion,
             "done": done,
             "ok": ok,
             "updated": time.time(),
@@ -147,12 +151,15 @@ def _finished(plan, result) -> str:
 
 
 def _output_path(source: Path, output_dir: Optional[str], fmt: str,
-                 frames: Optional[tuple] = None) -> Path:
+                 frames: Optional[tuple] = None, slow: int = 1) -> Path:
     base = Path(output_dir) if output_dir else source.parent / "Upflow2x"
     base.mkdir(parents=True, exist_ok=True)
     suffix = FORMATS.get(fmt, "")
-    # Name a trimmed render after its range, so two cuts of one file differ.
+    # Name a trimmed render after its range, so two cuts of one file differ,
+    # and a slowed one after how much slower.
     part = f"_f{frames[0]}-{frames[1]}" if frames else ""
+    if slow > 1:
+        part += f"_{slow}x"
     stem = f"{source.stem}{part}_smooth"
 
     def taken(path: Path) -> bool:
@@ -237,6 +244,11 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Draw the 2x upscale in the render with Real-ESRGAN, on a GPU. "
                              "Without a GPU, or without this flag, the render stays at "
                              "source resolution and Super Scale is applied on import.")
+    parser.add_argument("--slow-motion", type=int, default=1, choices=range(1, 5),
+                        metavar="N",
+                        help="Draw N frames for every frame of the clip, 1 to 4, at the same "
+                             "rate, so the render plays N times slower, ready to time remap. "
+                             "1 (default) keeps the clip's length.")
     parser.add_argument("--json", action="store_true",
                         help="Emit a machine-readable summary.")
     parser.add_argument("--status-file", default=None,
@@ -261,6 +273,7 @@ def config_from_args(args) -> Eternal2xConfig:
     cfg.upscale_enabled = False
     cfg.upscale_factor = 1 if args.no_upscale else 2
     cfg.network_upscale = args.network_upscale and not args.no_upscale
+    cfg.slow_motion = args.slow_motion
     return cfg
 
 
@@ -357,7 +370,10 @@ def _run(args, summary: dict) -> int:
     summary.update({"source": str(source), "width": width, "height": height,
                     "plan": plan.to_dict()})
 
-    if plan.is_noop and plan.marked:
+    # Slowed down, a clip on 1s or with every frame marked still has frames
+    # to draw between them. Analyse has nothing more to mark either way.
+    same_length = cfg.slow_motion == 1 or args.analyse
+    if plan.is_noop and plan.marked and (same_length or plan.unique_drawings <= 1):
         if plan.unique_drawings <= 1:
             why = "Only the first frame is marked, so there is nothing to draw between."
             short = "Mark at least one more frame on the clip, or delete the markers to let Upflow2x find the drawings."
@@ -370,7 +386,7 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=True, message=short)
         return 0
 
-    if plan.is_noop:
+    if plan.is_noop and (same_length or plan.unique_drawings <= 1):
         if plan.unique_drawings <= 1:
             why = "This clip is a single held image, so there is no motion to rebuild."
             short = "One held image. There is no motion to rebuild."
@@ -397,7 +413,8 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=True, message=plan.describe())
         return 0
 
-    output = _output_path(source, args.output_dir, args.format, None if whole else frames)
+    output = _output_path(source, args.output_dir, args.format, None if whole else frames,
+                          cfg.slow_motion)
     print(f"Rendering to: {output}")
     try:
         result = render_plan(source, plan, output, cfg, progress=progress,
@@ -416,6 +433,7 @@ def _run(args, summary: dict) -> int:
     elif cfg.network_upscale:
         print(f"Real-ESRGAN did not run, so Super Scale does the upscale. {result.upscale_note}")
     status.upscaled = result.upscaled
+    status.slow_motion = cfg.slow_motion
     summary["render"] = result.to_dict()
 
     # Resolve imports an image sequence from its first frame, not its folder.

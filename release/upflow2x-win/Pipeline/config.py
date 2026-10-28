@@ -44,6 +44,10 @@ class Eternal2xConfig:
     # Upscale 2x with the network in Pipeline/upscaler.py. Where it cannot run,
     # the render stays at the clip's size and Resolve's Super Scale does it.
     network_upscale: bool = False
+    # How many times longer the render is than the clip. 1 drops back into the
+    # edit in place of the original. 3 draws three frames for every one at the
+    # same rate, so it plays in slow motion, ready to time remap.
+    slow_motion: int = 1
 
     def to_dict(self) -> dict:
         return asdict(self)

@@ -6,7 +6,8 @@ Two passes over the source:
                    last new drawing, which is all `Pipeline.dedupe` needs to
                    build a plan. A grainy clip is measured a second time.
   render_plan()    decodes again and writes the output, holding only the two
-                   drawings currently being interpolated between.
+                   drawings currently being interpolated between and the
+                   next new one, which tells a cut from fast motion.
 
 Nothing loads the whole clip into memory, so length is limited by disk rather
 than by RAM.
@@ -15,16 +16,17 @@ than by RAM.
 from __future__ import annotations
 
 import sys
+from collections import deque
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Iterator, List, Optional, Sequence, Tuple
+from typing import Callable, Deque, Iterator, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
 
 from Pipeline.config import Eternal2xConfig
 from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
-from Pipeline.interpolate import upscale
+from Pipeline.interpolate import frames_are_a_cut, is_a_cut, shot_change, upscale
 
 ProgressFn = Callable[[str, float], None]
 
@@ -408,6 +410,7 @@ def render_plan(
 
     The output has exactly as many frames as the source and runs at the same
     rate, so it drops straight back into an edit in place of the original.
+    With `cfg.slow_motion` it has that many times the frames, at the same rate.
 
     `sequence` says whether `output` is a folder of PNG frames. Left as None it
     is guessed from the suffix, which a caller that knows should not rely on,
@@ -427,7 +430,7 @@ def render_plan(
     # The network's 2x and Lanczos never both apply, or the render would be 4x.
     # Where the network cannot run, the upscale is left to Super Scale.
     factor = cfg.upscale_factor if cfg.upscale_enabled and not cfg.network_upscale else 1
-    positions = output_time_map(plan)
+    positions = output_time_map(plan, cfg.slow_motion)
 
     # Set up before the source is opened, since the first render installs the
     # network's runtime and downloads its model, and a failure there should
@@ -515,40 +518,79 @@ def render_plan(
                                           plan.fps)
             state["writer"].write(frame)
         state["written"] += 1
-        if progress and plan.source_frames:
+        if progress and positions:
             # A GPU that gave out mid-render leaves the rest to the CPU, which
             # takes seconds a frame. A new stage name restarts the time left.
             on_cpu = not getattr(state["upscaler"], "on_gpu", True)
             progress("Rendering, upscaling on the CPU" if on_cpu else "Rendering",
-                     min(1.0, state["written"] / float(plan.source_frames)))
+                     min(1.0, state["written"] / float(len(positions))))
 
     try:
-        frames = _iter_plan_frames(cap, plan.output_indices)
-        prev = next(frames, None)
-        if prev is None:
-            raise SourceError(f"Could not read frames from: {source}")
-
+        indices = plan.output_indices
+        frames = _iter_plan_frames(cap, indices)
+        # The frames from slot `index` on. A pose fills several slots with the
+        # same drawing, so the window reads on past them to the next new one,
+        # and each change is judged against the changes on both sides of it.
+        window: Deque[np.ndarray] = deque()
         index = 0
-        for curr in frames:
+
+        def frame_at(slot: int) -> Optional[np.ndarray]:
+            while slot - index >= len(window):
+                frame = next(frames, None)
+                if frame is None:
+                    return None
+                window.append(frame)
+            return window[slot - index]
+
+        def change_from(slot: int) -> Optional[float]:
+            """shot_change from the drawing at `slot` to the next new one."""
+            if pair is None or plan.marked:
+                return None
+            new = slot + 1
+            while new < len(indices) and indices[new] == indices[slot]:
+                new += 1
+            a, b = frame_at(slot), frame_at(new)
+            return None if a is None or b is None else shot_change(a, b)
+
+        if frame_at(0) is None:
+            raise SourceError(f"Could not read frames from: {source}")
+        before: Optional[float] = None
+        here = change_from(0)
+        while frame_at(index + 1) is not None:
+            prev, curr = frame_at(index), frame_at(index + 1)
+            moves = indices[index + 1] != indices[index]
+            after = change_from(index + 1) if moves else None
             times = buckets[index] if index < len(buckets) else []
+            # Markers are the editor saying which frames go together, so a
+            # marked clip is drawn through every gap, a cut included.
+            if pair is None or not times or not moves:
+                unrelated = None
+            elif plan.marked:
+                unrelated = False
+            else:
+                unrelated = frames_are_a_cut(prev, curr) or is_a_cut(prev, curr, here,
+                                                                     before, after)
             # A few at a time. Between two markers there can be hundreds of
             # frames, and drawn all at once a minute's pause at 4K held over
             # 30 GB before the first was written.
             for at in range(0, len(times), BATCH):
                 part = times[at:at + BATCH]
                 if pair is not None:
-                    produced = pair(prev, curr, part)
+                    produced = pair(prev, curr, part, unrelated=unrelated)
                 else:
                     # De-duplicate only: every output frame is a real drawing,
                     # nothing is synthesised, and each starts where it did.
                     produced = [(prev if t < 1.0 else curr).copy() for t in part]
                 for frame in produced:
                     emit(frame)
-            prev = curr
+            if moves:
+                before, here = here, after
+            window.popleft()
             index += 1
 
         # A single-drawing plan, or the trailing hold the buckets do not cover.
-        while state["written"] < plan.source_frames:
+        prev = frame_at(index)
+        while state["written"] < len(positions):
             emit(prev)
     finally:
         cap.release()

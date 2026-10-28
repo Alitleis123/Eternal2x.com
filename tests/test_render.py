@@ -353,6 +353,77 @@ def test_a_hard_cut_stays_on_its_frame(make_anime, tmp_path, read_frames):
     )
 
 
+def test_a_marked_clip_is_drawn_through_a_cut(make_anime, tmp_path, read_frames):
+    """The editor's markers say which frames go together, so Render draws
+    every gap between two of them and second-guesses none."""
+    from Pipeline.dedupe import plan_from_marks
+    src = make_anime(holds=(2,) * 12, cut_at=6)
+    plan = plan_from_marks(range(0, 24, 2), 24, 24.0)
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    held = [i for i in range(1, 23, 2)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+    assert not held, f"in-betweens {held} were held between two markers"
+
+
+def _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames, scores):
+    """Render eight drawings on 2s with each pair's shot change set by hand."""
+    from Pipeline import interpolate
+    given = iter(scores)
+    monkeypatch.setattr(interpolate, "_disagreement", lambda a, b: next(given))
+    src = make_anime(holds=(2,) * 8)
+    plan, _, _ = analyse_video(src, cfg())
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    return [i for i in range(1, 15, 2)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+
+
+def test_fast_action_through_a_whole_shot_is_interpolated(monkeypatch, make_anime, tmp_path,
+                                                          read_frames):
+    """Fast action disagrees as much as a cut. Holding every such pair left a
+    Jujutsu Kaisen fight still on 37 of its 53 in-betweens."""
+    held = _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames,
+                             [0.15, 0.2, 0.12, 0.18, 0.15, 0.2, 0.14])
+    assert not held, f"in-betweens {held} were held as if the shot cut there"
+
+
+def test_a_cut_between_calm_pairs_still_holds(monkeypatch, make_anime, tmp_path, read_frames):
+    held = _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames,
+                             [0.01, 0.02, 0.01, 0.2, 0.02, 0.01, 0.02])
+    assert held == [7], f"held {held}, expected only the in-between across the cut"
+
+
+def test_a_move_between_two_poses_is_judged_against_the_moves_around_it(
+        monkeypatch, make_anime, tmp_path, read_frames):
+    """A pose fills several slots with one drawing. Those repeats are not
+    changes, so they must not make the move between two poses stand out."""
+    from Pipeline import interpolate
+    given = iter([0.08, 0.13, 0.08])
+    monkeypatch.setattr(interpolate, "_disagreement", lambda a, b: next(given))
+    src = make_anime(holds=(2, 12, 12, 2))
+    plan, _, _ = analyse_video(src, cfg())
+    assert plan.output_indices == [0] + [2] * 6 + [14] * 6 + [26]
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    # Frame 13 is the in-between from the first pose to the second.
+    assert float(np.abs(out[13].astype(float) - out[12].astype(float)).mean()) > 0.5, (
+        "the move between the two poses was held as if the shot cut there")
+
+
+def test_slow_motion_draws_three_times_the_frames_at_the_same_rate(make_anime, tmp_path,
+                                                                  read_frames):
+    """Three times the frames, for the editor to time remap. Each drawing
+    lands three times further in and every frame between two is drawn."""
+    src = make_anime(holds=(2,) * 8)
+    plan, _, _ = analyse_video(src, cfg())
+    result = render_plan(src, plan, tmp_path / "out", cfg(slow_motion=3), sequence=True)
+    out, source = read_frames(result.output), read_frames(src)
+    assert result.frames_written == len(out) == 48
+    assert result.fps == plan.fps
+    assert all(np.array_equal(out[3 * i], source[i]) for i in range(0, 16, 2))
+    held = [i for i in range(1, 42)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+    assert not held, f"frames {held} repeat the one before"
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())
@@ -556,9 +627,9 @@ def test_a_long_gap_between_markers_is_drawn_a_few_frames_at_a_time(monkeypatch,
     asked = []
     real = rife.Rife.interpolate_pair
 
-    def spy(self, a, b, times):
+    def spy(self, a, b, times, **kw):
         asked.append(len(times))
-        return real(self, a, b, times)
+        return real(self, a, b, times, **kw)
 
     monkeypatch.setattr(rife.Rife, "interpolate_pair", spy)
     src = make_anime(holds=(30, 2))

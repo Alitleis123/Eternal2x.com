@@ -332,12 +332,19 @@ local function render_name(path)
 end
 
 -- Whether `name` is what Stages/resolve_smooth.py calls a render of a file
--- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, then
--- _smooth, then _<nn> for the second render and on.
+-- whose name is `stem`: <stem>, a range _f<a>-<b> if it was trimmed, _<n>x
+-- if it was slowed, then _smooth, then _<nn> for the second render and on.
 local function rendered_from(name, stem)
     if stem == "" or name:sub(1, #stem) ~= stem then return false end
-    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1)
+    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1):gsub("^_%dx", "", 1)
     return rest == "_smooth" or rest:match("^_smooth_%d%d+$") ~= nil
+end
+
+-- How many times longer than its clip a render `name` of a file `stem` is,
+-- from the _<n>x that rendered_from passes over.
+local function slowed_by(name, stem)
+    local rest = name:sub(#stem + 1):gsub("^_f%d+%-%d+", "", 1)
+    return tonumber(rest:match("^_(%d)x_smooth")) or 1
 end
 
 -- The clip a render under the playhead was made from: on a track below it,
@@ -480,10 +487,12 @@ local function find_clip_path()
     local render = nil
     if below then
         -- Markers an editor puts on the render, the clip they see, count too.
+        -- A slowed one shows each frame of the original that many frames on.
         render = marked_clip(item, timeline, props)
         item = below
         props = below:GetMediaPoolItem():GetClipProperty() or {}
         path = props["File Path"]
+        render.slow = slowed_by(name, stem_of(path or ""))
     end
 
     -- Where the clip sits, so the result can go on a track above it, lined up
@@ -745,6 +754,7 @@ local function read_status()
         sequence_frames = tonumber(s:match('"sequence_frames"%s*:%s*(%d+)')) or 0,
         marks    = json_string(s, "marks") or "",
         upscaled = s:match('"upscaled"%s*:%s*(%a+)') == "true",
+        slow_motion = tonumber(s:match('"slow_motion"%s*:%s*(%d+)')) or 1,
         updated  = tonumber(s:match('"updated"%s*:%s*([%d%.eE]+)')),
         fps      = tonumber(s:match('"fps"%s*:%s*([%d%.]+)')) or 0,
         done     = s:match('"done"%s*:%s*(%a+)') == "true",
@@ -885,7 +895,7 @@ local win = disp:AddWindow({
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
                      ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
-                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nOff keeps every drawing on its frame and draws nothing, to upscale only." },
+                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nThe render plays at a third of the clip's speed, ready to time remap.\nOff keeps every drawing on its frame and the clip's length, and draws nothing, to upscale only." },
         ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
                      ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
@@ -1028,9 +1038,12 @@ local function clip_marks(clip)
                     if clip.unreadable or c.unreadable then error("no clip bounds") end
                     -- In timeline frames from the clip's first frame, which the
                     -- render shares with its original, then in the original's frames.
+                    -- A slowed render runs its own length, longer than the
+                    -- original's, and shows each of its frames that many on.
+                    local slow = c.slow or 1
                     t = math.floor(t + 0.5) - c.origin
-                    if t >= 0 and t < clip.length then
-                        local f = math.floor(t * clip.per + 1e-6)
+                    if t >= 0 and t < (slow > 1 and c.length or clip.length) then
+                        local f = math.floor(t / slow * clip.per + 1e-6)
                         if not seen[f] then
                             seen[f] = true
                             out[#out + 1] = f
@@ -1102,7 +1115,14 @@ local function current_args(extra)
     else
         args = args .. " --no-upscale"
     end
-    if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
+    -- Every render plays at a third of the clip's speed, with all the new
+    -- frames drawn, so there is more to time remap. With no in-betweens
+    -- there is nothing new to draw, so an upscale alone keeps the length.
+    if items.InterpCB.Checked then
+        args = args .. " --slow-motion 3"
+    else
+        args = args .. " --no-interpolate"
+    end
     if items.GrainCB.Checked then args = args .. " --grain" end
     if THRESHOLD ~= 5 then
         -- Each step doubles or halves how big a change counts, around the default.
@@ -1231,7 +1251,8 @@ end
 -- done: another timeline is open, the source clip is gone or was re-trimmed,
 -- or a call failed. Each step is guarded on its own, so a failure after the
 -- clip went in cannot lead to a second copy at the end of the timeline.
-local function place_above(pool, project, mpi, frames)
+-- `slow` is how many times longer than the clip the render is.
+local function place_above(pool, project, mpi, frames, slow)
     local place = RUN_PLACE
     if not (place and frames and frames > 0) then return nil end
     local ok, timeline, at, count, length = pcall(function()
@@ -1239,7 +1260,9 @@ local function place_above(pool, project, mpi, frames)
         if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
         local at = find_source(timeline, place)
         if not at then return nil end
-        local count = frames_covering(timeline, mpi, place.duration, frames)
+        -- A slowed render runs past the original anyway, so all of it goes on.
+        local count = slow > 1 and frames
+            or frames_covering(timeline, mpi, place.duration, frames)
         return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
     if not (ok and timeline and at and count and count > 0 and length) then return nil end
@@ -1261,7 +1284,9 @@ local function place_above(pool, project, mpi, frames)
     if added then pcall(function() timeline:SetTrackName("video", track, "Upflow2x") end) end
     -- Where it really ends, in case this Resolve counts frames differently.
     local over = 0
-    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    if slow == 1 then
+        pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    end
     return track, item, over
 end
 
@@ -1350,7 +1375,7 @@ local function import_result(st)
     if pool.AppendToTimeline then
         local frames = st.sequence_frames > 0 and st.sequence_frames
             or tonumber(clip_property(mpi, "Frames"))
-        local track, item, over = place_above(pool, project, mpi, frames)
+        local track, item, over = place_above(pool, project, mpi, frames, st.slow_motion)
         if track then
             LAST_ITEM = item
             notes = notes .. ", placed on V" .. track .. " above the original"
@@ -1441,7 +1466,8 @@ local function apply_status(st)
             LAST_OUTPUT = render_location(st)
             items.FolderBtn.Enabled = LAST_OUTPUT ~= nil
             local ok, notes, where, hint = import_result(st)
-            items.CompareBtn.Enabled = LAST_ITEM ~= nil
+            -- A slowed render runs past its original, so off it shows the next shot.
+            items.CompareBtn.Enabled = LAST_ITEM ~= nil and st.slow_motion == 1
             items.CompareBtn.Text = "Show Original"
             if ok then
                 set_status(st.message .. " " .. notes)

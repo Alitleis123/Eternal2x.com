@@ -165,7 +165,7 @@ def test_smooth_renders_imports_and_reports(installation):
 
     status = H.status()
     assert "12 drawings" in status, f"panel showed: {status!r}"
-    assert "48 smooth frames" in status or "24 smooth frames" in status
+    assert "72 smooth frames" in status, "the render is not three times the clip"
     assert "above the original" in status
 
     assert H.imported_count() == 1
@@ -181,10 +181,11 @@ def test_the_rendered_clip_is_real_and_correct(installation, read_frames):
 
     out = rendered_output(src)
     frames = read_frames(out)
-    assert len(frames) == 24, "the rebuild changed the clip length"
+    assert len(frames) == 72, "the render is not three times the clip"
 
-    # The stepped motion should be gone from everything but the held tail.
-    duplicates = sum(1 for i in range(1, len(frames) - 2)
+    # The stepped motion should be gone from everything but the held tail,
+    # the last drawing's 2 frames made 6.
+    duplicates = sum(1 for i in range(1, len(frames) - 5)
                      if np.array_equal(frames[i], frames[i - 1]))
     assert duplicates == 0, f"{duplicates} held frames survived"
 
@@ -198,7 +199,7 @@ def test_the_panel_hands_resolve_a_path_it_can_import(installation):
     assert H.sequence_import_count() == 1
     pattern = H.last_sequence_field("FilePath")
     first, last = H.last_sequence_field("StartIndex"), H.last_sequence_field("EndIndex")
-    assert last - first + 1 == 24, "the range does not cover the whole clip"
+    assert last - first + 1 == 72, "the range does not cover the whole render"
     for index in (first, last):
         frame = Path(pattern % index)
         assert frame.is_file(), f"Resolve was given {pattern}, but {frame.name} is missing"
@@ -249,7 +250,7 @@ def test_a_clip_path_with_spaces_survives_the_shell(installation, read_frames):
     H.click("SmoothBtn")
     finish(H)
     assert "above the original" in H.status()
-    assert len(read_frames(rendered_output(src))) == 24
+    assert len(read_frames(rendered_output(src))) == 72
 
 
 def test_a_python_that_cannot_start_is_reported_not_waited_on(installation, tmp_path):
@@ -280,8 +281,8 @@ def test_a_trimmed_timeline_clip_is_rebuilt_from_just_its_range(installation, re
     H.set_source_range(0.25, 0.75)       # frames 6 to 17 of a 24 fps file
     H.click("SmoothBtn")
     finish(H)
-    assert len(read_frames(rendered_output(src))) == 12
-    assert H.last_sequence_field("EndIndex") == 11
+    assert len(read_frames(rendered_output(src))) == 36
+    assert H.last_sequence_field("EndIndex") == 35
 
 
 def test_a_plugin_folder_with_shell_characters_still_runs(tmp_path, repo_root, make_anime,
@@ -292,4 +293,4 @@ def test_a_plugin_folder_with_shell_characters_still_runs(tmp_path, repo_root, m
         holds=(2,) * 6)
     H.click("SmoothBtn")
     finish(H)
-    assert len(read_frames(rendered_output(src))) == 12
+    assert len(read_frames(rendered_output(src))) == 36
