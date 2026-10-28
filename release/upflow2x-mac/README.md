@@ -171,9 +171,10 @@ Settings are remembered between sessions.
 
 ### What it will not do
 
-If a clip has no duplicated frames, Upflow2x says so and stops. Live action
-and animation already on 1s have nothing to recover, and smoothing them would
-only invent motion that was never there.
+If a clip has no duplicated frames, Analyse says so. Live action and
+animation already on 1s have no held drawings to recover. Render still slows
+them to a third of the speed, with two new frames drawn between every pair.
+With Interpolate off it stops instead, since there is nothing to draw.
 
 It also refuses a clip with a variable frame rate, as phone and screen
 recordings often have. Every rebuilt frame lasts the same time, so such a clip
