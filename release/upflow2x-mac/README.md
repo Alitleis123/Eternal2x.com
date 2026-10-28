@@ -23,9 +23,9 @@ rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer ho
 *Six frames of hair in the wind, drawn on 3s. The [site](https://upflow2x.com)
 has the moving version, with a divider to drag between the two.*
 
-The result has the clip's frame rate and three times its length, so it plays
-at a third of the speed with every new frame drawn, ready to time remap or
-slow further with optical flow. Every drawing lands on three times the frame
+The result has the clip's frame rate and three frames for every one of the
+clip's, so it plays at a third of the speed with every new frame drawn, ready
+to time remap or slow further with optical flow. Every drawing lands on three times the frame
 it was on in the source, so the shot keeps its timing, only slower. On a clip
 with markers the render ends on the last one, since nothing after it counts.
 Without markers, the last drawing has nothing after it to move toward, so it
@@ -124,8 +124,8 @@ move it.
 5. Click **Render**.
 
 Render keeps every marked frame as drawn and draws every frame between two
-markers fresh, so a part you leave unmarked never counts. The render ends on
-the last marker, so mark the last drawing you want in it. Every marker on the
+markers fresh, so a part you leave unmarked never counts. With Interpolate on,
+the render ends on the last marker, so mark the last drawing you want in it. Every marker on the
 clip counts, whatever its colour, and the clip's first frame always does.
 Markers on the timeline's ruler do not, so beat markers are safe there. You can
 skip Analyse and mark the frames yourself. A clip with no markers at all is
@@ -136,7 +136,8 @@ rendered from the drawings Upflow2x finds on its own.
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
-same frame and running three times as long. It goes on the lowest
+same frame. With Interpolate on it runs three times as long, up to the last
+marker if the clip has any. It goes on the lowest
 track that is empty there, or a new track named Upflow2x. Your other clips are
 never covered or moved. If you move the original while it renders, the result
 follows it. If another timeline is open when it finishes, or the original was
