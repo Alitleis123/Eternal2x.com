@@ -131,7 +131,7 @@ python3 Installer/gui_installer.py</code></div>
                 <ol class="os-steps">
                     <li>
                         <h3>Put the playhead on a clip</h3>
-                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. Analyse and Render pick up the clip under the playhead when you press them, and if the playhead sits in a gap, they keep the last clip. <strong>Use Clip at Playhead</strong> shows you which one that is.</p>
+                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. It follows the playhead as you move it, and if the playhead sits in a gap, it keeps the last clip.</p>
                     </li>
                     <li>
                         <h3>Analyse</h3>
@@ -202,7 +202,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"No clip under the playhead"</summary>
                         <div class="answer">
-                            <p>Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, then press Use Clip at Playhead.</p>
+                            <p>Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, and the panel picks it up.</p>
                         </div>
                     </details>
                     <details>

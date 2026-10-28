@@ -88,7 +88,7 @@ def test_panel_loads(lua, direct):
 def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
-    for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
+    for expected in ("SmoothBtn", "AnalyseBtn", "RefreshStatusBtn",
                      "CancelBtn", "UpdateBtn", "FormatCombo",
                      "UpscaleCB", "InterpCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
@@ -98,7 +98,7 @@ def test_every_control_is_present(lua, direct):
 def test_every_control_has_a_handler(lua, direct):
     H = load(lua, ui_script(direct))
     handlers = set(H.handler_ids().split(","))
-    for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
+    for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "PollTimer.Timeout",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
                      "UpdateBtn.Clicked",
                      "UpscaleCB.Clicked",
@@ -417,7 +417,7 @@ def test_the_selected_clip_is_shown_on_open(lua, direct):
 
 def test_refresh_picks_up_the_selection(lua, direct):
     H = load(lua, ui_script(direct), clip="/media/shot.mov")
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     assert "shot.mov" in H.widgets["SourceLabel"].Text
     assert "Ready" in H.status()
 
@@ -717,7 +717,7 @@ def test_a_sequence_is_placed_with_its_own_length(lua, direct):
 def test_without_the_placement_calls_it_goes_at_the_end(lua, direct):
     H = load(lua, ui_script(direct))
     H.no_place_api = True
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     finish_render(H, direct)
     assert len(H.placements) == 0
     assert H.appended == 1
@@ -804,7 +804,7 @@ def _with_source(lua, direct, **fields):
     sets = "; ".join(f"H.{k} = {str(v).lower() if isinstance(v, bool) else repr(v)}"
                      for k, v in fields.items())
     lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; {sets}", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     return H
 
 
@@ -920,7 +920,7 @@ def _stacked(lua, direct, top, *under):
     paths = ", ".join("'" + p.replace("\\", "\\\\") + "'" for p in under)
     lua.execute(f"local H = ...; H.tracks = nil; H.src_span = nil; "
                 f"H.item_track = {len(under) + 1}; H.under_paths = {{ {paths} }}", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     return H
 
 
@@ -954,7 +954,7 @@ def _under_a_clip(lua, direct, setup=""):
     H = load(lua, ui_script(direct), clip="/media/B.mov")
     lua.execute("local H = ...; H.tracks = nil; H.src_span = nil; H.item_track = 2; "
                 "H.under_paths = { '/media/A.mov' }; H.playhead_tc = '01:00:00:10'; " + setup, H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     return H
 
 
@@ -1363,7 +1363,7 @@ def test_the_panel_uses_a_resolve_global_when_there_is_one(lua, direct):
     lua.execute('resolve = nil')
     H.load(str(ui_script(direct)), "/media/first.mov")
     lua.execute('resolve = Resolve(); Resolve = nil')
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     assert "first.mov" in H.widgets["SourceLabel"].Text
 
 
@@ -2091,13 +2091,28 @@ def test_another_part_of_the_file_clears_the_last_analysis(lua, direct):
     assert H.widgets["AnalysisLabel"].ToolTip == ""
 
 
-def test_the_clip_tip_goes_when_no_clip_is_found(lua, direct):
+def test_the_clip_card_follows_the_playhead_from_the_start(lua, direct):
+    """No button to press: the timer runs as soon as the panel opens."""
     H = load(lua, ui_script(direct))
-    assert H.widgets["SourceLabel"].ToolTip.endswith("\n\n/media/shot.mov")
+    assert H.window.__items["PollTimer"].__running
+
+
+def test_the_clip_card_keeps_the_last_clip_in_a_gap(lua, direct):
+    """As Analyse and Render do, so moving off the clip does not lose it."""
+    H = load(lua, ui_script(direct))
     H.under_playhead = False
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
+    assert "shot.mov" in H.widgets["SourceLabel"].Text
+    assert H.widgets["SourceLabel"].ToolTip.endswith("\n\n/media/shot.mov")
+    assert H.status() == "Ready.", "a gap reported itself in the status"
+
+
+def test_with_no_clip_the_card_has_no_path(lua, direct):
+    H = lua.eval(f'dofile("{HARNESS.as_posix()}")')
+    H.under_playhead = False
+    H.load(str(ui_script(direct)), "/media/shot.mov")
     assert "shot.mov" not in H.widgets["SourceLabel"].ToolTip
-    assert "playhead" in H.widgets["SourceLabel"].ToolTip, "the card's own tip went too"
+    assert "playhead" in H.widgets["SourceLabel"].ToolTip
 
 
 def test_a_clip_kept_from_before_keeps_its_tip(lua, direct):
@@ -2137,7 +2152,7 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
     into a clip trimmed 20 frames in reads back as frame 30."""
     H = load(lua, ui_script(direct))
     H.left_offset, H.source_frames = 20, lua.table(20, 67)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     for key in (30, 20, 5, 75):
         H.add_marker(key)
     H.click("SmoothBtn")
@@ -2147,7 +2162,7 @@ def test_a_trimmed_clip_counts_its_markers_from_its_left_edge(lua, direct):
 def test_analyse_marks_a_trimmed_clip_where_its_frames_are(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset, H.source_frames = 20, lua.table(20, 67)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2159,7 +2174,7 @@ def test_markers_on_a_clip_at_another_rate_become_its_own_frames(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
     H.left_offset, H.source_frames = 47, lua.table(59, 118)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(47)
     H.add_marker(57)
     H.click("SmoothBtn")
@@ -2195,7 +2210,7 @@ def test_markers_on_a_render_above_its_original_count_too(lua, direct):
     """The editor sees the render on top and may mark that instead."""
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_markers[1][0] = {}; H.under_markers[1][12] = {}", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(6)
     H.click("SmoothBtn")
     assert "shot.mov" in H.last_command()
@@ -2212,7 +2227,7 @@ def test_markers_on_a_slowed_render_count_as_the_frames_they_show(lua, direct):
     H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000143].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_markers[1][0] = {}; "
                 "H.src_span[2] = H.src_span[1] + 144", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(6)
     H.add_marker(120)
     H.click("SmoothBtn")
@@ -2234,7 +2249,7 @@ def test_a_marker_near_the_end_of_a_slowed_render_counts(lua, direct):
     H = _stacked(lua, direct, "/r/shot_3x_smooth/frame_[000000-000356].png", "/media/shot.mov")
     lua.execute("local H = ...; H.clip_fps = '60'; H.src_span[2] = H.src_span[1] + 142; "
                 "H.under_spans[1][2] = H.under_spans[1][1] + 47", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(141)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "117"
@@ -2264,7 +2279,7 @@ def test_analyse_markers_never_read_back_as_the_drawing_before(lua, direct):
     H.clip_fps, H.timeline_fps, H.item_duration, H.left_offset = "30", "23.976", 200, 47
     H.source_frames = lua.table(59, 308)
     lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,125,127,129", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2280,7 +2295,7 @@ def test_markers_on_a_clip_whose_bounds_cannot_be_read_stop_the_render(lua, dire
     """Guessing the left offset would read every marker as the wrong frame."""
     H = load(lua, ui_script(direct))
     H.left_offset_fails = True
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(30)
     before = H.last_command()
     H.click("SmoothBtn")
@@ -2293,7 +2308,7 @@ def test_markers_on_a_trimmed_clip_without_its_source_range_stop_the_render(lua,
     counted from the clip's left edge would keep the wrong frames."""
     H = load(lua, ui_script(direct))
     H.left_offset = 20
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(30)
     before = H.last_command()
     H.click("SmoothBtn")
@@ -2304,7 +2319,7 @@ def test_markers_on_a_trimmed_clip_without_its_source_range_stop_the_render(lua,
 def test_analyse_places_no_markers_on_a_trimmed_clip_without_its_source_range(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset = 20
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4", message="On 2s.")
     H.click("RefreshStatusBtn")
@@ -2324,7 +2339,7 @@ def test_markers_on_an_untrimmed_clip_without_its_source_range_still_render(lua,
 def test_an_unmarked_clip_whose_bounds_cannot_be_read_still_renders(lua, direct):
     H = load(lua, ui_script(direct))
     H.left_offset_fails = True
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("SmoothBtn")
     assert "--marks-file" not in H.last_command()
     assert "No markers" in H.status()
@@ -2364,7 +2379,7 @@ def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, d
     render's marker 12 timeline frames in is the original's frame 15."""
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_fps = '30'; H.under_markers[1][0] = {}", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(12)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "0,15"
@@ -2373,7 +2388,7 @@ def test_markers_on_a_render_at_another_rate_count_as_the_original_frames(lua, d
 def test_render_markers_past_the_end_of_the_original_do_not_count(lua, direct):
     H = _stacked(lua, direct, "/r/shot_smooth/frame_[000000-000047].png", "/media/shot.mov")
     lua.execute("local H = ...; H.under_spans[1][2] = H.under_spans[1][1] + 24", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(30)
     H.click("SmoothBtn")
     assert "--marks-file" not in H.last_command()
@@ -2385,7 +2400,7 @@ def test_found_frames_that_share_a_timeline_frame_are_reported(lua, direct):
     share timeline frame 4. The panel says so rather than dropping one."""
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "30", "23.976"
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,2,4,5,7", message="On 1s.")
     H.click("RefreshStatusBtn")
@@ -2399,7 +2414,7 @@ def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps, H.item_duration = "23.976", "24", 1200
     lua.execute("local H = ...; H.src_span = nil; H.tracks = nil", H)
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.add_marker(1001)
     H.click("SmoothBtn")
     assert marks_sent(direct) == "1000"
@@ -2413,7 +2428,7 @@ def test_ntsc_rates_count_exactly_over_a_long_clip(lua, direct):
 def test_several_shared_frames_read_as_a_plural(lua, direct):
     H = load(lua, ui_script(direct))
     H.clip_fps, H.timeline_fps = "60", "24"
-    H.click("RefreshBtn")
+    H.fire("PollTimer", "Timeout")
     H.click("AnalyseBtn")
     write_status(direct, fraction=1.0, done=True, ok=True, marks="0,3,5,6,7", message="On 1s.")
     H.click("RefreshStatusBtn")
