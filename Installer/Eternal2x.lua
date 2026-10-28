@@ -483,7 +483,9 @@ local function find_clip_path()
     local render = nil
     if below then
         -- Markers an editor puts on the render, the clip they see, count too.
+        -- A slowed one shows each frame of the original that many frames on.
         render = marked_clip(item, timeline, props)
+        render.slow = tonumber(name:match("_(%d)x_smooth_?%d*$")) or 1
         item = below
         props = below:GetMediaPoolItem():GetClipProperty() or {}
         path = props["File Path"]
@@ -1042,7 +1044,7 @@ local function clip_marks(clip)
                     if clip.unreadable or c.unreadable then error("no clip bounds") end
                     -- In timeline frames from the clip's first frame, which the
                     -- render shares with its original, then in the original's frames.
-                    t = math.floor(t + 0.5) - c.origin
+                    t = (math.floor(t + 0.5) - c.origin) / (c.slow or 1)
                     if t >= 0 and t < clip.length then
                         local f = math.floor(t * clip.per + 1e-6)
                         if not seen[f] then
@@ -1255,7 +1257,9 @@ local function place_above(pool, project, mpi, frames)
         if not timeline or timeline:GetUniqueId() ~= place.timeline then return nil end
         local at = find_source(timeline, place)
         if not at then return nil end
-        local count = frames_covering(timeline, mpi, place.duration * RUN_SLOW, frames)
+        -- A slowed render runs past the original anyway, so all of it goes on.
+        local count = RUN_SLOW > 1 and frames
+            or frames_covering(timeline, mpi, place.duration, frames)
         return timeline, at, count, count and timeline_length(timeline, mpi, count)
     end)
     if not (ok and timeline and at and count and count > 0 and length) then return nil end
@@ -1277,7 +1281,9 @@ local function place_above(pool, project, mpi, frames)
     if added then pcall(function() timeline:SetTrackName("video", track, "Upflow2x") end) end
     -- Where it really ends, in case this Resolve counts frames differently.
     local over = 0
-    pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration * RUN_SLOW) end)
+    if RUN_SLOW == 1 then
+        pcall(function() over = tonumber(item:GetEnd()) - (at.start + place.duration) end)
+    end
     return track, item, over
 end
 
@@ -1457,7 +1463,8 @@ local function apply_status(st)
             LAST_OUTPUT = render_location(st)
             items.FolderBtn.Enabled = LAST_OUTPUT ~= nil
             local ok, notes, where, hint = import_result(st)
-            items.CompareBtn.Enabled = LAST_ITEM ~= nil
+            -- A slowed render runs past its original, so off it shows the next shot.
+            items.CompareBtn.Enabled = LAST_ITEM ~= nil and RUN_SLOW == 1
             items.CompareBtn.Text = "Show Original"
             if ok then
                 set_status(st.message .. " " .. notes)
