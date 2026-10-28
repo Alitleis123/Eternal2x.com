@@ -26,7 +26,7 @@ import numpy as np
 
 from Pipeline.config import Eternal2xConfig
 from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
-from Pipeline.interpolate import is_a_cut, shot_change, upscale
+from Pipeline.interpolate import frames_are_a_cut, is_a_cut, shot_change, upscale
 
 ProgressFn = Callable[[str, float], None]
 
@@ -543,7 +543,7 @@ def render_plan(
 
         def change_from(slot: int) -> Optional[float]:
             """shot_change from the drawing at `slot` to the next new one."""
-            if pair is None:
+            if pair is None or plan.marked:
                 return None
             new = slot + 1
             while new < len(indices) and indices[new] == indices[slot]:
@@ -560,8 +560,15 @@ def render_plan(
             moves = indices[index + 1] != indices[index]
             after = change_from(index + 1) if moves else None
             times = buckets[index] if index < len(buckets) else []
-            unrelated = (is_a_cut(prev, curr, here, before, after)
-                         if pair is not None and times and moves else None)
+            # Markers are the editor saying which frames go together, so a
+            # marked clip is drawn through every gap, a cut included.
+            if pair is None or not times or not moves:
+                unrelated = None
+            elif plan.marked:
+                unrelated = False
+            else:
+                unrelated = frames_are_a_cut(prev, curr) or is_a_cut(prev, curr, here,
+                                                                     before, after)
             # A few at a time. Between two markers there can be hundreds of
             # frames, and drawn all at once a minute's pause at 4K held over
             # 30 GB before the first was written.
