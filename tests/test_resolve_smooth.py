@@ -421,6 +421,25 @@ def test_the_panels_stop_ends_the_run(make_anime, monkeypatch, tmp_path):
     assert not list(out.rglob("*.mp4")) and not list(out.rglob("*.png"))
 
 
+def test_a_stop_while_the_last_frames_are_written_still_counts(make_anime, monkeypatch,
+                                                                tmp_path):
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    real = smooth.render_plan
+
+    def render_then_stop(*a, **k):
+        result = real(*a, **k)
+        status.with_suffix(".stop").write_text("")
+        return result
+
+    monkeypatch.setattr(smooth, "render_plan", render_then_stop)
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "o")]) == 1
+    payload = json.loads(status.read_text())
+    assert payload["ok"] is False and payload["message"] == "Stopped."
+    assert payload["import_path"] == "", "a stopped render must not be imported"
+
+
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):
     """The panel polls this file, so it must always parse."""
     src = make_anime(holds=(2,) * 8)

@@ -1712,9 +1712,11 @@ def test_the_stall_warning_goes_once_progress_resumes(lua, direct):
     write_status(direct, fraction=0.3, updated=time.time() - 10 * 60)
     H.click("RefreshStatusBtn")
     assert "No progress" in H.status()
+    assert H.text_of("CancelBtn") == "Reset", "the warning says press Reset"
     write_status(direct, fraction=0.4, updated=time.time())
     H.click("RefreshStatusBtn")
     assert "No progress" not in H.status()
+    assert H.text_of("CancelBtn") == "Stop"
 
 
 def test_reset_clears_a_run_that_went_quiet(lua, direct):
