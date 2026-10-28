@@ -23,12 +23,12 @@ rebuilt    A a B b C C c D D        in-betweens generated, C keeps its longer ho
 *Six frames of hair in the wind, drawn on 3s. The [site](https://upflow2x.com)
 has the moving version, with a divider to drag between the two.*
 
-Every drawing starts on the same frame it did in the source, so cuts and lip
-sync stay where the edit put them.
-
-The result has the same length and frame rate as the clip you started with, so
-it drops straight back into your edit. Set **Length** to 2x, 3x or 4x instead
-for slow motion with every new frame drawn, ready to time remap.
+The result has the clip's frame rate and three times its length, so it plays
+at a third of the speed with every new frame drawn, ready to time remap or
+slow further with optical flow. Every drawing lands on three times the frame
+it was on in the source, so the shot keeps its timing, only slower. The last
+drawing has nothing after it to move toward, so it holds for three times its
+length.
 
 ## What it does
 
@@ -134,7 +134,7 @@ rendered from the drawings Upflow2x finds on its own.
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
-same frame, so it lines up with your edit and audio. It goes on the lowest
+same frame and running three times as long. It goes on the lowest
 track that is empty there, or a new track named Upflow2x. Your other clips are
 never covered or moved. If you move the original while it renders, the result
 follows it. If another timeline is open when it finishes, or the original was
@@ -146,8 +146,8 @@ Then:
 
 - **Show Original** switches the smoothed clip off so the original shows
   through, and **Show Upflow2x** switches it back. Scrub or play to compare.
-  It is off for a render set longer than its clip, which has no original to
-  line up with.
+  It only works on an upscale with Interpolate off. A slowed render has no
+  original to line up with.
 - **Show in Folder** opens the render's location.
 
 Only the part of the file the timeline clip uses is analysed and rebuilt. To
@@ -163,9 +163,8 @@ Whole file when Resolve does not report one.
 | **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
 | **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
-| **Length** | `Same as clip` keeps the clip's length, so the render lines up with the edit and its audio. `2x`, `3x` and `4x longer` draw that many frames for every frame of the clip at the same frame rate, so the render plays that many times slower, ready to time remap or slow further with optical flow. Rendering takes that much longer and an image sequence takes that much more disk. The last drawing has nothing after it to move toward, so it holds for its stretched length. |
 | **Upscale 2x** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
-| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. Off skips the in-betweens, so every drawing comes back on its original frame. Use it with Upscale 2x to upscale only. |
+| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off skips the in-betweens, so every drawing comes back on its original frame and the render keeps the clip's length. Use it with Upscale 2x to upscale only. |
 | **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
 
 Settings are remembered between sessions.
