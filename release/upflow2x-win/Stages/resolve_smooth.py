@@ -480,45 +480,48 @@ def _run(args, summary: dict) -> int:
 
     # Too late to stop from here, or the clip would be left half placed.
     status.committed = True
-    media_item, imported = bridge.import_media(project, result.output,
-                                               frame_count=result.frames_written,
-                                               fps=result.fps)
-    print(("Imported: " if imported else "Import failed: ") + imported.detail)
-    summary["import"] = {"ok": imported.ok, "detail": imported.detail}
+    try:
+        media_item, imported = bridge.import_media(project, result.output,
+                                                   frame_count=result.frames_written,
+                                                   fps=result.fps)
+        print(("Imported: " if imported else "Import failed: ") + imported.detail)
+        summary["import"] = {"ok": imported.ok, "detail": imported.detail}
 
-    if not imported:
-        print(f"The render is fine and is waiting at: {result.output}")
-        print("Drag it into your media pool to finish.")
+        if not imported:
+            print(f"The render is fine and is waiting at: {result.output}")
+            print("Drag it into your media pool to finish.")
+            summary["ok"] = True
+            status.write(done=True, ok=True,
+                         message=f"Rendered, but Resolve would not import it. "
+                                 f"Drag in {result.output.name} to finish.")
+            return 0
+
+        if result.upscaled:
+            summary["upscale"] = {"ok": True, "detail": "Drawn 2x by Real-ESRGAN."}
+        elif cfg.upscale_factor > 1:
+            studio = bridge.is_studio(resolve)
+            if studio is False:
+                print("Skipping upscale: Super Scale needs DaVinci Resolve Studio.")
+                summary["upscale"] = {"ok": False, "detail": "not Studio"}
+            else:
+                scaled = bridge.set_super_scale(media_item, cfg.upscale_factor)
+                print(("Upscale: " if scaled else "Upscale not applied: ") + scaled.detail)
+                summary["upscale"] = {"ok": scaled.ok, "detail": scaled.detail}
+
+        appended = bridge.append_to_timeline(project, media_item)
+        print(("Timeline: " if appended else "Timeline not updated: ") + appended.detail)
+        summary["append"] = {"ok": appended.ok, "detail": appended.detail}
+
         summary["ok"] = True
-        status.write(done=True, ok=True,
-                     message=f"Rendered, but Resolve would not import it. "
-                             f"Drag in {result.output.name} to finish.")
+        print("Done.")
+        status.write(done=True, ok=True, message=_finished(plan, result))
         return 0
-
-    if result.upscaled:
-        summary["upscale"] = {"ok": True, "detail": "Drawn 2x by Real-ESRGAN."}
-    elif cfg.upscale_factor > 1:
-        studio = bridge.is_studio(resolve)
-        if studio is False:
-            print("Skipping upscale: Super Scale needs DaVinci Resolve Studio.")
-            summary["upscale"] = {"ok": False, "detail": "not Studio"}
-        else:
-            scaled = bridge.set_super_scale(media_item, cfg.upscale_factor)
-            print(("Upscale: " if scaled else "Upscale not applied: ") + scaled.detail)
-            summary["upscale"] = {"ok": scaled.ok, "detail": scaled.detail}
-
-    appended = bridge.append_to_timeline(project, media_item)
-    print(("Timeline: " if appended else "Timeline not updated: ") + appended.detail)
-    summary["append"] = {"ok": appended.ok, "detail": appended.detail}
-
-    summary["ok"] = True
-    print("Done.")
-    status.write(done=True, ok=True, message=_finished(plan, result))
-    # A Stop that came too late was not used, and would end the next run.
-    if status.stop_path is not None:
-        with contextlib.suppress(OSError):
-            status.stop_path.unlink()
-    return 0
+    finally:
+        # However this ends, a Stop that came now was not used, and would end
+        # the next run.
+        if status.stop_path is not None:
+            with contextlib.suppress(OSError):
+                status.stop_path.unlink()
 
 
 def _run_reporting(args, summary: dict) -> int:
