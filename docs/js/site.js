@@ -65,16 +65,10 @@
         ctx.stroke();
     }
 
-    var tick = 0;
     function loop() {
         draw();
-        tick = video.requestVideoFrameCallback ? video.requestVideoFrameCallback(loop)
-                                              : requestAnimationFrame(loop);
-    }
-    function restart() {
-        if (video.cancelVideoFrameCallback) video.cancelVideoFrameCallback(tick);
-        else cancelAnimationFrame(tick);
-        loop();
+        if (video.requestVideoFrameCallback) video.requestVideoFrameCallback(loop);
+        else requestAnimationFrame(loop);
     }
 
     function setPos(value) {
@@ -141,43 +135,6 @@
         else video.pause();
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
-
-    // Speed picks one of two 60 fps renders of the same shots. The new one
-    // picks up at the same moment, playing or paused as the last was.
-    var controls = document.getElementById('compare-controls');
-    if (controls) {
-        var speed = 'half';
-        var pending = null;
-        controls.hidden = false;
-        controls.addEventListener('click', function (e) {
-            var button = e.target.closest('button[data-speed]');
-            if (!button || button.dataset.speed === speed) return;
-            speed = button.dataset.speed;
-            controls.querySelectorAll('[data-speed]').forEach(function (b) {
-                b.setAttribute('aria-pressed', String(b === button));
-            });
-            // A second switch before the first render has loaded keeps the
-            // first one's moment. By then the video reads as paused at 0.
-            if (!pending) {
-                pending = { playing: !video.paused,
-                            at: video.duration ? video.currentTime / video.duration : 0 };
-            }
-            // The page's ?v= on the first video carries over, so a browser
-            // holding older renders fetches these.
-            var version = (video.getAttribute('src').split('?')[1] || '');
-            video.src = 'assets/demo/compare-60-' + speed + '.mp4'
-                + (version ? '?' + version : '');
-        });
-        video.addEventListener('loadedmetadata', function () {
-            if (!pending) return;
-            var resume = pending;
-            pending = null;
-            video.currentTime = resume.at * video.duration;
-            restart();
-            if (resume.playing) setPlaying(true);
-            else label();
-        });
-    }
 
     video.addEventListener('loadeddata', draw);
     video.addEventListener('seeked', draw);
