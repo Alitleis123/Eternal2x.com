@@ -41,10 +41,11 @@ it drops straight back into your edit.
   characters on drawn animation. Where the network cannot run, the drawings
   are kept as drawn.
 - Keeps deliberate held poses still, instead of smearing them into drift.
-- Cuts stay hard. Blending across a scene change would show both shots at once,
-  so where two drawings look like different shots it snaps instead. A cut
-  right beside another cut or very fast motion can still blend for a frame,
-  so check montages.
+- Cuts stay hard on a clip with no markers. Blending across a scene change
+  would show both shots at once, so where two drawings look like different
+  shots it snaps instead. A cut right beside another cut or very fast motion
+  can still blend for a frame, so check montages. On a marked clip it checks
+  nothing and draws every gap, so mark the last frame before a cut as well.
 - Upscales 2x with Real-ESRGAN's anime model, on the GPU on Windows. It clears
   compression blocks and keeps thin lines crisp, where Super Scale enlarges
   the blocks. Without a GPU, Resolve's Super Scale does the upscale.

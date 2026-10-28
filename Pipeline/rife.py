@@ -241,16 +241,17 @@ class Rife:
         drawings are never resampled. Across a cut the first drawing is held
         until the next one starts, since the network would otherwise morph one
         shot into the other. `unrelated` is the renderer's verdict on whether
-        the pair is two shots, made with the pairs around it in view. Without
-        it the pair is judged on its own.
+        the pair is two shots, made with the pairs around it in view, or False
+        where the editor's markers already said. Without it the pair is judged
+        on its own.
         """
         if not times:
             return []
         if np.array_equal(a, b):
             return [a.copy() for _ in times]
         if unrelated is None:
-            unrelated = frames_are_unrelated(a, b)
-        if frames_are_a_cut(a, b) or unrelated:
+            unrelated = frames_are_a_cut(a, b) or frames_are_unrelated(a, b)
+        if unrelated:
             return [(a.copy() if t < 1.0 else b.copy()) for t in times]
         out: List[np.ndarray] = []
         for t in times:

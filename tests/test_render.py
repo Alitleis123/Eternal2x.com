@@ -353,6 +353,18 @@ def test_a_hard_cut_stays_on_its_frame(make_anime, tmp_path, read_frames):
     )
 
 
+def test_a_marked_clip_is_drawn_through_a_cut(make_anime, tmp_path, read_frames):
+    """The editor's markers say which frames go together, so Render draws
+    every gap between two of them and second-guesses none."""
+    from Pipeline.dedupe import plan_from_marks
+    src = make_anime(holds=(2,) * 12, cut_at=6)
+    plan = plan_from_marks(range(0, 24, 2), 24, 24.0)
+    out = read_frames(render_plan(src, plan, tmp_path / "out.avi", cfg()).output)
+    held = [i for i in range(1, 23, 2)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+    assert not held, f"in-betweens {held} were held between two markers"
+
+
 def _held_in_betweens(monkeypatch, make_anime, tmp_path, read_frames, scores):
     """Render eight drawings on 2s with each pair's shot change set by hand."""
     from Pipeline import interpolate
