@@ -830,7 +830,7 @@ local START = themed([[
 -- checkable buttons, since a checkbox only takes a click on its dot and words.
 local TOGGLE = themed([[
     QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 8px;
-        padding: 0px 12px; min-height: 34px; font-size: 13px; color: $soft; text-align: left; }
+        padding: 0px 12px; min-height: 34px; font-size: 13px; color: $soft; }
     QPushButton:hover { background-color: $hover; }
     QPushButton:checked { border-color: $amber; color: $text; background-color: rgba(242, 169, 59, 40); }
     QPushButton:checked:hover { background-color: rgba(242, 169, 59, 64); }
@@ -881,7 +881,7 @@ local function bar_style(fraction)
         stop: %s $field, stop: 1 $field); }]], stop(f), stop(f + 0.001)))
 end
 
-local RENDER_LABEL = "\xE2\x96\xB6\nRender"
+local RENDER_LABEL = "\xE2\x96\xB6  Render"
 local ANALYSIS_HINT = "Mark the drawings with M, or let Analyse do it."
 
 -- What each part does, shown when the pointer rests on it, so the panel
@@ -912,8 +912,8 @@ local function row(name, control, tip)
     }
 end
 
--- The panel is the clip, the two switches and Render. The rest waits in
--- Settings.
+-- Top to bottom in the order you use it: the clip, Analyse, the two
+-- switches, then Render. The rest waits in Settings.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
@@ -933,19 +933,19 @@ local win = disp:AddWindow({
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
               WordWrap = true, MinimumSize = { 0, 46 }, ToolTip = TIPS.clip },
 
-    ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, Weight = 0,
-                   ToolTip = TIPS.render, MinimumSize = { 96, 76 }, MaximumSize = { 96, 76 } },
-        ui:VGroup{ Weight = 1, Spacing = 8,
-            ui:Button{ ID = "UpscaleCB", Text = "Upscaling", Checkable = true, Checked = DO_UPSCALE,
-                       StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
-            ui:Button{ ID = "InterpCB", Text = "Drawing in-betweens", Checkable = true,
-                       Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
-        },
-    },
-
     ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
     ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true },
+
+    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
+
+    ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Button{ ID = "UpscaleCB", Text = "Upscaling", Checkable = true, Checked = DO_UPSCALE,
+                   StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
+        ui:Button{ ID = "InterpCB", Text = "Drawing in-betweens", Checkable = true,
+                   Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
+    },
+    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, ToolTip = TIPS.render,
+               MinimumSize = { 0, 44 }, MaximumSize = { 16777215, 44 } },
 
     ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
               MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
