@@ -109,7 +109,8 @@ move it.
 
 1. Move the playhead over a clip on your timeline. Resolve does not tell
    scripts which clip is selected, so Upflow2x works on the clip under the
-   playhead, read again each time you press a button.
+   playhead. The panel follows the playhead, and in a gap it keeps the
+   last clip.
 2. Open **Workspace → Scripts → Upflow2x**.
 3. Click **Analyse**. It reads the clip, tells you what it found, for
    example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`,
@@ -222,7 +223,7 @@ afterwards.
 | Resolve says you need Studio | Since 19.1 the free edition blocks script panels. Upflow2x needs Studio. |
 | Clicking Upflow2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
-| "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
+| "No clip under the playhead" | Move the playhead over the clip, and the panel picks it up. |
 | "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
 | "Every frame differs, but the differences look like grain" | Mark the drawings with M, then press **Render**. From the command line, `--grain` raises the threshold above the grain. |
 | "...has a variable frame rate" | Render the clip to a constant frame rate first, from Resolve or with ffmpeg, as the message says. |

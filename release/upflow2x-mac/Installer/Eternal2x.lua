@@ -887,7 +887,7 @@ local ANALYSIS_HINT = "Mark the drawings with M, or let Analyse do it."
 -- What each part does, shown when the pointer rests on it, so the panel
 -- itself only needs names.
 local TIPS = {
-    clip = "Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Analyse and Render pick it up when you press them. Use Clip at Playhead shows which clip that is.",
+    clip = "Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. This box follows the playhead. With the playhead in a gap, it keeps the last clip.",
     detection = "Analyse finds the real drawings and puts a marker on each one. Delete a marker to leave its frame out, or add one with M. Render uses the marked frames, and finds the drawings itself on a clip with none.",
     threshold = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones.",
     render = "Render draws on your GPU and puts the result on the track above the clip. Resolve stays usable while it runs.",
@@ -944,10 +944,7 @@ local win = disp:AddWindow({
         },
     },
 
-    ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
-        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = BUTTON, ToolTip = TIPS.clip },
-    },
+    ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
     ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true },
 
     ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
@@ -1047,7 +1044,6 @@ local function set_busy(busy)
     RUNNING = busy
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
-    items.RefreshBtn.Enabled = not busy
     prefs_items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
 end
@@ -1064,6 +1060,13 @@ local function range_text(range)
             :gsub("(%d),(%d)", "%1.%2"))
 end
 
+-- The timer reads the clip twice a second, and a tip set again closes under
+-- the pointer, so the card is only written when it changes.
+local function show_source(text, tip)
+    if items.SourceLabel.Text ~= text then items.SourceLabel.Text = text end
+    if items.SourceLabel.ToolTip ~= tip then items.SourceLabel.ToolTip = tip end
+end
+
 local function refresh_source()
     local path, err, range, place, item = selected_clip_path()
     if not path then
@@ -1071,8 +1074,7 @@ local function refresh_source()
         SOURCE_RANGE = nil
         SOURCE_PLACE = nil
         SOURCE_ITEM = nil
-        items.SourceLabel.Text = err or "No clip under the playhead."
-        items.SourceLabel.ToolTip = TIPS.clip
+        show_source(err or "No clip under the playhead.", TIPS.clip)
         return false
     end
     -- Another clip, or another part of the file, makes the last analysis
@@ -1087,8 +1089,7 @@ local function refresh_source()
     SOURCE_RANGE = range
     SOURCE_PLACE = place
     SOURCE_ITEM = item
-    items.SourceLabel.Text = short_name(basename(path)) .. "\n" .. range_text(range)
-    items.SourceLabel.ToolTip = TIPS.clip .. "\n\n" .. path
+    show_source(short_name(basename(path)) .. "\n" .. range_text(range), TIPS.clip .. "\n\n" .. path)
     return true
 end
 
@@ -1636,9 +1637,14 @@ local have_timer = pcall(function()
     timer = ui:Timer({ ID = "PollTimer", Interval = 500 })
 end)
 
+-- Between runs the card follows the playhead, so there is nothing to press.
+local pick_source
 local function on_timeout(ev)
-    if not RUNNING then return end
-    poll()
+    if RUNNING then
+        poll()
+    else
+        pick_source(true)
+    end
 end
 
 if have_timer and timer then
@@ -1687,19 +1693,10 @@ function prefs.On.Settings.Close(ev)
     prefs:Hide()
 end
 
-function win.On.RefreshBtn.Clicked(ev)
-    if refresh_source() then
-        set_status("Ready.")
-        items.AnalysisLabel.Text = ANALYSIS_HINT
-        items.AnalysisLabel.ToolTip = ""
-    else
-        set_status(items.SourceLabel.Text)
-    end
-end
-
 -- Work on the clip under the playhead now, not the one there when the panel
 -- opened. If the playhead has moved off every clip, keep the last one.
-local function pick_source()
+-- With quiet, as the timer calls it, a gap says nothing.
+function pick_source(quiet)
     local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
                                           SOURCE_PLACE
     local clip, tip = SOURCE_ITEM, items.SourceLabel.ToolTip
@@ -1709,11 +1706,10 @@ local function pick_source()
         SOURCE_RANGE = range
         SOURCE_PLACE = place
         SOURCE_ITEM = clip
-        items.SourceLabel.Text = label
-        items.SourceLabel.ToolTip = tip
+        show_source(label, tip)
         return true
     end
-    set_status(items.SourceLabel.Text)
+    if not quiet then set_status(items.SourceLabel.Text) end
     return false
 end
 
@@ -1938,6 +1934,7 @@ if REPO_ROOT == "" then
     set_status("Run Installer/install_eternal2x.py, then restart Resolve.")
 else
     refresh_source()
+    start_polling()
     set_status(SOURCE_PATH and "Ready." or items.SourceLabel.Text)
     local waiting = read_status()
     if run_in_progress() then
