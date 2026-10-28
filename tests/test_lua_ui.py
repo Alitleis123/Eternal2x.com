@@ -89,8 +89,8 @@ def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
     for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
-                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo",
-                     "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
+                     "CancelBtn", "UpdateBtn", "FormatCombo",
+                     "UpscaleCB", "InterpCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
 
@@ -101,8 +101,8 @@ def test_every_control_has_a_handler(lua, direct):
     for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
                      "UpdateBtn.Clicked",
-                     "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
-                     "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
+                     "UpscaleCB.Clicked",
+                     "InterpCB.Clicked", "CompareBtn.Clicked",
                      "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
 
@@ -157,12 +157,6 @@ def test_every_render_plays_at_a_third_of_the_speed(lua, direct):
     H.set_checkbox("InterpCB", False)
     H.click("SmoothBtn")
     assert "--slow-motion" not in H.last_command()
-
-
-def test_hold_pattern_choices_are_offered(lua, direct):
-    H = load(lua, ui_script(direct))
-    labels = H.combo_items("HoldCombo").split(",")
-    assert labels == ["Auto detect", "On 2s", "On 3s"]
 
 
 def test_the_version_is_shown(lua, direct):
@@ -329,18 +323,15 @@ def test_interpolate_off_reaches_the_command(lua, direct):
     assert "--no-interpolate" in H.last_command()
 
 
-def test_hold_pattern_selection_reaches_the_command(lua, direct):
+def test_a_hold_pattern_or_grain_saved_before_is_not_sent(lua, direct):
+    """The panel no longer offers either, so a value an older version saved
+    would steer every run with no way to change it."""
+    conf = direct / "Installer" / "Eternal2x.conf"
+    conf.write_text(conf.read_text() + "base_hold=3\ngrain=true\n")
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 1)         # On 2s
-    H.click("AnalyseBtn")
-    assert "--base-hold 2" in H.last_command()
-
-
-def test_auto_hold_pattern_sends_no_override(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 0)         # Auto detect
     H.click("AnalyseBtn")
     assert "--base-hold" not in H.last_command()
+    assert "--grain" not in H.last_command()
 
 
 def test_unchecking_upscale_reaches_the_command(lua, direct):
@@ -357,22 +348,6 @@ def test_unchecking_interpolate_reaches_the_command(lua, direct):
     assert "--no-interpolate" in H.last_command()
 
 
-def test_grainy_source_is_off_unless_ticked(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.click("AnalyseBtn")
-    assert "--grain" not in H.last_command()
-    H.set_checkbox("GrainCB", True)
-    H.click("AnalyseBtn")
-    assert "--grain" in H.last_command()
-
-
-def test_grainy_source_is_remembered(lua, direct):
-    H = load(lua, ui_script(direct))
-    H.set_checkbox("GrainCB", True)
-    conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "grain=true" in conf
-    H = load(lua, ui_script(direct))
-    assert H.widgets["GrainCB"].Checked is True
 
 
 def test_defaults_send_no_opt_out_flags(lua, direct):
@@ -565,11 +540,9 @@ def test_refreshing_with_no_run_says_so(lua, direct):
 
 def test_settings_are_saved(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 2)        # On 3s
     H.set_checkbox("UpscaleCB", False)
 
     conf = (direct / "Installer" / "Eternal2x.conf").read_text()
-    assert "base_hold=3" in conf
     assert "upscale=false" in conf
 
 
@@ -594,20 +567,19 @@ def test_saving_settings_keeps_the_rest_of_the_config(lua, direct):
 
 def test_saved_settings_are_restored_next_time(lua, direct):
     H = load(lua, ui_script(direct))
-    H.set_combo("HoldCombo", 1)        # On 2s
-    H.set_checkbox("GrainCB", True)
+    H.set_checkbox("UpscaleCB", False)
 
     H2 = load(lua, ui_script(direct))
     H2.click("AnalyseBtn")
-    cmd = H2.last_command()
-    assert "--grain" in cmd
-    assert "--base-hold 2" in cmd
+    assert "--no-upscale" in H2.last_command()
 
 
-def test_auto_update_toggle_persists(lua, direct):
+def test_a_config_that_turned_updates_off_keeps_them_off(lua, direct):
+    """The panel has no box for it now, but someone who turned it off before
+    keeps their choice."""
     H = load(lua, ui_script(direct))
-    H.set_checkbox("AutoUpdateCB", True)
-    assert "auto_update=true" in (direct / "Installer" / "Eternal2x.conf").read_text()
+    H.set_checkbox("UpscaleCB", False)
+    assert "auto_update=false" in (direct / "Installer" / "Eternal2x.conf").read_text()
 
 
 # --------------------------------------------------------------------------
@@ -1352,14 +1324,6 @@ def test_the_windows_background_run_goes_through_a_script(lua, direct):
     assert text.startswith("@echo off\r\nchcp 65001 >nul\r\n")
     assert '"C:/clips/Tom & Jerry 100%%.mov"' in text, "the path must be quoted and % doubled"
     assert "2>&1" in text
-
-
-def test_a_saved_on_1s_setting_falls_back_to_auto_detect(lua, direct):
-    conf = direct / "Installer" / "Eternal2x.conf"
-    conf.write_text(conf.read_text() + "base_hold=1\n")
-    H = load(lua, ui_script(direct))
-    H.click("AnalyseBtn")
-    assert "--base-hold" not in H.last_command()
 
 
 # --------------------------------------------------------------------------

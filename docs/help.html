@@ -160,12 +160,9 @@ python3 Installer/gui_installer.py</code></div>
                 <p class="sub">The panel remembers them between sessions. Rest the pointer on the (i) beside one to see what it does.</p>
                 <dl class="settings">
                     <div><dt>Threshold</dt><dd>How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you've marked.</dd></div>
-                    <div><dt>Hold pattern</dt><dd>Leave it on <code>Auto detect</code>. Force <code>On 2s</code> or <code>On 3s</code> if a clip has unusual timing that trips the detector.</dd></div>
                     <div><dt>Output</dt><dd><code>Image sequence</code> is lossless and imports most reliably. <code>MP4</code> is one compact file but lossy. <code>MKV</code> is one lossless file. All three are 8-bit RGB, so transparency and 10-bit colour aren't kept. MP4 and MKV need an even width and height.</dd></div>
                     <div><dt>Upscale 2x</dt><dd>Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model comes with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. As an image sequence, a 4K frame is about 6 to 7 MB.</dd></div>
                     <div><dt>Interpolate</dt><dd>On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, which is about ten times slower. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off, every drawing comes back on its own frame with nothing new drawn, at the clip's length. Use that with Upscale 2x to only upscale.</dd></div>
-                    <div><dt>Grainy source</dt><dd>For film grain, which makes every held frame differ a little so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when the differences look like grain.</dd></div>
-                    <div><dt>Auto-update</dt><dd>Checks for a new version each time the panel opens. Untick it to check only when you press Check for Updates.</dd></div>
                 </dl>
             </section>
 
@@ -212,7 +209,7 @@ python3 Installer/gui_installer.py</code></div>
                         <summary>"No duplicate frames. This clip is already on 1s."</summary>
                         <div class="answer">
                             <p>Analyse found nothing to do. The clip has no repeated frames, so there are no held drawings to recover. It's live action or animation already drawn on 1s. Render still slows it to a third of the speed, with two new frames drawn between every pair. With Interpolate off it stops instead, since there is nothing to draw.</p>
-                            <p>If the panel says instead that every frame differs but the differences look like grain, tick Grainy source and analyse again. Leave it off for clean animation.</p>
+                            <p>If the panel says instead that every frame differs but the differences look like grain, mark the drawings with M, then press Render.</p>
                         </div>
                     </details>
                     <details>
@@ -227,7 +224,7 @@ python3 Installer/gui_installer.py</code></div>
                         <summary>Rendering is slow on long clips</summary>
                         <div class="answer">
                             <p>Every frame is read and every missing in-between drawn, so the time grows with the length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so trimming helps, though a cut late in a long file is still decoded up to its start first, shown as Seeking.</p>
-                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscale 2x on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. With Grainy source on, Analyse reads the clip twice. Resolve stays usable the whole time.</p>
+                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscale 2x on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. Resolve stays usable the whole time.</p>
                         </div>
                     </details>
                     <details>
@@ -269,7 +266,7 @@ python3 Installer/gui_installer.py</code></div>
                 <h2 id="updates-title">Updates</h2>
                 <p class="sub">They arrive on their own.</p>
                 <h3>Automatically</h3>
-                <p>Each time the panel opens, Upflow2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it. Untick Auto-update to stop this.</p>
+                <p>Each time the panel opens, Upflow2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it.</p>
                 <h3>When you ask</h3>
                 <p>Press <strong>Check for Updates</strong> at any time. If nothing changed, it says so and leaves your install alone. A failed check never stops you working, and an update that can't finish is undone, so you keep the version you had.</p>
                 <div class="callout">

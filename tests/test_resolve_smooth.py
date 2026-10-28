@@ -364,11 +364,12 @@ def _grainy_twos(tmp_path):
     return src
 
 
-def test_a_grainy_clip_suggests_grainy_source(monkeypatch, tmp_path):
+def test_a_grainy_clip_says_to_mark_the_drawings(monkeypatch, tmp_path):
     status = tmp_path / "status.json"
     run(monkeypatch, ["--video", str(_grainy_twos(tmp_path)), "--analyse",
                       "--status-file", str(status)])
-    assert "Grainy source" in json.loads(status.read_text())["message"]
+    message = json.loads(status.read_text())["message"]
+    assert "grain" in message and "Mark the drawings with M" in message
 
 
 def test_grainy_source_finds_the_drawings(monkeypatch, tmp_path):

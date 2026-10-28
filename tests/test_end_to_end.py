@@ -229,14 +229,6 @@ def test_settings_chosen_in_the_panel_reach_the_render(installation, read_frames
     assert H.property_of("Super Scale") is None, "Super Scale was applied anyway"
 
 
-def test_forcing_a_hold_pattern_reaches_the_render(installation):
-    H, _src = installation(holds=(2,) * 12)
-    H.set_combo("HoldCombo", 2)          # On 3s
-    H.click("AnalyseBtn")
-    finish(H)
-    assert "on 3s" in H.widgets["AnalysisLabel"].Text
-
-
 def test_a_second_run_does_not_overwrite_the_first(installation):
     # Two full renders, so keep the clip short.
     H, src = installation(holds=(2,) * 4)

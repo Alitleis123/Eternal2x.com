@@ -450,15 +450,10 @@ def test_config_has_no_byte_order_mark(tmp_path):
 
 
 def test_panel_defaults_are_values_the_stage_accepts(tmp_path):
-    from Stages.resolve_smooth import FORMATS, build_parser
+    from Stages.resolve_smooth import FORMATS
 
     conf = read_conf(inst.write_config(tmp_path, Path("/plugin"), "/usr/bin/python3"))
     assert conf["format"] in FORMATS
-    hold_choices = None
-    for action in build_parser()._actions:
-        if "--base-hold" in action.option_strings:
-            hold_choices = action.type
-    assert hold_choices(conf["base_hold"]) == 0
 
 
 def test_the_private_python_can_import_the_plugin():
