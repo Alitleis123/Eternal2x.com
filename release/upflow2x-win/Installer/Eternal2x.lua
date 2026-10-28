@@ -853,9 +853,11 @@ local function bar_style(fraction)
         return "QLabel { background-color: transparent; }"
     end
     local f = math.max(0.001, math.min(0.998, fraction))
+    -- Qt reads only a decimal point, and some locales format with a comma.
+    local function stop(value) return (string.format("%.3f", value):gsub(",", ".")) end
     return themed(string.format([[QLabel { border-radius: 2px; background-color: qlineargradient(
-        x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 $amber, stop: %.3f $amber,
-        stop: %.3f $field, stop: 1 $field); }]], f, f + 0.001))
+        x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 $amber, stop: %s $amber,
+        stop: %s $field, stop: 1 $field); }]], stop(f), stop(f + 0.001)))
 end
 
 local RENDER_LABEL = "Render"
