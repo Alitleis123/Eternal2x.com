@@ -810,28 +810,35 @@ local TITLE = themed("QLabel { font-size: 17px; font-weight: 600; color: $text; 
 local BADGE = themed([[QLabel { background-color: $amber; color: $on_amber; border-radius: 4px;
     padding: 1px 5px; font-family: Consolas, Menlo, monospace; font-size: 10px; font-weight: 700; }]])
 local VERSION = themed("QLabel { color: $mute; font-size: 11px; }")
-local STEP = themed([[QLabel { color: $amber; border: 1px solid $amber; border-radius: 9px;
-    font-size: 10px; font-weight: 700; }]])
-local SECTION = themed("QLabel { color: $text; font-size: 12px; font-weight: 600; }")
 local HAIRLINE = themed("QLabel { background-color: $hair; }")
 local INFO = themed([[QLabel { color: $soft; border: 1px solid $line; border-radius: 8px;
     font-family: Georgia, serif; font-size: 10px; font-weight: 700; }]])
 local CARD = themed([[QLabel { background-color: $field; border: 1px solid $hair;
-    border-radius: 5px; padding: 6px 9px; color: $text; font-size: 11px; }]])
+    border-radius: 6px; padding: 7px 10px; color: $text; font-size: 12px; }]])
 local NOTE = themed("QLabel { color: $soft; font-size: 11px; }")
-local FIELD_LABEL = themed("QLabel { color: $soft; font-size: 11px; }")
+local FIELD_LABEL = themed("QLabel { color: $soft; font-size: 12px; }")
 local META = themed("QLabel { color: $mute; font-size: 10px; }")
 local PROGRESS = themed("QLabel { color: $soft; font-size: 11px; font-family: Consolas, Menlo, monospace; }")
 local START = themed([[
-    QPushButton { background-color: $amber; border: none; border-radius: 5px;
-        color: $on_amber; font-size: 13px; font-weight: 600; min-height: 32px; }
+    QPushButton { background-color: $amber; border: none; border-radius: 8px;
+        color: $on_amber; font-size: 15px; font-weight: 700; }
     QPushButton:hover { background-color: $amber_hover; }
     QPushButton:pressed { background-color: $amber_down; }
     QPushButton:disabled { background-color: $raise; color: $mute; }
 ]])
+-- On or off at a glance: the whole tile lights up when it is on.
+local TOGGLE = themed([[
+    QCheckBox { background-color: $raise; border: 1px solid $line; border-radius: 8px;
+        padding: 0px 12px; min-height: 34px; spacing: 10px; font-size: 13px; color: $soft; }
+    QCheckBox:hover { background-color: $hover; }
+    QCheckBox:checked { border-color: $amber; color: $text; }
+    QCheckBox::indicator { width: 12px; height: 12px; border-radius: 6px;
+        border: 1px solid $line; background-color: $field; }
+    QCheckBox::indicator:checked { border-color: $amber; background-color: $amber; }
+]])
 local BUTTON = themed([[
-    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 5px;
-        min-height: 24px; padding: 3px 10px; font-size: 11px; color: $text; }
+    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 6px;
+        min-height: 30px; padding: 3px 10px; font-size: 12px; color: $text; }
     QPushButton:hover { background-color: $hover; }
     QPushButton:pressed { background-color: $field; }
     QPushButton:disabled { background-color: $panel; border-color: $hair; color: $mute; }
@@ -841,6 +848,25 @@ local LINK = themed([[
         min-height: 18px; font-size: 11px; color: $soft; }
     QPushButton:hover { color: $amber; }
     QPushButton:disabled { color: $mute; }
+]])
+local WINDOW = themed([[
+    QWidget { background-color: $panel; color: $text; font-size: 12px; }
+    QComboBox {
+        background-color: $field; border: 1px solid $hair; border-radius: 5px;
+        padding: 4px 8px; min-height: 18px; color: $text;
+    }
+    QComboBox:hover { border-color: $line; }
+    QComboBox QAbstractItemView {
+        background-color: $field; border: 1px solid $line; outline: none;
+        selection-background-color: $amber; selection-color: $on_amber;
+    }
+    QSlider::groove:horizontal { height: 3px; border-radius: 1px; background-color: $field; }
+    QSlider::sub-page:horizontal { border-radius: 1px; background-color: $amber; }
+    QSlider::handle:horizontal {
+        width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background-color: $text;
+    }
+    QSlider::handle:horizontal:hover { background-color: #ffffff; }
+    QToolTip { background-color: $field; color: $text; border: 1px solid $line; padding: 5px; }
 ]])
 -- A thin bar, amber up to how far the run has got. Empty, it keeps its
 -- space but shows nothing, so the panel doesn't jump when a run starts.
@@ -856,10 +882,10 @@ local function bar_style(fraction)
         stop: %s $field, stop: 1 $field); }]], stop(f), stop(f + 0.001)))
 end
 
-local RENDER_LABEL = "Render"
+local RENDER_LABEL = "\xE2\x96\xB6\nRender"
 local ANALYSIS_HINT = "Mark the drawings with M, or let Analyse do it."
 
--- What each part does, shown when the pointer rests on its (i), so the panel
+-- What each part does, shown when the pointer rests on it, so the panel
 -- itself only needs names.
 local TIPS = {
     clip = "Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Analyse and Render pick it up when you press them. Use Clip at Playhead shows which clip that is.",
@@ -877,115 +903,65 @@ local function info(tip)
                      MinimumSize = { 16, 16 }, MaximumSize = { 16, 16 } }
 end
 
--- A numbered heading, so the order to work in reads top to bottom.
-local function section(id, step, name, tip)
-    return ui:VGroup{ Weight = 0, Spacing = 5,
-        ui:VGap(8),
-        ui:HGroup{ Weight = 0, Spacing = 7,
-            ui:Label{ Text = step, StyleSheet = STEP, Weight = 0, Alignment = { AlignCenter = true },
-                      MinimumSize = { 18, 18 }, MaximumSize = { 18, 18 } },
-            ui:Label{ ID = id, Text = name, StyleSheet = SECTION, Weight = 1 },
-            info(tip),
-        },
-        ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
-    }
-end
-
 -- Name, control, (i): the same three columns on every row.
 local function row(name, control, tip)
     return ui:HGroup{ Weight = 0, Spacing = 8,
-        ui:Label{ Text = name, StyleSheet = FIELD_LABEL, Weight = 0.32,
+        ui:Label{ Text = name, StyleSheet = FIELD_LABEL, Weight = 0.28,
                   Alignment = { AlignRight = true, AlignVCenter = true } },
         control,
         info(tip),
     }
 end
 
+-- The panel is the clip, the two switches and Render. The rest waits in
+-- Settings.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 400, 600 },
-    StyleSheet = themed([[
-        QWidget { background-color: $panel; color: $text; font-size: 12px; }
-        QComboBox {
-            background-color: $field; border: 1px solid $hair; border-radius: 5px;
-            padding: 4px 8px; min-height: 18px; color: $text; font-size: 11px;
-        }
-        QComboBox:hover { border-color: $line; }
-        QComboBox QAbstractItemView {
-            background-color: $field; border: 1px solid $line; outline: none;
-            selection-background-color: $amber; selection-color: $on_amber;
-        }
-        QCheckBox { spacing: 0px; }
-        QCheckBox::indicator {
-            width: 14px; height: 14px; border-radius: 3px;
-            border: 1px solid $line; background-color: $field;
-        }
-        QCheckBox::indicator:hover { border-color: $soft; }
-        QCheckBox::indicator:checked { background-color: $amber; border-color: $amber; }
-        QSlider::groove:horizontal { height: 3px; border-radius: 1px; background-color: $field; }
-        QSlider::sub-page:horizontal { border-radius: 1px; background-color: $amber; }
-        QSlider::handle:horizontal {
-            width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background-color: $text;
-        }
-        QSlider::handle:horizontal:hover { background-color: #ffffff; }
-        QToolTip { background-color: $field; color: $text; border: 1px solid $line; padding: 5px; }
-    ]]),
+    Geometry = { 100, 100, 380, 420 },
+    StyleSheet = WINDOW,
 }, ui:VGroup{
-    Spacing = 6,
+    Spacing = 8,
 
     ui:HGroup{ Weight = 0, Spacing = 6,
         ui:Label{ ID = "Title", Text = "Upflow", StyleSheet = TITLE, Weight = 0 },
         ui:Label{ ID = "Badge", Text = "2X", StyleSheet = BADGE, Weight = 0,
                   Alignment = { AlignCenter = true } },
-        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 1,
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
-    },
-
-    section("SourceSection", "1", "Clip", TIPS.clip),
-    ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
-              WordWrap = true, MinimumSize = { 0, 44 } },
-    ui:HGroup{ Weight = 0,
         ui:HGap(0, 1),
-        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = LINK, Weight = 0 },
+        ui:Button{ ID = "SettingsBtn", Text = "Settings", StyleSheet = LINK, Weight = 0 },
     },
 
-    section("DetectSection", "2", "Detection", TIPS.detection),
-    row("Threshold", ui:HGroup{ Weight = 0.68, Spacing = 8,
-        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9,
-                   Value = THRESHOLD, Orientation = "Horizontal" },
-        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
-                  Weight = 0, MinimumSize = { 10, 0 },
-                  Alignment = { AlignRight = true, AlignVCenter = true } },
-    }, TIPS.threshold),
-    ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, Weight = 0 },
-    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true,
-              Alignment = { AlignHCenter = true } },
+    ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
+              WordWrap = true, MinimumSize = { 0, 46 }, ToolTip = TIPS.clip },
 
-    section("RunSection", "3", "Render", TIPS.render),
-    row("Upscale 2x", ui:CheckBox{ ID = "UpscaleCB", Checked = DO_UPSCALE, Weight = 0.68 }, TIPS.upscale),
-    row("Interpolate", ui:CheckBox{ ID = "InterpCB", Checked = DO_INTERPOLATE, Weight = 0.68 }, TIPS.interp),
-    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.68 }, TIPS.format),
-    ui:VGap(2),
-    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START,
-               MinimumSize = { 0, 34 }, MaximumSize = { 16777215, 34 } },
+    ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, Weight = 0,
+                   ToolTip = TIPS.render, MinimumSize = { 96, 76 }, MaximumSize = { 96, 76 } },
+        ui:VGroup{ Weight = 1, Spacing = 8,
+            ui:CheckBox{ ID = "UpscaleCB", Text = "Upscaling", Checked = DO_UPSCALE,
+                         StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
+            ui:CheckBox{ ID = "InterpCB", Text = "Drawing in-betweens", Checked = DO_INTERPOLATE,
+                         StyleSheet = TOGGLE, ToolTip = TIPS.interp },
+        },
+    },
+
+    ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
+        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = BUTTON, ToolTip = TIPS.clip },
+    },
+    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true },
+
     ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
               MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS, WordWrap = true },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = NOTE, WordWrap = true,
               MinimumSize = { 0, 30 } },
-    ui:HGroup{ Weight = 0, Spacing = 4,
+
+    ui:HGroup{ Weight = 0, Spacing = 2,
         ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = LINK, Enabled = false, Weight = 0,
                    ToolTip = "Switch the render off and on to compare it with the original under it." },
-        ui:HGap(0, 1),
         ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = LINK, Enabled = false, Weight = 0,
                    ToolTip = "Open the folder the render was saved to." },
-    },
-
-    ui:VGap(4),
-    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
-    ui:HGroup{ Weight = 0, Spacing = 4,
-        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
         ui:HGap(0, 1),
         ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = LINK, Weight = 0,
                    ToolTip = "Read how far the run has got, if the panel stopped updating." },
@@ -995,10 +971,36 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
 })
 
-local items = win:GetItems()
+local prefs = disp:AddWindow({
+    ID = "Settings",
+    WindowTitle = "Upflow2x Settings",
+    Geometry = { 140, 140, 340, 170 },
+    StyleSheet = WINDOW,
+}, ui:VGroup{
+    Spacing = 10,
 
-for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
-items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
+    row("Threshold", ui:HGroup{ Weight = 0.72, Spacing = 8,
+        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9,
+                   Value = THRESHOLD, Orientation = "Horizontal" },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
+                  Weight = 0, MinimumSize = { 10, 0 },
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+    }, TIPS.threshold),
+    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.72 }, TIPS.format),
+    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
+    ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = BUTTON, Weight = 0 },
+        ui:HGap(0, 1),
+        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+    },
+})
+
+local items = win:GetItems()
+local prefs_items = prefs:GetItems()
+
+for _, label in ipairs(FORMAT_LABELS) do prefs_items.FormatCombo:AddItem(label) end
+prefs_items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 -- ---------------------------------------------------------------------------
 -- state
@@ -1047,7 +1049,7 @@ local function set_busy(busy)
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
     items.RefreshBtn.Enabled = not busy
-    items.UpdateBtn.Enabled = not busy
+    prefs_items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
 end
 
@@ -1177,7 +1179,7 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+    local fmt = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
     -- --network-upscale tells the stage this panel skips Super Scale for a
     -- render that comes back already 2x.
@@ -1674,7 +1676,16 @@ end
 
 function win.On.Eternal2x.Close(ev)
     save_conf()
+    prefs:Hide()
     disp:ExitLoop()
+end
+
+function win.On.SettingsBtn.Clicked(ev)
+    prefs:Show()
+end
+
+function prefs.On.Settings.Close(ev)
+    prefs:Hide()
 end
 
 function win.On.RefreshBtn.Clicked(ev)
@@ -1852,14 +1863,14 @@ function win.On.CancelBtn.Clicked(ev)
     set_status("Ready.")
 end
 
-function win.On.ThresholdSlider.ValueChanged(ev)
-    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(items.ThresholdSlider.Value) or 5) + 0.5)))
-    items.ThresholdValue.Text = tostring(THRESHOLD)
+function prefs.On.ThresholdSlider.ValueChanged(ev)
+    THRESHOLD = math.max(1, math.min(9, math.floor((tonumber(prefs_items.ThresholdSlider.Value) or 5) + 0.5)))
+    prefs_items.ThresholdValue.Text = tostring(THRESHOLD)
     save_conf()
 end
 
-function win.On.FormatCombo.CurrentIndexChanged(ev)
-    FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
+function prefs.On.FormatCombo.CurrentIndexChanged(ev)
+    FORMAT = FORMATS[(prefs_items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     save_conf()
 end
 
@@ -1913,7 +1924,7 @@ local function run_update(auto_mode)
     end
 end
 
-function win.On.UpdateBtn.Clicked(ev)
+function prefs.On.UpdateBtn.Clicked(ev)
     run_update(false)
 end
 

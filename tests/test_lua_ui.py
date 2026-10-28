@@ -159,6 +159,24 @@ def test_every_render_plays_at_a_third_of_the_speed(lua, direct):
     assert "--slow-motion" not in H.last_command()
 
 
+def test_settings_open_in_their_own_window(lua, direct):
+    H = load(lua, ui_script(direct))
+    settings = H.windows["Settings"]
+    assert not settings.__shown
+    H.click("SettingsBtn")
+    assert settings.__shown
+    H.fire("Settings", "Close")
+    assert not settings.__shown
+    assert H.window.__shown, "closing Settings closed the panel"
+
+
+def test_closing_the_panel_closes_its_settings(lua, direct):
+    H = load(lua, ui_script(direct))
+    H.click("SettingsBtn")
+    H.fire("Eternal2x", "Close")
+    assert not H.windows["Settings"].__shown
+
+
 def test_the_version_is_shown(lua, direct):
     H = load(lua, ui_script(direct))
     assert "0.3.0" in H.widgets["SubTitle"].Text

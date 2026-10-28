@@ -144,25 +144,25 @@ python3 Installer/gui_installer.py</code></div>
                     </li>
                     <li>
                         <h3>Render</h3>
-                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Interpolate on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
-                        <p>When it's done, the result is imported, at 2x if Upscale 2x is ticked, and placed above the original, starting on the same frame, at the same frame rate with three frames for every one of the clip's, up to the last marker if it has any, so it plays at a third of the speed, ready to time remap. With Interpolate off it keeps the clip's length. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
+                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Drawing in-betweens on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
+                        <p>When it's done, the result is imported, at 2x if Upscaling is on, and placed above the original, starting on the same frame, at the same frame rate with three frames for every one of the clip's, up to the last marker if it has any, so it plays at a third of the speed, ready to time remap. With Drawing in-betweens off it keeps the clip's length. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
                         <p>If another timeline is open when it finishes, or the original was deleted or retrimmed, it goes at the end of the timeline instead. An image sequence whose frame rate Resolve won't set stays in the media pool, since it would play at the wrong speed.</p>
                     </li>
                     <li>
                         <h3>Compare</h3>
-                        <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through, and Show Upflow2x switches it back. It only works on an upscale with Interpolate off, since a slowed render has no original to line up with. <strong>Show in Folder</strong> opens where the render was saved.</p>
+                        <p><strong>Show Original</strong> switches the smoothed clip off so the original shows through, and Show Upflow2x switches it back. It only works on an upscale with Drawing in-betweens off, since a slowed render has no original to line up with. <strong>Show in Folder</strong> opens where the render was saved.</p>
                     </li>
                 </ol>
             </section>
 
             <section id="settings" aria-labelledby="settings-title">
                 <h2 id="settings-title">Settings</h2>
-                <p class="sub">The panel remembers them between sessions. Rest the pointer on the (i) beside one to see what it does.</p>
+                <p class="sub">The panel remembers them between sessions. Upscaling and Drawing in-betweens are on the panel, and Threshold and Output are under Settings. Rest the pointer on one to see what it does.</p>
                 <dl class="settings">
                     <div><dt>Threshold</dt><dd>How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you've marked.</dd></div>
                     <div><dt>Output</dt><dd><code>Image sequence</code> is lossless and imports most reliably. <code>MP4</code> is one compact file but lossy. <code>MKV</code> is one lossless file. All three are 8-bit RGB, so transparency and 10-bit colour aren't kept. MP4 and MKV need an even width and height.</dd></div>
-                    <div><dt>Upscale 2x</dt><dd>Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model comes with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. As an image sequence, a 4K frame is about 6 to 7 MB.</dd></div>
-                    <div><dt>Interpolate</dt><dd>On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, which is about ten times slower. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off, every drawing comes back on its own frame with nothing new drawn, at the clip's length. Use that with Upscale 2x to only upscale.</dd></div>
+                    <div><dt>Upscaling</dt><dd>Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model comes with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. As an image sequence, a 4K frame is about 6 to 7 MB.</dd></div>
+                    <div><dt>Drawing in-betweens</dt><dd>On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, which is about ten times slower. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off, every drawing comes back on its own frame with nothing new drawn, at the clip's length. With Upscaling on, that only upscales.</dd></div>
                 </dl>
             </section>
 
@@ -208,7 +208,7 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"No duplicate frames. This clip is already on 1s."</summary>
                         <div class="answer">
-                            <p>Analyse found nothing to do. The clip has no repeated frames, so there are no held drawings to recover. It's live action or animation already drawn on 1s. Render still slows it to a third of the speed, with two new frames drawn between every pair. With Interpolate off it stops instead, since there is nothing to draw.</p>
+                            <p>Analyse found nothing to do. The clip has no repeated frames, so there are no held drawings to recover. It's live action or animation already drawn on 1s. Render still slows it to a third of the speed, with two new frames drawn between every pair. With Drawing in-betweens off it stops instead, since there is nothing to draw.</p>
                             <p>If the panel says instead that every frame differs but the differences look like grain, mark the drawings with M, then press Render.</p>
                         </div>
                     </details>
@@ -224,7 +224,7 @@ python3 Installer/gui_installer.py</code></div>
                         <summary>Rendering is slow on long clips</summary>
                         <div class="answer">
                             <p>Every frame is read and every missing in-between drawn, so the time grows with the length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so trimming helps, though a cut late in a long file is still decoded up to its start first, shown as Seeking.</p>
-                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscale 2x on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. Resolve stays usable the whole time.</p>
+                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscaling on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. Resolve stays usable the whole time.</p>
                         </div>
                     </details>
                     <details>

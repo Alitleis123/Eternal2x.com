@@ -78,15 +78,28 @@ local dispatcher = {}
 dispatcher.__index = dispatcher
 
 function dispatcher:AddWindow(attrs, layout)
+    -- The panel's first window is H.window. A later one, such as Settings,
+    -- shares its handler table and widget list, so tests reach every control
+    -- the same way.
+    local first = H.window
     local win = {
         __attrs = attrs,
         __layout = layout,
         __shown = false,
         __extra = {},
-        On = auto_table(),
+        On = first and first.On or auto_table(),
     }
     local items = {}
     collect(layout, items)
+    if first then
+        for id, w in pairs(items) do H.widgets[id] = w end
+        H.windows[attrs.ID] = win
+        function win:GetItems() return items end
+        function win:Show() self.__shown = true end
+        function win:Hide() self.__shown = false end
+        return win
+    end
+    H.windows = { [attrs.ID] = win }
     function win:GetItems() return items end
     function win:Show() self.__shown = true end
     function win:Hide() self.__shown = false end
@@ -416,6 +429,7 @@ end
 function H.load(script_path, clip_file_path)
     H.commands = {}
     H.prints = {}
+    H.window = nil
 
     _G.fu = { UIManager = ui }
     _G.bmd = bmd

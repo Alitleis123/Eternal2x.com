@@ -124,7 +124,7 @@ move it.
 5. Click **Render**.
 
 Render keeps every marked frame as drawn and draws every frame between two
-markers fresh, so a part you leave unmarked never counts. With Interpolate on,
+markers fresh, so a part you leave unmarked never counts. With Drawing in-betweens on,
 the render ends on the last marker, so mark the last drawing you want in it. Every marker on the
 clip counts, whatever its colour, and the clip's first frame always does.
 Markers on the timeline's ruler do not, so beat markers are safe there. You can
@@ -136,7 +136,7 @@ rendered from the drawings Upflow2x finds on its own.
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
-same frame. With Interpolate on it runs three times as long, up to the last
+same frame. With Drawing in-betweens on it runs three times as long, up to the last
 marker if the clip has any. It goes on the lowest
 track that is empty there, or a new track named Upflow2x. Your other clips are
 never covered or moved. If you move the original while it renders, the result
@@ -149,7 +149,7 @@ Then:
 
 - **Show Original** switches the smoothed clip off so the original shows
   through, and **Show Upflow2x** switches it back. Scrub or play to compare.
-  It only works on an upscale with Interpolate off. A slowed render has no
+  It only works on an upscale with Drawing in-betweens off. A slowed render has no
   original to line up with.
 - **Show in Folder** opens the render's location.
 
@@ -161,15 +161,16 @@ Whole file when Resolve does not report one.
 
 ### Settings
 
-The panel remembers them between sessions. Rest the pointer on the (i) beside
-one to see what it does.
+The panel remembers them between sessions. Upscaling and Drawing in-betweens
+are on the panel, and Threshold and Output are under **Settings**. Rest the
+pointer on one to see what it does.
 
 | Setting | What it does |
 |---|---|
 | **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
-| **Upscale 2x** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
-| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off skips the in-betweens, so every drawing comes back on its original frame and the render keeps the clip's length. Use it with Upscale 2x to upscale only. |
+| **Upscaling** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
+| **Drawing in-betweens** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off skips the in-betweens, so every drawing comes back on its original frame and the render keeps the clip's length. With Upscaling on, that only upscales. |
 
 Settings are remembered between sessions.
 
@@ -178,7 +179,7 @@ Settings are remembered between sessions.
 If a clip has no duplicated frames, Analyse says so. Live action and
 animation already on 1s have no held drawings to recover. Render still slows
 them to a third of the speed, with two new frames drawn between every pair.
-With Interpolate off it stops instead, since there is nothing to draw.
+With Drawing in-betweens off it stops instead, since there is nothing to draw.
 
 It also refuses a clip with a variable frame rate, as phone and screen
 recordings often have. Every rebuilt frame lasts the same time, so such a clip
