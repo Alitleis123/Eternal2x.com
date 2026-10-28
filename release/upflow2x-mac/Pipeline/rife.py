@@ -92,7 +92,13 @@ def _pip(cmd: List[str], progress: Optional[ProgressFn]) -> subprocess.Completed
             return subprocess.CompletedProcess(cmd, proc.returncode, out, err)
         except subprocess.TimeoutExpired:
             if progress:
-                progress("Installing AI runtime", 0.0)
+                try:
+                    progress("Installing AI runtime", 0.0)
+                except BaseException:
+                    # Stopped. Cut short, pip could leave this Python half
+                    # installed, so it finishes before the run ends.
+                    proc.communicate()
+                    raise
 
 
 def ensure_runtime(progress: Optional[ProgressFn] = None):

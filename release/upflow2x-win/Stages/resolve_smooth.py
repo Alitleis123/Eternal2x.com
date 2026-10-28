@@ -71,6 +71,10 @@ class StatusFile:
               message: Optional[str] = None) -> None:
         if self.path is None:
             return
+        # A Stop pressed after the last frame, while the writes finished,
+        # still counts: the run reports Stopped, not a result to import.
+        if done and ok and self.stop_path.exists():
+            raise Stopped()
         if message is not None:
             # The panel parses this file with simple pattern matching, so keep
             # the text on one line and free of quotes and backslashes.

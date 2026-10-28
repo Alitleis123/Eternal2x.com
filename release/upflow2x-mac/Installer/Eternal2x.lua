@@ -1616,16 +1616,19 @@ local function poll()
         -- window closed before Python started leaves no file at all.
         local last = (st and st.updated and st.updated > 0) and st.updated or LAUNCHED_AT
         local quiet = last and (os.time() - last) or 0
+        -- Quiet this long, the button clears the run, so it says Reset.
         if quiet > STALLED_AFTER and not st then
+            items.CancelBtn.Text = "Reset"
             set_status(string.format("Python has not started after %d minutes. Press Reset "
                 .. "and run it again. Log: %s", math.floor(quiet / 60 + 0.5), LOG_PATH))
         elseif quiet > STALLED_AFTER then
-            set_status(string.format("No progress for %d minutes. If the Upflow2x window "
-                .. "was closed, the render stopped: press Reset and run it again.",
-                math.floor(quiet / 60 + 0.5)))
+            items.CancelBtn.Text = "Reset"
+            set_status(string.format("No progress for %d minutes, so the run has stopped. "
+                .. "Press Reset and run it again.", math.floor(quiet / 60 + 0.5)))
         elseif (items.Status.Text or ""):match("^No progress for")
             or (items.Status.Text or ""):match("^Python has not started") then
             -- It is reporting again, so the warning no longer holds.
+            items.CancelBtn.Text = "Stop"
             set_status("Working. Resolve stays usable while this runs.")
         end
         return false
