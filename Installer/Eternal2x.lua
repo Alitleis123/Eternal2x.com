@@ -971,7 +971,7 @@ local win = disp:AddWindow({
                MinimumSize = { 0, 34 }, MaximumSize = { 16777215, 34 } },
     ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
               MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
-    ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
+    ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS, WordWrap = true },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = NOTE, WordWrap = true,
               MinimumSize = { 0, 30 } },
     ui:HGroup{ Weight = 0, Spacing = 4,
