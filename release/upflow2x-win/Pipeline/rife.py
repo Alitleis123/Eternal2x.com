@@ -41,6 +41,15 @@ MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "rife_v4.25.onn
 # multiple of this. The frame is padded by repeating its edge, then cropped.
 _PAD = 64
 
+# Asked for a frame close to a drawing, the network hands back the drawing
+# itself: on Hero's walk, every t up to 0.1 came back as the first drawing
+# exactly and every t from 0.9 as the second, and the motion stayed uneven to
+# about 0.2 and from 0.8. Slowed three times, that held each drawing for about
+# six extra frames, a pause at every drawing. Between 0.25 and 0.75 it is even,
+# so it is only ever asked for those. A frame nearer a drawing is drawn between
+# the drawing and the halfway frame, and so on until it falls inside.
+_EVEN_FROM = 0.25
+
 ProgressFn = Callable[[str, float], None]
 
 
@@ -164,6 +173,12 @@ def ensure_model(progress: Optional[ProgressFn] = None, path: Path = MODEL_PATH,
 class Rife:
     """One loaded model, reused for every pair of drawings in a render."""
 
+    # The pair being drawn and the halfway frames drawn for it, by where they
+    # sit between its drawings. A render asks for a pair's in-betweens a few
+    # at a time, so they are kept until the next pair.
+    _pair = None
+    _known = None
+
     def __init__(self, progress: Optional[ProgressFn] = None):
         ort = ensure_runtime(progress)
         model = ensure_model(progress)
@@ -261,5 +276,20 @@ class Rife:
             elif t >= 1.0:
                 out.append(b.copy())
             else:
-                out.append(self._run(a, b, t))
+                out.append(self._between(a, b, t))
         return out
+
+    def _between(self, a: np.ndarray, b: np.ndarray, t: float) -> np.ndarray:
+        """The frame at t between a and b, asking the network only for 0.25 to 0.75."""
+        if self._pair is None or self._pair[0] is not a or self._pair[1] is not b:
+            self._pair, self._known = (a, b), {0.0: a, 1.0: b}
+        known = self._known
+        lo, hi = 0.0, 1.0
+        while True:
+            local = (t - lo) / (hi - lo)
+            if _EVEN_FROM <= local <= 1.0 - _EVEN_FROM or hi - lo < 1.0 / 64:
+                return self._run(known[lo], known[hi], local)
+            mid = (lo + hi) / 2.0
+            if mid not in known:
+                known[mid] = self._run(known[lo], known[hi], 0.5)
+            lo, hi = (lo, mid) if local < 0.5 else (mid, hi)
