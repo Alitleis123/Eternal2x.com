@@ -142,21 +142,18 @@
     }
     pause.addEventListener('click', function () { setPlaying(video.paused); });
 
-    // Speed and frame rate pick one of four renders of the same shots. The new
-    // one picks up at the same moment, playing or paused as the last was.
+    // Speed picks one of two 60 fps renders of the same shots. The new one
+    // picks up at the same moment, playing or paused as the last was.
     var controls = document.getElementById('compare-controls');
     if (controls) {
-        var choice = { speed: 'half', rate: '24' };
+        var speed = 'half';
         var pending = null;
         controls.hidden = false;
         controls.addEventListener('click', function (e) {
-            var button = e.target.closest('button');
-            if (!button) return;
-            var key = button.dataset.speed ? 'speed' : 'rate';
-            var value = button.dataset[key];
-            if (choice[key] === value) return;
-            choice[key] = value;
-            controls.querySelectorAll('[data-' + key + ']').forEach(function (b) {
+            var button = e.target.closest('button[data-speed]');
+            if (!button || button.dataset.speed === speed) return;
+            speed = button.dataset.speed;
+            controls.querySelectorAll('[data-speed]').forEach(function (b) {
                 b.setAttribute('aria-pressed', String(b === button));
             });
             // A second switch before the first render has loaded keeps the
@@ -168,7 +165,7 @@
             // The page's ?v= on the first video carries over, so a browser
             // holding older renders fetches these.
             var version = (video.getAttribute('src').split('?')[1] || '');
-            video.src = 'assets/demo/compare-' + choice.rate + '-' + choice.speed + '.mp4'
+            video.src = 'assets/demo/compare-60-' + speed + '.mp4'
                 + (version ? '?' + version : '');
         });
         video.addEventListener('loadedmetadata', function () {

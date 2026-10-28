@@ -182,7 +182,7 @@ h1, h2 { margin: 0; font-weight: 600; letter-spacing: -.025em; }
 .compare.js .compare-pause:hover { border-color: var(--amber); }
 @media (pointer: coarse) { .compare.js .compare-pause { min-height: 44px; left: 8px; bottom: 8px; } }
 
-/* Speed and frame rate for the demo, shown only where the script can switch them. */
+/* Speed for the demo, shown only where the script can switch it. */
 .compare-controls { display: flex; flex-wrap: wrap; gap: 8px 10px; padding: 12px 6px 0; }
 .compare-controls[hidden] { display: none; }
 .seg { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 8px; overflow: hidden; }
