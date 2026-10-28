@@ -473,9 +473,9 @@ def test_progress_is_reported(make_anime, tmp_path):
                 progress=lambda s, f: seen.append((s, f)))
 
     stages = {s for s, _ in seen}
-    assert "Analysing" in stages and "Rendering" in stages
+    assert "Analysing" in stages and "Drawing in-betweens" in stages
     assert all(0.0 <= f <= 1.0 for _, f in seen)
-    assert max(f for s, f in seen if s == "Rendering") == pytest.approx(1.0, abs=0.01)
+    assert max(f for s, f in seen if s == "Drawing in-betweens") == pytest.approx(1.0, abs=0.01)
 
 
 

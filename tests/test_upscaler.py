@@ -227,8 +227,19 @@ def test_the_progress_says_when_the_cpu_takes_over(monkeypatch, make_anime, tmp_
     render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
                 upscale_enabled=False), sequence=True,
                 progress=lambda stage, fraction: stages.append(stage))
-    assert stages[:3] == ["Rendering"] * 3
-    assert stages[-1] == "Rendering, upscaling on the CPU"
+    assert stages[:3] == ["Drawing in-betweens and upscaling"] * 3
+    assert stages[-1] == "Drawing in-betweens and upscaling on the CPU"
+
+
+def test_an_upscale_alone_says_upscaling(monkeypatch, make_anime, tmp_path):
+    monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
+    stages = []
+    src = make_anime(holds=(2,) * 6)
+    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
+                upscale_enabled=False, interpolate_enabled=False), sequence=True,
+                progress=lambda stage, fraction: stages.append(stage))
+    assert set(stages) == {"Upscaling"}
 
 
 def test_the_network_is_only_loaded_when_asked(twice_as_big, make_anime, tmp_path):
