@@ -193,6 +193,18 @@ def test_the_contact_page_sends_the_message_itself(repo_root):
         assert question in fields, f"the bug report never asks for {question!r}"
 
 
+def test_the_film_credits_hero_under_it(repo_root):
+    """The film is cut from Hero, which is CC BY 4.0. The end card credits it,
+    but a visitor who never plays the film never sees that."""
+    film = re.search(r'<figure class="panel film">(.*?)</figure>', page(repo_root, "index.html"), re.S)
+    assert film, "index.html has no film"
+    caption = re.search(r"<figcaption>(.*?)</figcaption>", film.group(1), re.S)
+    assert caption, "nothing under the film credits Hero"
+    assert 'href="https://studio.blender.org/projects/hero/"' in caption.group(1)
+    assert "Blender Foundation" in caption.group(1)
+    assert 'href="https://creativecommons.org/licenses/by/4.0/"' in caption.group(1)
+
+
 @pytest.mark.parametrize("name", PAGES)
 def test_pages_use_no_em_dashes(repo_root, name):
     text = page(repo_root, name)
