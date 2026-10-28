@@ -522,8 +522,15 @@ def render_plan(
             # A GPU that gave out mid-render leaves the rest to the CPU, which
             # takes seconds a frame. A new stage name restarts the time left.
             on_cpu = not getattr(state["upscaler"], "on_gpu", True)
-            progress("Rendering, upscaling on the CPU" if on_cpu else "Rendering",
-                     min(1.0, state["written"] / float(len(positions))))
+            # The panel shows this as it goes, so it names the work being done.
+            upscaling = "upscaling on the CPU" if on_cpu else "upscaling"
+            if state["upscaler"] is None and factor == 1:
+                stage = "Drawing in-betweens" if pair is not None else "Rendering"
+            elif pair is not None:
+                stage = "Drawing in-betweens and " + upscaling
+            else:
+                stage = upscaling.capitalize()
+            progress(stage, min(1.0, state["written"] / float(len(positions))))
 
     try:
         indices = plan.output_indices

@@ -397,10 +397,10 @@ def _run(args, summary: dict) -> int:
             summary["skipped"] = "no duplicate frames"
             if plan.grain_suspected:
                 why = ("Every frame differs, but by about the same small amount, as grain "
-                       "makes held frames differ. If the clip is grainy, turn on Grainy "
-                       "source (--grain) and try again.")
-                short = ("Every frame differs, but the differences look like grain. If the "
-                         "clip is grainy, turn on Grainy source and analyse again.")
+                       "makes held frames differ. If the clip is grainy, mark the drawings "
+                       "with M, or run with --grain and try again.")
+                short = ("Every frame differs, but the differences look like grain. Mark the "
+                         "drawings with M, then press Render.")
         print(f"Nothing to do. {why}")
         summary["ok"] = True
         status.write(done=True, ok=True, message=short)

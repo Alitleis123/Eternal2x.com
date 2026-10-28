@@ -197,8 +197,6 @@ local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
-local GRAINY = parse_bool(conf["grain"], false)
-local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 -- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
 local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
@@ -230,9 +228,7 @@ local function save_conf()
     f:write("output_dir=" .. OUTPUT_DIR .. "\n")
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
-    f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
     f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
-    f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
 end
@@ -783,14 +779,10 @@ end
 local ui = fu.UIManager
 local disp = bmd.UIDispatcher(ui)
 
--- No "On 1s": planning on 1s gives every frame its own slot, so it would
--- change nothing. A saved 1 from an older version falls back to Auto detect.
-local HOLDS = { 0, 2, 3 }
-local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
 -- No AVI: Resolve refuses its lossless FFV1 there, so that file is MKV. A
 -- saved avi from an older version falls back to the image sequence.
 local FORMATS = { "png", "mp4", "mkv" }
-local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "MKV (lossless)" }
+local FORMAT_LABELS = { "Image sequence", "MP4", "MKV" }
 
 local function index_of(list, value)
     for i, v in ipairs(list) do
@@ -873,12 +865,10 @@ local TIPS = {
     clip = "Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Analyse and Render pick it up when you press them. Use Clip at Playhead shows which clip that is.",
     detection = "Analyse finds the real drawings and puts a marker on each one. Delete a marker to leave its frame out, or add one with M. Render uses the marked frames, and finds the drawings itself on a clip with none.",
     threshold = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones.",
-    hold = "Auto detect works for most clips. Pick On 2s or On 3s if a clip's timing trips it.",
-    grain = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes.",
     render = "Render draws on your GPU and puts the result on the track above the clip. Resolve stays usable while it runs.",
     upscale = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip.",
     interp = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nThe render plays at a third of the clip's speed, ready to time remap.\nOff keeps every drawing on its frame and the clip's length, and draws nothing, to upscale only.",
-    format = "Image sequence is lossless and imports most reliably. All outputs are 8-bit RGB.",
+    format = "Image sequence is lossless and imports most reliably. MP4 is one small file but lossy, and MKV is one lossless file. All are 8-bit RGB.",
 }
 
 local function info(tip)
@@ -914,7 +904,7 @@ end
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 400, 700 },
+    Geometry = { 100, 100, 400, 600 },
     StyleSheet = themed([[
         QWidget { background-color: $panel; color: $text; font-size: 12px; }
         QComboBox {
@@ -955,7 +945,10 @@ local win = disp:AddWindow({
     section("SourceSection", "1", "Clip", TIPS.clip),
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
               WordWrap = true, MinimumSize = { 0, 44 } },
-    ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = BUTTON, Weight = 0 },
+    ui:HGroup{ Weight = 0,
+        ui:HGap(0, 1),
+        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = LINK, Weight = 0 },
+    },
 
     section("DetectSection", "2", "Detection", TIPS.detection),
     row("Threshold", ui:HGroup{ Weight = 0.68, Spacing = 8,
@@ -965,8 +958,6 @@ local win = disp:AddWindow({
                   Weight = 0, MinimumSize = { 10, 0 },
                   Alignment = { AlignRight = true, AlignVCenter = true } },
     }, TIPS.threshold),
-    row("Hold pattern", ui:ComboBox{ ID = "HoldCombo", Weight = 0.68 }, TIPS.hold),
-    row("Grainy source", ui:CheckBox{ ID = "GrainCB", Checked = GRAINY, Weight = 0.68 }, TIPS.grain),
     ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, Weight = 0 },
     ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true,
               Alignment = { AlignHCenter = true } },
@@ -983,10 +974,11 @@ local win = disp:AddWindow({
     ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
     ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = NOTE, WordWrap = true,
               MinimumSize = { 0, 30 } },
-    ui:HGroup{ Weight = 0, Spacing = 6,
-        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = BUTTON, Enabled = false,
+    ui:HGroup{ Weight = 0, Spacing = 4,
+        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = LINK, Enabled = false, Weight = 0,
                    ToolTip = "Switch the render off and on to compare it with the original under it." },
-        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = BUTTON, Enabled = false,
+        ui:HGap(0, 1),
+        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = LINK, Enabled = false, Weight = 0,
                    ToolTip = "Open the folder the render was saved to." },
     },
 
@@ -994,8 +986,6 @@ local win = disp:AddWindow({
     ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
     ui:HGroup{ Weight = 0, Spacing = 4,
         ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
-        ui:CheckBox{ ID = "AutoUpdateCB", Text = "Auto-update", Checked = AUTO_UPDATE, Weight = 0,
-                     StyleSheet = themed("QCheckBox { spacing: 6px; color: $soft; font-size: 11px; }") },
         ui:HGap(0, 1),
         ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = LINK, Weight = 0,
                    ToolTip = "Read how far the run has got, if the panel stopped updating." },
@@ -1007,9 +997,7 @@ local win = disp:AddWindow({
 
 local items = win:GetItems()
 
-for _, label in ipairs(HOLD_LABELS) do items.HoldCombo:AddItem(label) end
 for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
-items.HoldCombo.CurrentIndex = index_of(HOLDS, BASE_HOLD)
 items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 -- ---------------------------------------------------------------------------
@@ -1189,10 +1177,6 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local hold = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
-    if hold and hold > 0 then
-        args = args .. " --base-hold " .. tostring(hold)
-    end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
     -- --network-upscale tells the stage this panel skips Super Scale for a
@@ -1210,7 +1194,6 @@ local function current_args(extra)
     else
         args = args .. " --no-interpolate"
     end
-    if items.GrainCB.Checked then args = args .. " --grain" end
     if THRESHOLD ~= 5 then
         -- Each step doubles or halves how big a change counts, around the default.
         args = args .. " --threshold " .. string.format("%.6f", 0.004 * 2 ^ ((THRESHOLD - 5) / 2)):gsub(",", ".")
@@ -1875,11 +1858,6 @@ function win.On.ThresholdSlider.ValueChanged(ev)
     save_conf()
 end
 
-function win.On.HoldCombo.CurrentIndexChanged(ev)
-    BASE_HOLD = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
-    save_conf()
-end
-
 function win.On.FormatCombo.CurrentIndexChanged(ev)
     FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     save_conf()
@@ -1893,17 +1871,6 @@ end
 function win.On.InterpCB.Clicked(ev)
     DO_INTERPOLATE = items.InterpCB.Checked
     save_conf()
-end
-
-function win.On.GrainCB.Clicked(ev)
-    GRAINY = items.GrainCB.Checked
-    save_conf()
-end
-
-function win.On.AutoUpdateCB.Clicked(ev)
-    AUTO_UPDATE = items.AutoUpdateCB.Checked
-    save_conf()
-    set_status(AUTO_UPDATE and "Auto-update enabled." or "Auto-update disabled.")
 end
 
 local function run_update(auto_mode)
