@@ -187,36 +187,31 @@
     label();
     setPlaying(!still);
 
-    // The first time the demo is on screen, the divider shows off both sides
-    // once, in about 1.5 seconds: over to the right to show the original,
-    // all the way left to show Upflow2x, then back to the middle. Touching the
-    // demo first skips that, and any press or key during it puts the divider
-    // straight back.
+    // Start with the original, then reveal the comparison once. Touching the
+    // demo first skips the reveal, and any press or key during it puts the
+    // divider in the middle.
     if (still || !window.IntersectionObserver) return;
+    setPos(1);
     var figure = box.closest('figure') || box;
-    var sweeping = false, done = false, frame = 0, began = 0, from = pos, path = [];
-    function stop() {
+    var sweeping = false, done = false, frame = 0, began = 0;
+    function stop(keepPosition) {
         if (done) return;
         done = true;
         seen.disconnect();
         cancelAnimationFrame(frame);
         window.removeEventListener('pointerdown', input, true);
         window.removeEventListener('keydown', input, true);
-        if (sweeping) setPos(from);
+        if (!keepPosition) setPos(.5);
         sweeping = false;
     }
     function input(e) {
         if (sweeping || figure.contains(e.target)) stop();
     }
-    // Eases from each [seconds, divider] stop in path to the next.
     function step(now) {
         if (!began) began = now;
-        var s = (now - began) / 1000, i = 1;
-        while (i < path.length - 1 && s >= path[i][0]) i++;
-        var a = path[i - 1], b = path[i];
-        var t = Math.min(1, (s - a[0]) / (b[0] - a[0]));
-        setPos(a[1] + (b[1] - a[1]) * (1 - Math.cos(Math.PI * t)) / 2);
-        if (s < b[0]) frame = requestAnimationFrame(step);
+        var t = Math.min(1, (now - began) / 600);
+        setPos(1 - (1 - Math.cos(Math.PI * t)) / 4);
+        if (t < 1) frame = requestAnimationFrame(step);
         else stop();
     }
     function sweep() {
@@ -226,16 +221,17 @@
             video.addEventListener('loadeddata', sweep, { once: true });
             return;
         }
-        from = pos;
-        // 5% and 95% keep the grip whole on screen.
-        path = [[0, from], [.35, .95], [.45, .95], [1.05, .05], [1.15, .05], [1.5, from]];
-        sweeping = true;
-        frame = requestAnimationFrame(step);
+        // Hold the original briefly once its first frame is ready.
+        setTimeout(function () {
+            if (done) return;
+            sweeping = true;
+            frame = requestAnimationFrame(step);
+        }, 200);
     }
     window.addEventListener('pointerdown', input, true);
     window.addEventListener('keydown', input, true);
     // Assistive tech can set the range with no press or key. Its value stays.
-    slider.addEventListener('input', function () { sweeping = false; stop(); });
+    slider.addEventListener('input', function () { stop(true); });
     // Asking for less motion later stops it too, and puts the divider back.
     var less = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
     if (less && less.addEventListener) {
@@ -244,8 +240,7 @@
     var seen = new IntersectionObserver(function (entries) {
         if (!entries[0].isIntersecting) return;
         seen.disconnect();
-        // As the hero finishes coming in.
-        setTimeout(sweep, 200);
+        sweep();
     }, { threshold: .6 });
     seen.observe(box);
 })();
