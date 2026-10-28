@@ -15,8 +15,10 @@ than by RAM.
 
 from __future__ import annotations
 
+import os
 import sys
 from collections import deque
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Deque, Iterator, List, Optional, Sequence, Tuple
@@ -367,6 +369,11 @@ def _iter_plan_frames(cap: cv2.VideoCapture, indices: Sequence[int]) -> Iterator
 # How many in-betweens are drawn before they are written.
 BATCH = 8
 
+# Threads that encode and write PNG frames. A 4K PNG takes about as long to
+# encode as the GPU takes to draw and upscale a frame, and OpenCV lets go of
+# Python while it encodes, so the two overlap. One core is left for Resolve.
+WRITERS = max(1, min(3, (os.cpu_count() or 2) - 1))
+
 # Encoders to try per container, best quality first.
 _ENCODERS = {
     ".mkv": ("FFV1",),             # lossless; Resolve refuses FFV1 in AVI
@@ -462,6 +469,24 @@ def render_plan(
         buckets[i].append(p - i)
 
     cap = _open(source, frames, progress)
+    pool = ThreadPoolExecutor(max_workers=WRITERS) if is_sequence else None
+    # Frames still being written, oldest first. A few at most, so a fast GPU
+    # can't fill memory with 4K frames waiting for the disk.
+    pending: Deque[Future] = deque()
+
+    def write_png(frame: np.ndarray, target: Path, number: int) -> None:
+        # Encode in memory and let Python write the file. cv2.imwrite
+        # cannot open a non-ASCII path on Windows, so a clip in a folder
+        # called Épisode 01 would fail on its first frame.
+        encoded, data = cv2.imencode(".png", frame)
+        if not encoded:
+            raise SourceError(f"Could not encode frame {number}.")
+        try:
+            target.write_bytes(data.tobytes())
+        except OSError as exc:
+            raise SourceError(f"Could not write {target}: {exc}. Check the disk "
+                              "has space and the folder is writable.") from exc
+
     state = {"writer": None, "written": 0, "width": 0, "height": 0, "upscaler": upscaler,
              "upscale_note": upscale_note, "last_in": None, "last_out": None}
 
@@ -493,17 +518,10 @@ def render_plan(
         state["height"], state["width"] = frame.shape[:2]
         if is_sequence:
             target = output / f"frame_{state['written']:06d}.png"
-            # Encode in memory and let Python write the file. cv2.imwrite
-            # cannot open a non-ASCII path on Windows, so a clip in a folder
-            # called Épisode 01 would fail on its first frame.
-            encoded, data = cv2.imencode(".png", frame)
-            if not encoded:
-                raise SourceError(f"Could not encode frame {state['written']}.")
-            try:
-                target.write_bytes(data.tobytes())
-            except OSError as exc:
-                raise SourceError(f"Could not write {target}: {exc}. Check the disk "
-                                  "has space and the folder is writable.") from exc
+            # A write that failed raises here, on the next frame.
+            while len(pending) >= 2 * WRITERS:
+                pending.popleft().result()
+            pending.append(pool.submit(write_png, frame, target, state["written"]))
         else:
             if state["writer"] is None:
                 # Every writer here rounds an odd size down to even without a
@@ -599,10 +617,15 @@ def render_plan(
         prev = frame_at(index)
         while state["written"] < len(positions):
             emit(prev)
+        while pending:
+            pending.popleft().result()
     finally:
         cap.release()
         if state["writer"] is not None:
             state["writer"].release()
+        if pool is not None:
+            # Even on the way out of an error, no write is left going.
+            pool.shutdown(wait=True)
 
     return RenderResult(
         output=output,
