@@ -525,9 +525,9 @@ def render_plan(
             # The panel shows this as it goes, so it names the work being done.
             upscaling = "upscaling on the CPU" if on_cpu else "upscaling"
             if state["upscaler"] is None and factor == 1:
-                stage = "Drawing in-betweens" if pair is not None else "Rendering"
+                stage = "Interpolating" if pair is not None else "Rendering"
             elif pair is not None:
-                stage = "Drawing in-betweens and " + upscaling
+                stage = "Interpolating and " + upscaling
             else:
                 stage = upscaling.capitalize()
             progress(stage, min(1.0, state["written"] / float(len(positions))))
