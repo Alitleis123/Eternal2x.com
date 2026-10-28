@@ -274,6 +274,19 @@ cut a new one rather than re-uploading.
 Archives are byte reproducible, so rebuilding a tag on any machine gives the
 same checksums as the published ones.
 
+## Licence
+
+Required Notice: Copyright 2026 Ali Tleis (https://upflow2x.com)
+
+Upflow2x is under the
+[PolyForm Shield License 1.0.0](https://polyformproject.org/licenses/shield/1.0.0),
+with the full text and notice in
+[`LICENSE.md`](https://github.com/sidebandstudio/Upflow2x/blob/main/LICENSE.md).
+You can use it for anything, including paid client work, and you can read,
+change and share the code. You can't use it to make a product that competes
+with Upflow2x, free ones included. The models and footage under Credits keep
+their own licences.
+
 ## Credits
 
 The in-betweens are drawn by [Practical-RIFE](https://github.com/hzwer/Practical-RIFE)
