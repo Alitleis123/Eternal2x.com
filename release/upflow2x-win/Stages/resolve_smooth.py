@@ -57,6 +57,9 @@ class StatusFile:
         self.marks = ""
         # The render is already 2x, so the panel must not add Super Scale.
         self.upscaled = False
+        # How many times longer than its clip the render is, so the panel
+        # places all of it, even opened again since the render started.
+        self.slow_motion = 1
 
     def write(self, *, done: bool = False, ok: bool = False,
               message: Optional[str] = None) -> None:
@@ -76,6 +79,7 @@ class StatusFile:
             "fps": round(self.fps, 3),
             "marks": self.marks,
             "upscaled": self.upscaled,
+            "slow_motion": self.slow_motion,
             "done": done,
             "ok": ok,
             "updated": time.time(),
@@ -429,6 +433,7 @@ def _run(args, summary: dict) -> int:
     elif cfg.network_upscale:
         print(f"Real-ESRGAN did not run, so Super Scale does the upscale. {result.upscale_note}")
     status.upscaled = result.upscaled
+    status.slow_motion = cfg.slow_motion
     summary["render"] = result.to_dict()
 
     # Resolve imports an image sequence from its first frame, not its folder.
