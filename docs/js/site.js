@@ -188,7 +188,7 @@
     setPlaying(!still);
 
     // The first time the demo is on screen, the divider shows off both sides
-    // once, in about three seconds: over to the right to show the original,
+    // once, in about 1.5 seconds: over to the right to show the original,
     // all the way left to show Upflow2x, then back to the middle. Touching the
     // demo first skips that, and any press or key during it puts the divider
     // straight back.
@@ -228,7 +228,7 @@
         }
         from = pos;
         // 5% and 95% keep the grip whole on screen.
-        path = [[0, from], [.7, .95], [.9, .95], [2.1, .05], [2.3, .05], [3, from]];
+        path = [[0, from], [.35, .95], [.45, .95], [1.05, .05], [1.15, .05], [1.5, from]];
         sweeping = true;
         frame = requestAnimationFrame(step);
     }
@@ -245,7 +245,7 @@
         if (!entries[0].isIntersecting) return;
         seen.disconnect();
         // As the hero finishes coming in.
-        setTimeout(sweep, 400);
+        setTimeout(sweep, 200);
     }, { threshold: .6 });
     seen.observe(box);
 })();
