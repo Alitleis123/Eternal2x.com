@@ -166,8 +166,9 @@
     }
     function step(now) {
         if (!began) began = now;
-        var t = Math.min(1, (now - began) / 600);
-        setPos(1 - (1 - Math.cos(Math.PI * t)) / 4);
+        var t = Math.min(1, (now - began) / 1100);
+        var eased = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        setPos(1 - .5 * eased);
         if (t < 1) frame = requestAnimationFrame(step);
         else stop();
     }
@@ -183,7 +184,7 @@
             if (done) return;
             sweeping = true;
             frame = requestAnimationFrame(step);
-        }, 200);
+        }, 700);
     }
     window.addEventListener('pointerdown', input, true);
     window.addEventListener('keydown', input, true);
