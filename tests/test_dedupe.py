@@ -332,6 +332,12 @@ def test_a_single_drawing_is_still_a_noop():
 # frames the editor marked
 # --------------------------------------------------------------------------
 
+def test_slow_motion_makes_every_frame_several_and_draws_between_them():
+    from Pipeline.dedupe import output_time_map, plan_from_marks
+    plan = plan_from_marks([0, 2], 4, 24.0)
+    assert output_time_map(plan, slow=3) == pytest.approx([k / 6 for k in range(6)] + [1.0] * 6)
+
+
 def test_marked_frames_are_the_drawings_and_the_rest_are_in_betweens():
     from Pipeline.dedupe import output_time_map, plan_from_marks
     plan = plan_from_marks([0, 4, 6], 8, 24.0)

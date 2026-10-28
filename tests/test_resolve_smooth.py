@@ -741,6 +741,26 @@ def test_marked_frames_are_kept_and_everything_between_is_drawn_fresh(
     assert not np.array_equal(frames[4], source[4]), "the unmarked drawing was kept"
 
 
+def test_slow_motion_renders_three_times_the_frames_under_its_own_name(
+        make_anime, monkeypatch, tmp_path):
+    src = make_anime(holds=(2,) * 6, fps=24.0)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--marks", "0,2,4,6,8,10", "--slow-motion", "3"]) == 0
+    assert len(list((out / f"{src.stem}_3x_smooth").glob("frame_*.png"))) == 36
+
+
+@pytest.mark.parametrize("marks", [[], ["--marks", ",".join(str(f) for f in range(12))]])
+def test_slow_motion_draws_a_clip_that_has_no_held_frames(make_anime, monkeypatch, tmp_path,
+                                                          marks):
+    """At its own speed a clip on 1s has nothing to draw. Slowed down, it does."""
+    src = make_anime(holds=(1,) * 12, fps=24.0)
+    out = tmp_path / "out"
+    assert run(monkeypatch, ["--video", str(src), "--output-dir", str(out),
+                             "--slow-motion", "2"] + marks) == 0
+    assert len(list((out / f"{src.stem}_2x_smooth").glob("frame_*.png"))) == 24
+
+
 def test_analyse_hands_the_drawings_it_found_to_the_panel(make_anime, monkeypatch, tmp_path):
     src = make_anime(holds=(2,) * 6, fps=24.0)
     status = tmp_path / "status.json"

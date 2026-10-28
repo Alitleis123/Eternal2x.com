@@ -408,6 +408,22 @@ def test_a_move_between_two_poses_is_judged_against_the_moves_around_it(
         "the move between the two poses was held as if the shot cut there")
 
 
+def test_slow_motion_draws_three_times_the_frames_at_the_same_rate(make_anime, tmp_path,
+                                                                  read_frames):
+    """Three times the frames, for the editor to time remap. Each drawing
+    lands three times further in and every frame between two is drawn."""
+    src = make_anime(holds=(2,) * 8)
+    plan, _, _ = analyse_video(src, cfg())
+    result = render_plan(src, plan, tmp_path / "out", cfg(slow_motion=3), sequence=True)
+    out, source = read_frames(result.output), read_frames(src)
+    assert result.frames_written == len(out) == 48
+    assert result.fps == plan.fps
+    assert all(np.array_equal(out[3 * i], source[i]) for i in range(0, 16, 2))
+    held = [i for i in range(1, 42)
+            if float(np.abs(out[i].astype(float) - out[i - 1].astype(float)).mean()) < 0.5]
+    assert not held, f"frames {held} repeat the one before"
+
+
 def test_render_reports_output_dimensions(make_anime, tmp_path):
     src = make_anime(holds=(2,) * 6, size=(200, 120))
     plan, _, _ = analyse_video(src, cfg())

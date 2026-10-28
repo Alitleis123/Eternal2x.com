@@ -88,7 +88,7 @@ def test_every_control_is_present(lua, direct):
     H = load(lua, ui_script(direct))
     ids = set(H.widget_ids().split(","))
     for expected in ("SmoothBtn", "AnalyseBtn", "RefreshBtn", "RefreshStatusBtn",
-                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo",
+                     "CancelBtn", "UpdateBtn", "HoldCombo", "FormatCombo", "LengthCombo",
                      "UpscaleCB", "InterpCB", "GrainCB", "AutoUpdateCB", "Status",
                      "Progress", "SourceLabel", "AnalysisLabel", "CompareBtn", "FolderBtn"):
         assert expected in ids, f"missing {expected}; have {sorted(ids)}"
@@ -100,7 +100,7 @@ def test_every_control_has_a_handler(lua, direct):
     for expected in ("SmoothBtn.Clicked", "AnalyseBtn.Clicked", "RefreshBtn.Clicked",
                      "RefreshStatusBtn.Clicked", "CancelBtn.Clicked",
                      "UpdateBtn.Clicked",
-                     "HoldCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
+                     "HoldCombo.CurrentIndexChanged", "LengthCombo.CurrentIndexChanged", "UpscaleCB.Clicked",
                      "InterpCB.Clicked", "GrainCB.Clicked", "AutoUpdateCB.Clicked", "CompareBtn.Clicked",
                      "FolderBtn.Clicked"):
         assert expected in handlers, f"no handler for {expected}"
@@ -140,6 +140,24 @@ def test_output_format_selection_reaches_the_command(lua, direct):
     H.set_combo("FormatCombo", 1)      # MP4
     H.click("AnalyseBtn")
     assert "--format mp4" in H.last_command()
+
+
+def test_length_keeps_the_clip_unless_asked_and_matches_the_stage(lua, direct):
+    from Stages.resolve_smooth import build_parser
+    H = load(lua, ui_script(direct))
+    H.click("SmoothBtn")
+    assert "--slow-motion" not in H.last_command()
+
+    accepted = None
+    for action in build_parser()._actions:
+        if "--slow-motion" in action.option_strings:
+            accepted = set(action.choices)
+    assert H.combo_items("LengthCombo").count(",") == len(accepted) - 1
+    H.set_combo("LengthCombo", 2)
+    H.click("SmoothBtn")
+    assert "--slow-motion 3" in H.last_command()
+    assert "slow_motion=3" in (direct / "Installer" / "Eternal2x.conf").read_text()
+    assert load(lua, ui_script(direct)).widgets["LengthCombo"].CurrentIndex == 2
 
 
 def test_hold_pattern_choices_are_offered(lua, direct):
@@ -806,6 +824,16 @@ def test_a_placement_that_runs_past_the_original_says_so(lua, direct):
     assert "runs 1 frame past it" in H.status()
 
 
+def test_a_slowed_render_is_placed_at_its_full_length(lua, direct):
+    """Three times longer than the original, so none of it is cut to fit."""
+    H = load(lua, ui_script(direct))
+    H.set_combo("LengthCombo", 2)
+    H.media_frames = "144"
+    finish_render(H, direct)
+    assert H.placements[1].endFrame == 144
+    assert "past it" not in H.status()
+
+
 def test_a_render_a_frame_short_is_placed_whole(lua, direct):
     H = load(lua, ui_script(direct))
     H.media_frames = "47"
@@ -861,6 +889,13 @@ def test_a_render_over_its_original_is_not_smoothed_again(lua, direct):
     H.click("AnalyseBtn")
     assert "/media/shot.mov" in H.last_command()
     assert "shot_f7-73" not in H.last_command()
+
+
+def test_a_slowed_render_over_its_original_is_skipped_too(lua, direct):
+    H = _stacked(lua, direct, "/r/shot_f7-73_3x_smooth/frame_[000000-000143].png",
+                 "/media/shot.mov")
+    H.click("AnalyseBtn")
+    assert "/media/shot.mov" in H.last_command()
 
 
 def test_a_single_file_render_over_its_original_is_skipped_too(lua, direct):

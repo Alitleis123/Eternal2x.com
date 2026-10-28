@@ -410,6 +410,7 @@ def render_plan(
 
     The output has exactly as many frames as the source and runs at the same
     rate, so it drops straight back into an edit in place of the original.
+    With `cfg.slow_motion` it has that many times the frames, at the same rate.
 
     `sequence` says whether `output` is a folder of PNG frames. Left as None it
     is guessed from the suffix, which a caller that knows should not rely on,
@@ -429,7 +430,7 @@ def render_plan(
     # The network's 2x and Lanczos never both apply, or the render would be 4x.
     # Where the network cannot run, the upscale is left to Super Scale.
     factor = cfg.upscale_factor if cfg.upscale_enabled and not cfg.network_upscale else 1
-    positions = output_time_map(plan)
+    positions = output_time_map(plan, cfg.slow_motion)
 
     # Set up before the source is opened, since the first render installs the
     # network's runtime and downloads its model, and a failure there should
@@ -517,12 +518,12 @@ def render_plan(
                                           plan.fps)
             state["writer"].write(frame)
         state["written"] += 1
-        if progress and plan.source_frames:
+        if progress and positions:
             # A GPU that gave out mid-render leaves the rest to the CPU, which
             # takes seconds a frame. A new stage name restarts the time left.
             on_cpu = not getattr(state["upscaler"], "on_gpu", True)
             progress("Rendering, upscaling on the CPU" if on_cpu else "Rendering",
-                     min(1.0, state["written"] / float(plan.source_frames)))
+                     min(1.0, state["written"] / float(len(positions))))
 
     try:
         indices = plan.output_indices
@@ -589,7 +590,7 @@ def render_plan(
 
         # A single-drawing plan, or the trailing hold the buckets do not cover.
         prev = frame_at(index)
-        while state["written"] < plan.source_frames:
+        while state["written"] < len(positions):
             emit(prev)
     finally:
         cap.release()
