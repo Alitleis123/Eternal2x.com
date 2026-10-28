@@ -467,6 +467,23 @@ def test_progress_bar_fills_as_it_goes(lua, direct):
     assert filled == [0.1, 0.9], "the progress bar did not grow"
 
 
+def test_the_progress_bar_fills_under_a_decimal_comma_locale(lua, direct):
+    """Qt drops a gradient whose stops read 0,420."""
+    for name in ("de_DE.UTF-8", "de_DE", "German_Germany.1252"):
+        if lua.eval(f'os.setlocale("{name}", "numeric")'):
+            break
+    else:
+        pytest.skip("no decimal comma locale here")
+    try:
+        assert lua.eval('string.format("%.1f", 0.5)') == "0,5"
+        H = load(lua, ui_script(direct))
+        write_status(direct, fraction=0.42)
+        H.click("RefreshStatusBtn")
+        assert bar_fill(H) == 0.42
+    finally:
+        lua.eval('os.setlocale("C", "numeric")')
+
+
 def test_the_progress_bar_is_empty_until_a_run_starts(lua, direct):
     H = load(lua, ui_script(direct))
     assert bar_fill(H) is None
