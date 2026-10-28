@@ -99,7 +99,6 @@ PANEL_DEFAULTS = {
     "base_hold": "0",
     "threshold": "5",
     "format": "png",
-    "slow_motion": "1",
 }
 
 

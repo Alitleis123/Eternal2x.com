@@ -202,8 +202,6 @@ local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 -- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
 local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
--- How many times longer the render is than the clip, 1 to 4.
-local SLOW = math.max(1, math.min(4, math.floor(tonumber(conf["slow_motion"] or "1") or 1)))
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
 -- The frames marked on the clip go to the stage in this file. A long clip's
@@ -236,7 +234,6 @@ local function save_conf()
     f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
     f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
-    f:write("slow_motion=" .. tostring(SLOW) .. "\n")
     f:close()
 end
 
@@ -794,8 +791,6 @@ local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
 -- saved avi from an older version falls back to the image sequence.
 local FORMATS = { "png", "mp4", "mkv" }
 local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "MKV (lossless)" }
-local LENGTHS = { 1, 2, 3, 4 }
-local LENGTH_LABELS = { "Same as clip", "2x longer", "3x longer", "4x longer" }
 
 local function index_of(list, value)
     for i, v in ipairs(list) do
@@ -897,15 +892,10 @@ local win = disp:AddWindow({
                      ToolTip = "Image sequence is lossless and imports most reliably. All outputs are 8-bit RGB." },
     },
     ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Length", Weight = 0.4 },
-        ui:ComboBox{ ID = "LengthCombo", Weight = 0.6,
-                     ToolTip = "Same as clip drops the render back into the edit in sync.\nLonger draws 2, 3 or 4 frames for every frame of the clip at the same frame rate, so it plays in slow motion, ready to time remap." },
-    },
-    ui:HGroup{ Spacing = 6,
         ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
                      ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
         ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
-                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nOff keeps every drawing on its frame and draws nothing, to upscale only." },
+                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nThe render plays at a third of the clip's speed, ready to time remap.\nOff keeps every drawing on its frame and the clip's length, and draws nothing, to upscale only." },
         ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
                      ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
     },
@@ -941,8 +931,6 @@ for _, label in ipairs(HOLD_LABELS) do items.HoldCombo:AddItem(label) end
 for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
 items.HoldCombo.CurrentIndex = index_of(HOLDS, BASE_HOLD)
 items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
-for _, label in ipairs(LENGTH_LABELS) do items.LengthCombo:AddItem(label) end
-items.LengthCombo.CurrentIndex = index_of(LENGTHS, SLOW)
 
 -- ---------------------------------------------------------------------------
 -- state
@@ -1120,8 +1108,6 @@ local function current_args(extra)
     end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
-    local slow = LENGTHS[(items.LengthCombo.CurrentIndex or 0) + 1] or 1
-    if slow > 1 then args = args .. " --slow-motion " .. tostring(slow) end
     -- --network-upscale tells the stage this panel skips Super Scale for a
     -- render that comes back already 2x.
     if items.UpscaleCB.Checked then
@@ -1129,7 +1115,14 @@ local function current_args(extra)
     else
         args = args .. " --no-upscale"
     end
-    if not items.InterpCB.Checked then args = args .. " --no-interpolate" end
+    -- Every render plays at a third of the clip's speed, with all the new
+    -- frames drawn, so there is more to time remap. With no in-betweens
+    -- there is nothing new to draw, so an upscale alone keeps the length.
+    if items.InterpCB.Checked then
+        args = args .. " --slow-motion 3"
+    else
+        args = args .. " --no-interpolate"
+    end
     if items.GrainCB.Checked then args = args .. " --grain" end
     if THRESHOLD ~= 5 then
         -- Each step doubles or halves how big a change counts, around the default.
@@ -1792,11 +1785,6 @@ end
 
 function win.On.FormatCombo.CurrentIndexChanged(ev)
     FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
-    save_conf()
-end
-
-function win.On.LengthCombo.CurrentIndexChanged(ev)
-    SLOW = LENGTHS[(items.LengthCombo.CurrentIndex or 0) + 1] or 1
     save_conf()
 end
 
