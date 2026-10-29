@@ -163,7 +163,7 @@
           </div>
           <div data-hf-id="hf-3iaa" id="card4" class="card" data-layout-allow-overlap style="top: 96px">
             <div data-hf-id="hf-06ks" class="num">4</div>
-            <h2 data-hf-id="hf-1kpg">It lands on the track above</h2>
+            <h2 data-hf-id="hf-1kpg">Then it lands on the track above</h2>
             <p data-hf-id="hf-bj9o" id="c4a">At a third of the speed, ready to time remap.</p>
           </div>
         </div>
@@ -316,12 +316,14 @@
       click("#ringRender", renderAt, 20.05);
       out(["#boxUp", "#boxInterp"], 20.05, 0.3);
       fade("#c3c", 20.3, 0.3);
-      out("#cursor", 21.0, 0.2);
+      // There is no capture of a render running, so the panel goes once the click
+      // is seen, and the camera waits on the timeline for the result.
+      out("#cursor", 20.6, 0.2);
+      out("#panel", 20.6, 0.4);
+      focus(1000, 830, 1.25, 20.8, 1.1, 960);
       out("#card3", 22.1, 0.3);
 
       // Step 4. The render lands on V2, over the original.
-      focus(1000, 830, 1.25, 22.3, 0.9, 960);
-      out("#panel", 22.3, 0.4);
       rise("#card4", 22.5);
       tl.fromTo("#coverV2", { clipPath: "inset(0% 0% 0% 0%)" },
                 { clipPath: "inset(0% 0% 0% 100%)", duration: 0.7, ease: "power2.out" }, 23.3);
