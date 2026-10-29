@@ -197,13 +197,13 @@ local AUTO_UPDATE = parse_bool(conf["auto_update"], true)
 local OUTPUT_DIR = conf["output_dir"] or ""
 local DO_UPSCALE = parse_bool(conf["upscale"], true)
 local DO_INTERPOLATE = parse_bool(conf["interpolate"], true)
-local GRAINY = parse_bool(conf["grain"], false)
-local BASE_HOLD = tonumber(conf["base_hold"] or "0") or 0
 -- How big a change Analyse counts as a new drawing, 1 to 9, 5 the default.
 local THRESHOLD = math.max(1, math.min(9, math.floor(tonumber(conf["threshold"] or "5") or 5)))
 local FORMAT = conf["format"] or "png"
 
 local STATUS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.json")
+-- Stop creates this, and the run ends at its next frame.
+local STOP_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_status.stop")
 -- The frames marked on the clip go to the stage in this file. A long clip's
 -- list does not fit on a Windows command line.
 local MARKS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_marks.txt")
@@ -230,9 +230,7 @@ local function save_conf()
     f:write("output_dir=" .. OUTPUT_DIR .. "\n")
     f:write("upscale=" .. (DO_UPSCALE and "true" or "false") .. "\n")
     f:write("interpolate=" .. (DO_INTERPOLATE and "true" or "false") .. "\n")
-    f:write("grain=" .. (GRAINY and "true" or "false") .. "\n")
     f:write("threshold=" .. tostring(THRESHOLD) .. "\n")
-    f:write("base_hold=" .. tostring(BASE_HOLD) .. "\n")
     f:write("format=" .. FORMAT .. "\n")
     f:close()
 end
@@ -594,6 +592,7 @@ end
 -- minimised window through `start`. UTF-16 also carries non-ASCII paths that
 -- os.execute's ANSI code page cannot. Without LuaJIT's ffi, os.execute runs.
 local hidden_execute = nil
+local hidden_start = nil
 if is_windows() then
     pcall(function()
         local ffi = require("ffi")
@@ -640,6 +639,28 @@ if is_windows() then
             k32.CloseHandle(pi.process)
             return true, tonumber(code[0])
         end
+        -- Starts `cmd` in `dir` and leaves it running, with no window.
+        hidden_start = function(cmd, dir)
+            local function wide(s)
+                local size = k32.MultiByteToWideChar(65001, 0, s, #s, nil, 0)
+                if size <= 0 then return nil end
+                local out = ffi.new("wchar_t[?]", size + 1)
+                k32.MultiByteToWideChar(65001, 0, s, #s, out, size)
+                return out
+            end
+            local line = wide((os.getenv("ComSpec") or "cmd.exe") .. " /c " .. cmd)
+            local cwd = wide(dir)
+            if not line or not cwd then return false end
+            local si = ffi.new("E2X_STARTUPINFOW")
+            si.cb = ffi.sizeof(si)
+            local pi = ffi.new("E2X_PROCESS_INFORMATION")
+            if k32.CreateProcessW(nil, line, nil, nil, 0, 0x08000000, nil, cwd, si, pi) == 0 then
+                return false
+            end
+            k32.CloseHandle(pi.thread)
+            k32.CloseHandle(pi.process)
+            return true
+        end
     end)
 end
 
@@ -659,11 +680,25 @@ local function run_blocking(module_name, args, log)
     return (ok == true or ok == 0)
 end
 
+-- Runs a script in the plugin folder by name, as a render does. With no
+-- window, there is none to close by mistake, which would end the run without
+-- a word. Where that cannot start, `fallback` opens a minimised one.
+local function start_script(script, fallback)
+    if hidden_start then
+        local dir = (REPO_ROOT ~= "" and REPO_ROOT or root):gsub("/", "\\")
+        local ok, started = pcall(hidden_start, ".\\" .. basename(script), dir)
+        if ok and started then return true end
+    end
+    local ok = execute(fallback)
+    return (ok == true or ok == 0)
+end
+
 -- True once the run is on its way. Python reports from then on.
 local function run_background(module_name, args)
     local cmd = build_command(module_name, args, true)
     if not cmd then return false end
     print("[Upflow2x] " .. cmd)
+    if is_windows() then return start_script(RUN_SCRIPT, cmd) end
     local ok = execute(cmd)
     return (ok == true or ok == 0)
 end
@@ -765,6 +800,7 @@ end
 local function clear_status()
     os.remove(STATUS_PATH)
     os.remove(EXIT_PATH)
+    os.remove(STOP_PATH)
 end
 
 -- The exit code of the last background run, or nil while it is still going.
@@ -783,14 +819,10 @@ end
 local ui = fu.UIManager
 local disp = bmd.UIDispatcher(ui)
 
--- No "On 1s": planning on 1s gives every frame its own slot, so it would
--- change nothing. A saved 1 from an older version falls back to Auto detect.
-local HOLDS = { 0, 2, 3 }
-local HOLD_LABELS = { "Auto detect", "On 2s", "On 3s" }
 -- No AVI: Resolve refuses its lossless FFV1 there, so that file is MKV. A
 -- saved avi from an older version falls back to the image sequence.
 local FORMATS = { "png", "mp4", "mkv" }
-local FORMAT_LABELS = { "Image sequence (lossless)", "MP4 (compact)", "MKV (lossless)" }
+local FORMAT_LABELS = { "Image sequence", "MP4", "MKV" }
 
 local function index_of(list, value)
     for i, v in ipairs(list) do
@@ -799,137 +831,199 @@ local function index_of(list, value)
     return 0
 end
 
+-- Resolve's own greys, so the panel sits beside the Inspector without
+-- standing out, and the amber from upflow2x.com for what is pressed or on.
+local C = {
+    panel = "#28282e", field = "#1d1d21", raise = "#37363c", hover = "#423f47",
+    line = "#45444b", hair = "#35343a",
+    text = "#dcdcd8", soft = "#a3a2a8", mute = "#7a7b80",
+    amber = "#f2a93b", amber_hover = "#f6bd63", amber_down = "#d9932c", on_amber = "#17171a",
+}
+-- "$name" in a style sheet becomes that colour.
+local function themed(sheet)
+    return (sheet:gsub("%$([%w_]+)", C))
+end
+
 -- Resolve's UI Manager ignores #name selectors in a window's style sheet, so
 -- every widget that looks different from the rest carries its own.
-local TITLE = "QLabel { font-size: 20px; font-weight: 700; color: #ededf4; }"
-local SUBTITLE = "QLabel { color: #6e6e82; font-size: 11px; padding-bottom: 4px; }"
-local SECTION = [[QLabel { color: #9a9ab0; font-size: 10px; font-weight: 700;
-    padding-top: 8px; letter-spacing: 0.6px; }]]
-local CARD = [[QLabel { background-color: #121216; border: 1px solid #1e1e26;
-    border-radius: 6px; padding: 6px 9px; color: #c8c8d6; font-size: 11px; }]]
-local META = "QLabel { color: #5c5c70; font-size: 10px; }"
-local PROGRESS = "QLabel { color: #7c6fef; font-size: 11px; font-family: monospace; }"
-local START = [[
-    QPushButton { background-color: #7c6fef; border: 1px solid #9b90f5; border-radius: 7px;
-        color: #0b0b0f; font-size: 13px; font-weight: 700; min-height: 34px; }
-    QPushButton:hover { background-color: #9b90f5; }
-    QPushButton:disabled { background-color: #2a2740; color: #6a6a80; border-color: #2a2740; }
-]]
-local GHOST = [[
-    QPushButton { background-color: #121216; border: 1px solid #1e1e26; border-radius: 6px;
-        min-height: 22px; padding: 3px 10px; font-size: 11px; font-weight: 500; color: #b4b4c6; }
-    QPushButton:hover { background-color: #1a1a22; border-color: #7c6fef; color: #e2e2ea; }
-    QPushButton:disabled { background-color: #0f0f13; border-color: #18181f; color: #4a4a5a; }
-]]
+local TITLE = themed("QLabel { font-size: 17px; font-weight: 600; color: $text; }")
+local BADGE = themed([[QLabel { background-color: $amber; color: $on_amber; border-radius: 4px;
+    padding: 1px 5px; font-family: Consolas, Menlo, monospace; font-size: 10px; font-weight: 700; }]])
+local VERSION = themed("QLabel { color: $mute; font-size: 11px; }")
+local HAIRLINE = themed("QLabel { background-color: $hair; }")
+local INFO = themed([[QLabel { color: $soft; border: 1px solid $line; border-radius: 8px;
+    font-family: Georgia, serif; font-size: 10px; font-weight: 700; }]])
+local CARD = themed([[QLabel { background-color: $field; border: 1px solid $hair;
+    border-radius: 6px; padding: 7px 10px; color: $text; font-size: 12px; }]])
+local NOTE = themed("QLabel { color: $soft; font-size: 11px; }")
+local FIELD_LABEL = themed("QLabel { color: $soft; font-size: 12px; }")
+local META = themed("QLabel { color: $mute; font-size: 10px; }")
+local PROGRESS = themed("QLabel { color: $soft; font-size: 11px; font-family: Consolas, Menlo, monospace; }")
+local START = themed([[
+    QPushButton { background-color: $amber; border: none; border-radius: 8px;
+        color: $on_amber; font-size: 15px; font-weight: 700; }
+    QPushButton:hover { background-color: $amber_hover; }
+    QPushButton:pressed { background-color: $amber_down; }
+    QPushButton:disabled { background-color: $raise; color: $mute; }
+]])
+-- On or off at a glance: the whole tile lights up when it is on. They are
+-- checkable buttons, since a checkbox only takes a click on its dot and words.
+local TOGGLE = themed([[
+    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 8px;
+        padding: 0px 12px; min-height: 34px; font-size: 13px; color: $soft; }
+    QPushButton:hover { background-color: $hover; }
+    QPushButton:checked { border-color: $amber; color: $text; background-color: rgba(242, 169, 59, 40); }
+    QPushButton:checked:hover { background-color: rgba(242, 169, 59, 64); }
+]])
+local BUTTON = themed([[
+    QPushButton { background-color: $raise; border: 1px solid $line; border-radius: 6px;
+        min-height: 30px; padding: 3px 10px; font-size: 12px; color: $text; }
+    QPushButton:hover { background-color: $hover; }
+    QPushButton:pressed { background-color: $field; }
+    QPushButton:disabled { background-color: $panel; border-color: $hair; color: $mute; }
+]])
+local LINK = themed([[
+    QPushButton { background-color: transparent; border: none; padding: 2px 4px;
+        min-height: 18px; font-size: 11px; color: $soft; }
+    QPushButton:hover { color: $amber; }
+    QPushButton:disabled { color: $mute; }
+]])
+local WINDOW = themed([[
+    QWidget { background-color: $panel; color: $text; font-size: 12px; }
+    QComboBox {
+        background-color: $field; border: 1px solid $hair; border-radius: 5px;
+        padding: 4px 8px; min-height: 18px; color: $text;
+    }
+    QComboBox:hover { border-color: $line; }
+    QComboBox QAbstractItemView {
+        background-color: $field; border: 1px solid $line; outline: none;
+        selection-background-color: $amber; selection-color: $on_amber;
+    }
+    QSlider::groove:horizontal { height: 3px; border-radius: 1px; background-color: $field; }
+    QSlider::sub-page:horizontal { border-radius: 1px; background-color: $amber; }
+    QSlider::handle:horizontal {
+        width: 12px; height: 12px; margin: -5px 0; border-radius: 6px; background-color: $text;
+    }
+    QSlider::handle:horizontal:hover { background-color: #ffffff; }
+    QToolTip { background-color: $field; color: $text; border: 1px solid $line; padding: 5px; }
+]])
+-- A thin bar, amber up to how far the run has got. Empty, it keeps its
+-- space but shows nothing, so the panel doesn't jump when a run starts.
+local function bar_style(fraction)
+    if not fraction then
+        return "QLabel { background-color: transparent; }"
+    end
+    local f = math.max(0.001, math.min(0.998, fraction))
+    -- Qt reads only a decimal point, and some locales format with a comma.
+    local function stop(value) return (string.format("%.3f", value):gsub(",", ".")) end
+    return themed(string.format([[QLabel { border-radius: 2px; background-color: qlineargradient(
+        x1: 0, y1: 0, x2: 1, y2: 0, stop: 0 $amber, stop: %s $amber,
+        stop: %s $field, stop: 1 $field); }]], stop(f), stop(f + 0.001)))
+end
 
-local RENDER_LABEL = "\xE2\x96\xB2  Render"
-local ANALYSIS_HINT = "Analyse marks the drawings on the clip. Or mark the frames yourself with M. Render uses the marked frames."
+local RENDER_LABEL = "\xE2\x96\xB6  Render"
+local ANALYSIS_HINT = "Mark the drawings with M, or let Analyse do it."
 
+-- What each part does, shown when the pointer rests on it, so the panel
+-- itself only needs names.
+local TIPS = {
+    clip = "Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. This box follows the playhead. With the playhead in a gap, it keeps the last clip.",
+    detection = "Analyse finds the real drawings and puts a marker on each one. Delete a marker to leave its frame out, or add one with M. Render uses the marked frames, and finds the drawings itself on a clip with none.",
+    threshold = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones.",
+    render = "Render draws on your GPU and puts the result on the track above the clip. Resolve stays usable while it runs.",
+    upscale = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip.",
+    interp = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nThe render plays at a third of the clip's speed, ready to time remap.\nOff keeps every drawing on its frame and the clip's length, and draws nothing, to upscale only.",
+    format = "Image sequence is lossless and imports most reliably. MP4 is one small file but lossy, and MKV is one lossless file. All are 8-bit RGB.",
+}
+
+local function info(tip)
+    return ui:Label{ Text = "i", ToolTip = tip, StyleSheet = INFO, Weight = 0,
+                     Alignment = { AlignCenter = true },
+                     MinimumSize = { 16, 16 }, MaximumSize = { 16, 16 } }
+end
+
+-- Name, control, (i): the same three columns on every row.
+local function row(name, control, tip)
+    return ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Label{ Text = name, StyleSheet = FIELD_LABEL, Weight = 0.2,
+                  Alignment = { AlignLeft = true, AlignVCenter = true } },
+        control,
+        info(tip),
+    }
+end
+
+-- Top to bottom in the order you use it: the clip, Analyse and its
+-- threshold, the two switches and the output, then Render. All in one
+-- window, so nothing opens on top of it.
 local win = disp:AddWindow({
     ID = "Eternal2x",
     WindowTitle = "Upflow2x  v" .. CURRENT_VERSION,
-    Geometry = { 100, 100, 460, 700 },
-    StyleSheet = [[
-        QWidget { background-color: #0b0b0f; color: #e2e2ea; font-size: 12px; }
-        QPushButton {
-            background-color: #16161e; border: 1px solid #28283a; border-radius: 7px;
-            min-height: 32px; padding: 6px 14px; font-weight: 600; color: #e2e2ea;
-        }
-        QPushButton:hover { background-color: #1e1e28; border-color: #7c6fef; }
-        QPushButton:pressed { background-color: #121218; }
-        QPushButton:disabled { color: #4a4a5a; border-color: #1e1e26; background-color: #101014; }
-        QComboBox {
-            background-color: #16161e; border: 1px solid #28283a; border-radius: 6px;
-            padding: 5px 8px; min-height: 24px; color: #e2e2ea;
-        }
-        QComboBox:hover { border-color: #7c6fef; }
-        QComboBox QAbstractItemView {
-            background-color: #16161e; border: 1px solid #28283a;
-            selection-background-color: #7c6fef; selection-color: #0b0b0f;
-        }
-        QCheckBox { color: #c8c8d6; font-size: 11px; spacing: 7px; }
-        QCheckBox::indicator {
-            width: 15px; height: 15px; border-radius: 3px;
-            border: 1px solid #28283a; background: #121216;
-        }
-        QCheckBox::indicator:checked { background: #7c6fef; border-color: #9b90f5; }
-    ]],
+    Geometry = { 100, 100, 380, 506 },
+    StyleSheet = WINDOW,
 }, ui:VGroup{
-    Spacing = 2,
+    Spacing = 8,
 
-    ui:Label{ ID = "Title", Text = "Upflow2x", StyleSheet = TITLE },
-    ui:Label{ ID = "SubTitle", StyleSheet = SUBTITLE,
-              Text = "Smooth 2x for hand-drawn animation  \xC2\xB7  v" .. CURRENT_VERSION },
+    ui:HGroup{ Weight = 0, Spacing = 6,
+        ui:Label{ ID = "Title", Text = "Upflow", StyleSheet = TITLE, Weight = 0 },
+        ui:Label{ ID = "Badge", Text = "2X", StyleSheet = BADGE, Weight = 0,
+                  Alignment = { AlignCenter = true } },
+        ui:HGap(0, 1),
+        ui:Label{ ID = "SubTitle", Text = "v" .. CURRENT_VERSION, StyleSheet = VERSION, Weight = 0,
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+        ui:Button{ ID = "UpdateBtn", Text = "Check for Updates", StyleSheet = LINK, Weight = 0 },
+    },
 
-    ui:Label{ ID = "SourceSection", Text = "SOURCE CLIP", StyleSheet = SECTION },
     ui:Label{ ID = "SourceLabel", Text = "No clip under the playhead.", StyleSheet = CARD,
-              WordWrap = true, MinimumSize = { 0, 46 } },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshBtn", Text = "Use Clip at Playhead", StyleSheet = GHOST,
-                   ToolTip = "Read the clip under the playhead. Resolve does not tell scripts which clip is selected." },
-        ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = GHOST,
-                   ToolTip = "Find the drawings and mark them on the clip. Delete a marker to leave a frame out, or add your own with M." },
-    },
-    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT,
-              StyleSheet = CARD, WordWrap = true, MinimumSize = { 0, 46 } },
+              WordWrap = true, MinimumSize = { 0, 46 }, ToolTip = TIPS.clip },
 
-    ui:Label{ ID = "SettingsSection", Text = "SETTINGS", StyleSheet = SECTION },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Threshold", Weight = 0.4 },
-        ui:Slider{ ID = "ThresholdSlider", Weight = 0.5, Minimum = 1, Maximum = 9,
-                   Value = THRESHOLD, Orientation = "Horizontal",
-                   ToolTip = "How big a change Analyse counts as a new drawing. Lower catches small moves, like only a mouth. Higher counts only big ones." },
-        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), Weight = 0.1 },
-    },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Hold pattern", Weight = 0.4 },
-        ui:ComboBox{ ID = "HoldCombo", Weight = 0.6,
-                     ToolTip = "Leave on Auto detect unless a clip's timing trips the detector." },
-    },
-    ui:HGroup{ Spacing = 6,
-        ui:Label{ Text = "Output", Weight = 0.4 },
-        ui:ComboBox{ ID = "FormatCombo", Weight = 0.6,
-                     ToolTip = "Image sequence is lossless and imports most reliably. All outputs are 8-bit RGB." },
-    },
-    ui:HGroup{ Spacing = 6,
-        ui:CheckBox{ ID = "UpscaleCB", Text = "Upscale 2x", Checked = DO_UPSCALE,
-                     ToolTip = "Draw every frame at 2x with Real-ESRGAN's anime model, on the GPU on Windows. Without a GPU, Resolve's Super Scale does it.\nIt shows on a timeline bigger than the clip." },
-        ui:CheckBox{ ID = "InterpCB", Text = "Interpolate", Checked = DO_INTERPOLATE,
-                     ToolTip = "Draw the missing in-betweens with the RIFE network, on the GPU on Windows. Its first use downloads about 50 MB.\nThe render plays at a third of the clip's speed, ready to time remap.\nOff keeps every drawing on its frame and the clip's length, and draws nothing, to upscale only." },
-        ui:CheckBox{ ID = "GrainCB", Text = "Grainy source", Checked = GRAINY,
-                     ToolTip = "The clip has film grain, so held frames all differ a little. Leave off for clean animation, where it can merge fine real changes." },
-    },
+    ui:Button{ ID = "AnalyseBtn", Text = "Analyse", StyleSheet = BUTTON, ToolTip = TIPS.detection },
+    row("Threshold", ui:HGroup{ Weight = 0.8, Spacing = 8,
+        ui:Slider{ ID = "ThresholdSlider", Weight = 1, Minimum = 1, Maximum = 9, PageStep = 1,
+                   Value = THRESHOLD, Orientation = "Horizontal" },
+        ui:Label{ ID = "ThresholdValue", Text = tostring(THRESHOLD), StyleSheet = FIELD_LABEL,
+                  Weight = 0, MinimumSize = { 10, 0 },
+                  Alignment = { AlignRight = true, AlignVCenter = true } },
+    }, TIPS.threshold),
+    ui:Label{ ID = "AnalysisLabel", Text = ANALYSIS_HINT, StyleSheet = NOTE, WordWrap = true },
 
-    ui:Label{ ID = "RunSection", Text = "RUN", StyleSheet = SECTION },
-    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START,
-               MinimumSize = { 0, 38 }, MaximumSize = { 16777215, 38 } },
-    ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS },
-    ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = CARD, WordWrap = true,
-              MinimumSize = { 0, 60 } },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = GHOST,
-                   Enabled = false,
-                   ToolTip = "Switch the smoothed clip off and on to compare it with the original under it." },
-        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = GHOST,
-                   Enabled = false, ToolTip = "Open the folder the render was saved to." },
-    },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = GHOST },
-        ui:Button{ ID = "CancelBtn", Text = "Reset", StyleSheet = GHOST },
-    },
+    ui:Label{ StyleSheet = HAIRLINE, MinimumSize = { 0, 1 }, MaximumSize = { 16777215, 1 } },
 
+    ui:HGroup{ Weight = 0, Spacing = 8,
+        ui:Button{ ID = "UpscaleCB", Text = "Upscaling", Checkable = true, Checked = DO_UPSCALE,
+                   StyleSheet = TOGGLE, ToolTip = TIPS.upscale },
+        ui:Button{ ID = "InterpCB", Text = "Interpolate", Checkable = true,
+                   Checked = DO_INTERPOLATE, StyleSheet = TOGGLE, ToolTip = TIPS.interp },
+    },
+    row("Output", ui:ComboBox{ ID = "FormatCombo", Weight = 0.8 }, TIPS.format),
+    ui:Button{ ID = "SmoothBtn", Text = RENDER_LABEL, StyleSheet = START, ToolTip = TIPS.render,
+               MinimumSize = { 0, 44 }, MaximumSize = { 16777215, 44 } },
+
+    ui:Label{ ID = "ProgressBar", Text = "", StyleSheet = bar_style(nil),
+              MinimumSize = { 0, 4 }, MaximumSize = { 16777215, 4 } },
+    ui:Label{ ID = "Progress", Text = "", StyleSheet = PROGRESS, WordWrap = true },
+    -- Three lines, as long as a finished render's message runs. Resolve does
+    -- not grow a wrapped label to fit, so two lines cut it off top and bottom.
+    ui:Label{ ID = "Status", Text = "Ready.", StyleSheet = NOTE, WordWrap = true,
+              MinimumSize = { 0, 46 } },
+
+    ui:HGroup{ Weight = 0, Spacing = 2,
+        ui:Button{ ID = "CompareBtn", Text = "Show Original", StyleSheet = LINK, Enabled = false, Weight = 0,
+                   ToolTip = "Switch the render off and on to compare it with the original under it." },
+        ui:Button{ ID = "FolderBtn", Text = "Show in Folder", StyleSheet = LINK, Enabled = false, Weight = 0,
+                   ToolTip = "Open the folder the render was saved to." },
+        ui:HGap(0, 1),
+        ui:Button{ ID = "RefreshStatusBtn", Text = "Refresh Progress", StyleSheet = LINK, Weight = 0,
+                   ToolTip = "Read how far the run has got, if the panel stopped updating." },
+        ui:Button{ ID = "CancelBtn", Text = "Reset", StyleSheet = LINK, Weight = 0,
+                   ToolTip = "Clear a run that stopped without finishing." },
+    },
     ui:Label{ ID = "Meta", Text = "", StyleSheet = META, WordWrap = true },
-    ui:HGroup{ Spacing = 6,
-        ui:Button{ ID = "UpdateBtn", Text = "\xE2\x86\xBB  Check for Updates", StyleSheet = GHOST },
-        ui:CheckBox{ ID = "AutoUpdateCB", Text = "Auto-update", Checked = AUTO_UPDATE },
-    },
 })
+
 
 local items = win:GetItems()
 
-for _, label in ipairs(HOLD_LABELS) do items.HoldCombo:AddItem(label) end
 for _, label in ipairs(FORMAT_LABELS) do items.FormatCombo:AddItem(label) end
-items.HoldCombo.CurrentIndex = index_of(HOLDS, BASE_HOLD)
 items.FormatCombo.CurrentIndex = index_of(FORMATS, FORMAT)
 
 -- ---------------------------------------------------------------------------
@@ -958,6 +1052,8 @@ local ANALYSING = false
 
 local function set_status(msg)
     items.Status.Text = msg or ""
+    -- The whole message, for one too long for the box.
+    items.Status.ToolTip = msg or ""
     print("[Upflow2x] " .. (msg or ""))
 end
 
@@ -966,23 +1062,23 @@ end
 local function set_progress(fraction, stage)
     if not fraction or (fraction <= 0 and (stage or "") == "") then
         items.Progress.Text = ""
+        items.ProgressBar.StyleSheet = bar_style(nil)
         return
     end
-    local width = 24
-    local filled = math.floor(fraction * width + 0.5)
-    if filled > width then filled = width end
-    local bar = string.rep("\xE2\x96\x88", filled) .. string.rep("\xE2\x96\x91", width - filled)
-    items.Progress.Text = string.format("%s  %d%%  %s", bar, math.floor(fraction * 100 + 0.5),
-                                        stage or "")
+    fraction = math.min(1, fraction)
+    items.ProgressBar.StyleSheet = bar_style(fraction)
+    items.Progress.Text = string.format("%d%%  %s", math.floor(fraction * 100 + 0.5), stage or "")
 end
 
 local function set_busy(busy)
     RUNNING = busy
     items.SmoothBtn.Enabled = not busy
     items.AnalyseBtn.Enabled = not busy
-    items.RefreshBtn.Enabled = not busy
     items.UpdateBtn.Enabled = not busy
     items.SmoothBtn.Text = busy and "Working..." or RENDER_LABEL
+    items.CancelBtn.Text = busy and "Stop" or "Reset"
+    items.CancelBtn.ToolTip = busy and "End the run now. Frames it has written stay in its folder."
+        or "Clear a run that stopped without finishing."
 end
 
 -- Seconds as text that Python's float() reads, whatever the locale.
@@ -992,27 +1088,45 @@ end
 
 local function range_text(range)
     if not range then return "Whole file." end
-    return (string.format("%.2f s to %.2f s of the file, %.2f s long.",
-                          range.start, range.finish, range.finish - range.start)
+    return (string.format("%.2f s long, from %.2f s of the file.",
+                          range.finish - range.start, range.start)
             :gsub("(%d),(%d)", "%1.%2"))
 end
 
-local function refresh_source()
+-- The timer reads the clip twice a second, and a tip set again closes under
+-- the pointer, so the card is only written when it changes.
+local function show_source(text, tip)
+    if items.SourceLabel.Text ~= text then items.SourceLabel.Text = text end
+    if items.SourceLabel.ToolTip ~= tip then items.SourceLabel.ToolTip = tip end
+end
+
+-- With keep, a playhead in a gap leaves the last clip, and the card, as they are.
+local function refresh_source(keep)
     local path, err, range, place, item = selected_clip_path()
     if not path then
+        if keep and SOURCE_PATH then return false end
         SOURCE_PATH = nil
         SOURCE_RANGE = nil
         SOURCE_PLACE = nil
         SOURCE_ITEM = nil
-        items.SourceLabel.Text = err or "No clip under the playhead."
+        show_source(err or "No clip under the playhead.", TIPS.clip)
         return false
+    end
+    -- Another clip, even one cut from the same part of the same file, or
+    -- another part of the file, makes the last analysis say nothing about it.
+    local was, at = SOURCE_RANGE, SOURCE_PLACE
+    if path ~= SOURCE_PATH or (range and range.start) ~= (was and was.start)
+            or (range and range.finish) ~= (was and was.finish)
+            or (place and place.item) ~= (at and at.item)
+            or (place and place.timeline) ~= (at and at.timeline) then
+        items.AnalysisLabel.Text = ANALYSIS_HINT
+        items.AnalysisLabel.ToolTip = ""
     end
     SOURCE_PATH = path
     SOURCE_RANGE = range
     SOURCE_PLACE = place
     SOURCE_ITEM = item
-    items.SourceLabel.Text = short_name(basename(path)) .. "\n" .. range_text(range)
-    items.Meta.Text = short_path(path, 68)
+    show_source(short_name(basename(path)) .. "\n" .. range_text(range), TIPS.clip .. "\n\n" .. path)
     return true
 end
 
@@ -1102,10 +1216,6 @@ local function current_args(extra)
                         .. " --end-time " .. seconds(SOURCE_RANGE.finish)
         end
     end
-    local hold = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
-    if hold and hold > 0 then
-        args = args .. " --base-hold " .. tostring(hold)
-    end
     local fmt = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     args = args .. " --format " .. fmt
     -- --network-upscale tells the stage this panel skips Super Scale for a
@@ -1123,7 +1233,6 @@ local function current_args(extra)
     else
         args = args .. " --no-interpolate"
     end
-    if items.GrainCB.Checked then args = args .. " --grain" end
     if THRESHOLD ~= 5 then
         -- Each step doubles or halves how big a change counts, around the default.
         args = args .. " --threshold " .. string.format("%.6f", 0.004 * 2 ^ ((THRESHOLD - 5) / 2)):gsub(",", ".")
@@ -1443,17 +1552,24 @@ local function apply_status(st)
             ANALYSING = false
             local placed, shared = 0, 0
             if ANALYSED_ITEM then placed, shared = mark_drawings(ANALYSED_ITEM, st.marks) end
-            if st.message ~= "" then items.AnalysisLabel.Text = st.message end
+            local report = st.message
             if placed > 0 then
-                items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " Marked " .. placed
-                    .. " frames on the clip."
+                report = report .. " Marked " .. placed .. " frames on the clip."
                 if shared > 0 then
-                    items.AnalysisLabel.Text = items.AnalysisLabel.Text .. " " .. shared
+                    report = report .. " " .. shared
                         .. (shared == 1 and " more found frame shares a timeline frame with another"
                             or " more found frames share timeline frames with others")
                         .. ", as the clip runs faster than the timeline."
                 end
-                set_status("Delete a marker to leave its frame out, or add one with M, then press Render.")
+                local on = st.message:match("[Oo]n (%d)s")
+                items.AnalysisLabel.Text = "Placed " .. placed .. " markers."
+                    .. (on and (" Animated on " .. on .. "s.") or "")
+            elseif st.message ~= "" then
+                items.AnalysisLabel.Text = st.message
+            end
+            items.AnalysisLabel.ToolTip = report
+            if placed > 0 then
+                set_status("Check the markers, then press Render.")
             elseif st.marks ~= "" and ANALYSED_ITEM and ANALYSED_ITEM.unreadable then
                 set_status("Analysis complete. Resolve would not say where the clip's frames are, so no markers were placed.")
             else
@@ -1471,10 +1587,10 @@ local function apply_status(st)
             items.CompareBtn.Text = "Show Original"
             if ok then
                 set_status(st.message .. " " .. notes)
-                -- Two lines of status leave no room for a tip as well.
+                -- Three lines of status leave no room for a tip as well.
                 if hint then items.Meta.Text = hint end
             elseif where then
-                -- The status box fits two lines, too few for a path as well.
+                -- The status box fits three lines, too few for a path as well.
                 items.Meta.Text = short_path(where, 68)
                 print("[Upflow2x] The render is at " .. where)
                 set_status(st.message .. " " .. notes .. " Drag it in from the path below.")
@@ -1504,16 +1620,19 @@ local function poll()
         -- window closed before Python started leaves no file at all.
         local last = (st and st.updated and st.updated > 0) and st.updated or LAUNCHED_AT
         local quiet = last and (os.time() - last) or 0
+        -- Quiet this long, the button clears the run, so it says Reset.
         if quiet > STALLED_AFTER and not st then
+            items.CancelBtn.Text = "Reset"
             set_status(string.format("Python has not started after %d minutes. Press Reset "
                 .. "and run it again. Log: %s", math.floor(quiet / 60 + 0.5), LOG_PATH))
         elseif quiet > STALLED_AFTER then
-            set_status(string.format("No progress for %d minutes. If the Upflow2x window "
-                .. "was closed, the render stopped: press Reset and run it again.",
-                math.floor(quiet / 60 + 0.5)))
+            items.CancelBtn.Text = "Reset"
+            set_status(string.format("No progress for %d minutes, so the run has stopped. "
+                .. "Press Reset and run it again.", math.floor(quiet / 60 + 0.5)))
         elseif (items.Status.Text or ""):match("^No progress for")
             or (items.Status.Text or ""):match("^Python has not started") then
             -- It is reporting again, so the warning no longer holds.
+            items.CancelBtn.Text = "Stop"
             set_status("Working. Resolve stays usable while this runs.")
         end
         return false
@@ -1558,9 +1677,33 @@ local have_timer = pcall(function()
     timer = ui:Timer({ ID = "PollTimer", Interval = 500 })
 end)
 
+-- Where the playhead is, or nil. Cheap enough to read every tick.
+local function playhead_spot()
+    local ok, spot = pcall(function()
+        local timeline = get_resolve():GetProjectManager():GetCurrentProject():GetCurrentTimeline()
+        return timeline:GetUniqueId() .. " " .. tostring(timeline:GetCurrentTimecode())
+    end)
+    return ok and spot or nil
+end
+
+-- Between runs the card follows the playhead, so there is nothing to press.
+-- During playback the playhead moves every tick, and reading the clip under
+-- it each time would cost Resolve, so the card catches up once it stops.
+local pick_source
+local last_spot = nil
 local function on_timeout(ev)
-    if not RUNNING then return end
-    poll()
+    if RUNNING then
+        poll()
+        return
+    end
+    local spot = playhead_spot()
+    local still = spot == last_spot
+    last_spot = spot
+    if not still then return end
+    local missing = not SOURCE_PATH and items.SourceLabel.Text
+    if pick_source(true) and missing and items.Status.Text == missing then
+        set_status("Ready.")
+    end
 end
 
 if have_timer and timer then
@@ -1600,31 +1743,12 @@ function win.On.Eternal2x.Close(ev)
     disp:ExitLoop()
 end
 
-function win.On.RefreshBtn.Clicked(ev)
-    if refresh_source() then
-        set_status("Ready.")
-        items.AnalysisLabel.Text = ANALYSIS_HINT
-    else
-        set_status(items.SourceLabel.Text)
-    end
-end
-
 -- Work on the clip under the playhead now, not the one there when the panel
 -- opened. If the playhead has moved off every clip, keep the last one.
-local function pick_source()
-    local previous, label, range, place = SOURCE_PATH, items.SourceLabel.Text, SOURCE_RANGE,
-                                          SOURCE_PLACE
-    local clip = SOURCE_ITEM
-    if refresh_source() then return true end
-    if previous then
-        SOURCE_PATH = previous
-        SOURCE_RANGE = range
-        SOURCE_PLACE = place
-        SOURCE_ITEM = clip
-        items.SourceLabel.Text = label
-        return true
-    end
-    set_status(items.SourceLabel.Text)
+-- With quiet, as the timer calls it, a gap says nothing.
+function pick_source(quiet)
+    if refresh_source(true) or SOURCE_PATH then return true end
+    if not quiet then set_status(items.SourceLabel.Text) end
     return false
 end
 
@@ -1647,8 +1771,9 @@ function win.On.AnalyseBtn.Clicked(ev)
     STAGE.name = nil
     set_busy(true)
     set_progress(0.01, "Starting")
-    set_status("Analysing. Resolve stays usable while this runs.")
+    set_status("Analysing...")
     items.AnalysisLabel.Text = "Analysing..."
+    items.AnalysisLabel.ToolTip = ""
     start_run(current_args(" --analyse"))
 end
 
@@ -1689,10 +1814,10 @@ function win.On.SmoothBtn.Clicked(ev)
     set_busy(true)
     set_progress(0.01, "Starting")
     if #marks > 0 then
-        set_status("Rendering from the " .. #marks .. " frames marked on the clip. Resolve stays usable.")
+        set_status("Rendering the " .. #marks .. " marked frames.")
         start_run(current_args(" --marks-file " .. shell_quote(MARKS_PATH)))
     else
-        set_status("No markers on the clip, so Upflow2x finds the drawings. Resolve stays usable.")
+        set_status("Rendering. No markers, so Upflow2x finds the drawings.")
         start_run(current_args(""))
     end
 end
@@ -1741,7 +1866,11 @@ function win.On.FolderBtn.Clicked(ev)
               shell_quote(LAST_OUTPUT:match("^(.+)/") or ".") .. " >/dev/null 2>&1 &"
     end
     print("[Upflow2x] " .. cmd)
-    execute(cmd)
+    if is_windows() then
+        start_script(REVEAL_SCRIPT, cmd)
+    else
+        execute(cmd)
+    end
 end
 
 function win.On.RefreshStatusBtn.Clicked(ev)
@@ -1750,6 +1879,8 @@ function win.On.RefreshStatusBtn.Clicked(ev)
     -- A run this panel started is polled even before Python reports, so one
     -- that never started is caught.
     if not read_status() and not RUNNING then
+        -- Without a timer, this is also how the card catches up.
+        pick_source(true)
         set_status("No run in progress.")
         return
     end
@@ -1758,10 +1889,12 @@ end
 
 function win.On.CancelBtn.Clicked(ev)
     if run_in_progress() then
+        -- The run sees this at its next frame, then reports Stopped.
+        local f = io.open(STOP_PATH, "w")
+        if f then f:close() end
         set_busy(true)
         start_polling()
-        set_status("It is still running, so Reset leaves it alone. If its window was closed, "
-            .. "Reset works once it has been quiet for 3 minutes.")
+        set_status(f and "Stopping..." or "Could not stop the run.")
         return
     end
     clear_status()
@@ -1778,11 +1911,6 @@ function win.On.ThresholdSlider.ValueChanged(ev)
     save_conf()
 end
 
-function win.On.HoldCombo.CurrentIndexChanged(ev)
-    BASE_HOLD = HOLDS[(items.HoldCombo.CurrentIndex or 0) + 1] or 0
-    save_conf()
-end
-
 function win.On.FormatCombo.CurrentIndexChanged(ev)
     FORMAT = FORMATS[(items.FormatCombo.CurrentIndex or 0) + 1] or "png"
     save_conf()
@@ -1796,17 +1924,6 @@ end
 function win.On.InterpCB.Clicked(ev)
     DO_INTERPOLATE = items.InterpCB.Checked
     save_conf()
-end
-
-function win.On.GrainCB.Clicked(ev)
-    GRAINY = items.GrainCB.Checked
-    save_conf()
-end
-
-function win.On.AutoUpdateCB.Clicked(ev)
-    AUTO_UPDATE = items.AutoUpdateCB.Checked
-    save_conf()
-    set_status(AUTO_UPDATE and "Auto-update enabled." or "Auto-update disabled.")
 end
 
 local function run_update(auto_mode)
@@ -1863,8 +1980,8 @@ if REPO_ROOT == "" then
     items.Meta.Text = "Plugin folder not configured."
     set_status("Run Installer/install_eternal2x.py, then restart Resolve.")
 else
-    items.Meta.Text = short_path(REPO_ROOT, 68)
     refresh_source()
+    start_polling()
     set_status(SOURCE_PATH and "Ready." or items.SourceLabel.Text)
     local waiting = read_status()
     if run_in_progress() then

@@ -364,11 +364,12 @@ def _grainy_twos(tmp_path):
     return src
 
 
-def test_a_grainy_clip_suggests_grainy_source(monkeypatch, tmp_path):
+def test_a_grainy_clip_says_to_mark_the_drawings(monkeypatch, tmp_path):
     status = tmp_path / "status.json"
     run(monkeypatch, ["--video", str(_grainy_twos(tmp_path)), "--analyse",
                       "--status-file", str(status)])
-    assert "Grainy source" in json.loads(status.read_text())["message"]
+    message = json.loads(status.read_text())["message"]
+    assert "grain" in message and "Mark the drawings with M" in message
 
 
 def test_grainy_source_finds_the_drawings(monkeypatch, tmp_path):
@@ -400,6 +401,144 @@ def test_status_file_records_failures(install_fake_resolve, monkeypatch, tmp_pat
     assert payload["done"] is True
     assert payload["ok"] is False
     assert "missing" in payload["message"]
+
+
+def test_the_panels_stop_ends_the_run(make_anime, monkeypatch, tmp_path):
+    """The run has no window to close, so the panel's Stop file ends it."""
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    stop = tmp_path / "status.stop"
+    stop.write_text("")
+    out = tmp_path / "o"
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(out)]) == 1
+
+    payload = json.loads(status.read_text())
+    assert payload["done"] is True
+    assert payload["ok"] is False
+    assert payload["message"] == "Stopped."
+    assert not stop.exists(), "a Stop left behind would end the next run too"
+    assert not list(out.rglob("*.mp4")) and not list(out.rglob("*.png"))
+
+
+def test_a_stop_while_the_last_frames_are_written_still_counts(make_anime, monkeypatch,
+                                                                tmp_path):
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    real = smooth.render_plan
+
+    def render_then_stop(*a, **k):
+        result = real(*a, **k)
+        status.with_suffix(".stop").write_text("")
+        return result
+
+    monkeypatch.setattr(smooth, "render_plan", render_then_stop)
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "o")]) == 1
+    payload = json.loads(status.read_text())
+    assert payload["ok"] is False and payload["message"] == "Stopped."
+    assert payload["import_path"] == "", "a stopped render must not be imported"
+
+
+def _stop_after_render(monkeypatch, status):
+    real = smooth.render_plan
+
+    def render_then_stop(*a, **k):
+        result = real(*a, **k)
+        status.with_suffix(".stop").write_text("")
+        return result
+
+    monkeypatch.setattr(smooth, "render_plan", render_then_stop)
+
+
+def test_a_late_stop_is_not_reported_as_a_success_in_json(make_anime, monkeypatch, capsys,
+                                                          tmp_path):
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    _stop_after_render(monkeypatch, status)
+    assert run(monkeypatch, ["--video", str(src), "--json", "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "o")]) == 1
+    payload = json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+    assert payload["ok"] is False and payload["error"] == "Stopped."
+    assert "import_path" not in payload
+
+
+def test_a_late_stop_puts_nothing_into_resolve(anime_in_resolve, monkeypatch, tmp_path):
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    status = tmp_path / "status.json"
+    _stop_after_render(monkeypatch, status)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")]) == 1
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    assert not pool.imported, "a stopped render was imported"
+
+
+def test_a_stop_while_the_final_status_waits_for_the_panel_still_counts(make_anime,
+                                                                         monkeypatch,
+                                                                         tmp_path):
+    """The panel holds the status file open as it polls, so the last write can
+    wait a while, and Stop can come in that time."""
+    src = make_anime(holds=(2,) * 8)
+    status = tmp_path / "status.json"
+    real_replace = Path.replace
+    held = []
+
+    def held_once(self, target):
+        if Path(target) == status and not held and '"ok": true' in self.read_text():
+            held.append(True)
+            status.with_suffix(".stop").write_text("")
+            raise PermissionError("the panel has it open")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", held_once)
+    assert run(monkeypatch, ["--video", str(src), "--status-file", str(status),
+                             "--output-dir", str(tmp_path / "o")]) == 1
+    payload = json.loads(status.read_text())
+    assert payload["ok"] is False and payload["message"] == "Stopped."
+
+
+def test_a_stop_once_the_import_has_begun_lets_it_finish(anime_in_resolve, monkeypatch,
+                                                         tmp_path):
+    """Stopped halfway into Resolve, the clip would be imported but not placed."""
+    _src, resolve, timeline, _items, _ = anime_in_resolve()
+    status = tmp_path / "status.json"
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    real_import = pool.ImportMedia
+
+    def import_then_stop(*a, **k):
+        status.with_suffix(".stop").write_text("")
+        return real_import(*a, **k)
+
+    monkeypatch.setattr(pool, "ImportMedia", import_then_stop)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")]) == 0
+    assert pool.imported, "nothing was imported"
+    assert json.loads(status.read_text())["ok"] is True
+    assert not status.with_suffix(".stop").exists(), "it would stop the next run"
+
+
+def test_a_stop_during_an_import_resolve_refuses_does_not_stop_the_next_run(
+        anime_in_resolve, monkeypatch, tmp_path):
+    """The render is finished either way, so the Stop came too late to use."""
+    _src, resolve, _tl, _items, _ = anime_in_resolve()
+    status = tmp_path / "status.json"
+    pool = resolve.GetProjectManager().GetCurrentProject().GetMediaPool()
+    pool.import_mode = "none"
+    real_import = pool.ImportMedia
+
+    def import_then_stop(*a, **k):
+        status.with_suffix(".stop").write_text("")
+        return real_import(*a, **k)
+
+    monkeypatch.setattr(pool, "ImportMedia", import_then_stop)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "out")]) == 0
+    assert not status.with_suffix(".stop").exists(), "it would stop the next run"
+
+    monkeypatch.setattr(pool, "ImportMedia", real_import)
+    assert run(monkeypatch, ["--status-file", str(status),
+                             "--output-dir", str(tmp_path / "again")]) == 0
+    assert json.loads(status.read_text())["message"] != "Stopped."
 
 
 def test_status_file_never_contains_a_partial_write(make_anime, monkeypatch, tmp_path):

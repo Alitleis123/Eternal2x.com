@@ -131,7 +131,7 @@ python3 Installer/gui_installer.py</code></div>
                 <ol class="os-steps">
                     <li>
                         <h3>Put the playhead on a clip</h3>
-                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. Analyse and Render pick up the clip under the playhead when you press them, and if the playhead sits in a gap, they keep the last clip. <strong>Use Clip at Playhead</strong> shows you which one that is.</p>
+                        <p>Move the playhead over the clip on your timeline, then open the panel. It shows the clip it picked up and the part of the file the clip uses. It follows the playhead as you move it, and if the playhead sits in a gap, it keeps the last clip.</p>
                     </li>
                     <li>
                         <h3>Analyse</h3>
@@ -144,8 +144,8 @@ python3 Installer/gui_installer.py</code></div>
                     </li>
                     <li>
                         <h3>Render</h3>
-                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Interpolate on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
-                        <p>When it's done, the result is imported, at 2x if Upscale 2x is ticked, and placed above the original, starting on the same frame, at the same frame rate with three frames for every one of the clip's, up to the last marker if it has any, so it plays at a third of the speed, ready to time remap. With Interpolate off it keeps the clip's length. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
+                        <p>Press <strong>Render</strong>. It keeps every marked frame as drawn and draws every frame between two markers fresh, so a part you leave unmarked never counts. With Interpolate on, the render ends on the last marker, so mark the last drawing you want in it. A clip with no markers at all is rendered from the drawings Upflow2x finds on its own. The render runs in the background with a progress bar and the time left, and Resolve stays usable. <strong>Stop</strong> ends it early. The first time, it installs the AI runtime and downloads the model, about 50 MB, so the bar can sit at 0% for a minute or two.</p>
+                        <p>When it's done, the result is imported, at 2x if Upscaling is on, and placed above the original, starting on the same frame, at the same frame rate with three frames for every one of the clip's, up to the last marker if it has any, so it plays at a third of the speed, ready to time remap. With Interpolate off it keeps the clip's length. It goes on the lowest track that is empty there, or a new track named Upflow2x, so none of your clips get covered. Only the part of the file you trimmed to is rebuilt.</p>
                         <p>If another timeline is open when it finishes, or the original was deleted or retrimmed, it goes at the end of the timeline instead. An image sequence whose frame rate Resolve won't set stays in the media pool, since it would play at the wrong speed.</p>
                     </li>
                     <li>
@@ -157,15 +157,12 @@ python3 Installer/gui_installer.py</code></div>
 
             <section id="settings" aria-labelledby="settings-title">
                 <h2 id="settings-title">Settings</h2>
-                <p class="sub">The panel remembers them between sessions.</p>
+                <p class="sub">They are all on the panel, and it remembers them between sessions. Rest the pointer on one to see what it does.</p>
                 <dl class="settings">
                     <div><dt>Threshold</dt><dd>How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you've marked.</dd></div>
-                    <div><dt>Hold pattern</dt><dd>Leave it on <code>Auto detect</code>. Force <code>On 2s</code> or <code>On 3s</code> if a clip has unusual timing that trips the detector.</dd></div>
                     <div><dt>Output</dt><dd><code>Image sequence</code> is lossless and imports most reliably. <code>MP4</code> is one compact file but lossy. <code>MKV</code> is one lossless file. All three are 8-bit RGB, so transparency and 10-bit colour aren't kept. MP4 and MKV need an even width and height.</dd></div>
-                    <div><dt>Upscale 2x</dt><dd>Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model comes with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. As an image sequence, a 4K frame is about 6 to 7 MB.</dd></div>
-                    <div><dt>Interpolate</dt><dd>On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, which is about ten times slower. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off, every drawing comes back on its own frame with nothing new drawn, at the clip's length. Use that with Upscale 2x to only upscale.</dd></div>
-                    <div><dt>Grainy source</dt><dd>For film grain, which makes every held frame differ a little so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when the differences look like grain.</dd></div>
-                    <div><dt>Auto-update</dt><dd>Checks for a new version each time the panel opens. Untick it to check only when you press Check for Updates.</dd></div>
+                    <div><dt>Upscaling</dt><dd>Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model comes with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. As an image sequence, a 4K frame is about 6 to 7 MB.</dd></div>
+                    <div><dt>Interpolate</dt><dd>On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, which is about ten times slower. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off, every drawing comes back on its own frame with nothing new drawn, at the clip's length. With Upscaling on, that only upscales.</dd></div>
                 </dl>
             </section>
 
@@ -205,14 +202,14 @@ python3 Installer/gui_installer.py</code></div>
                     <details>
                         <summary>"No clip under the playhead"</summary>
                         <div class="answer">
-                            <p>Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, then press Use Clip at Playhead.</p>
+                            <p>Upflow2x works on the clip under the playhead, since Resolve doesn't tell scripts which clip is selected. Move the playhead over the clip, and the panel picks it up.</p>
                         </div>
                     </details>
                     <details>
                         <summary>"No duplicate frames. This clip is already on 1s."</summary>
                         <div class="answer">
                             <p>Analyse found nothing to do. The clip has no repeated frames, so there are no held drawings to recover. It's live action or animation already drawn on 1s. Render still slows it to a third of the speed, with two new frames drawn between every pair. With Interpolate off it stops instead, since there is nothing to draw.</p>
-                            <p>If the panel says instead that every frame differs but the differences look like grain, tick Grainy source and analyse again. Leave it off for clean animation.</p>
+                            <p>If the panel says instead that every frame differs but the differences look like grain, mark the drawings with M, then press Render.</p>
                         </div>
                     </details>
                     <details>
@@ -227,13 +224,13 @@ python3 Installer/gui_installer.py</code></div>
                         <summary>Rendering is slow on long clips</summary>
                         <div class="answer">
                             <p>Every frame is read and every missing in-between drawn, so the time grows with the length of the clip on your timeline. Only the part of the file the clip uses is rebuilt, so trimming helps, though a cut late in a long file is still decoded up to its start first, shown as Seeking.</p>
-                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscale 2x on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. With Grainy source on, Analyse reads the clip twice. Resolve stays usable the whole time.</p>
+                            <p>On Windows the in-betweens are drawn on the GPU, and ten seconds of 1080p takes roughly ten to twenty seconds. On the CPU it's about ten times slower. Upscaling on the GPU adds about 0.3 to 0.5 s a frame, much of it writing the 4K images. Resolve stays usable the whole time.</p>
                         </div>
                     </details>
                     <details>
                         <summary>Progress seems stuck</summary>
                         <div class="answer">
-                            <p>Press Refresh Progress. If the panel says Python hasn't started, or that there's been no progress for a few minutes, the run stopped, often because its window was closed. Press Reset and run it again.</p>
+                            <p>Press Refresh Progress. If the panel says Python hasn't started, or that there's been no progress for a few minutes, the run stopped. Press Reset and run it again.</p>
                             <p>For anything else, email us the panel's status text and the <code>.eternal2x_last_run.log</code> file from the plugin folder.</p>
                         </div>
                     </details>
@@ -269,7 +266,7 @@ python3 Installer/gui_installer.py</code></div>
                 <h2 id="updates-title">Updates</h2>
                 <p class="sub">They arrive on their own.</p>
                 <h3>Automatically</h3>
-                <p>Each time the panel opens, Upflow2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it. Untick Auto-update to stop this.</p>
+                <p>Each time the panel opens, Upflow2x checks for a new version. If there is one, it downloads it, checks it against its checksum and applies it. Restart Resolve afterwards to load it.</p>
                 <h3>When you ask</h3>
                 <p>Press <strong>Check for Updates</strong> at any time. If nothing changed, it says so and leaves your install alone. A failed check never stops you working, and an update that can't finish is undone, so you keep the version you had.</p>
                 <div class="callout">

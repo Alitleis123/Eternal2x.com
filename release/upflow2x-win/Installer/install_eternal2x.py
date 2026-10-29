@@ -95,8 +95,6 @@ PANEL_DEFAULTS = {
     "output_dir": "",
     "upscale": "true",
     "interpolate": "true",
-    "grain": "false",
-    "base_hold": "0",
     "threshold": "5",
     "format": "png",
 }

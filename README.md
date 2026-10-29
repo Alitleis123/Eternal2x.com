@@ -35,7 +35,7 @@ holds for three times its length.
 
 - Finds duplicated frames and works out whether the clip is on 1s, 2s or 3s.
   It counts a change of colour, a slow fade or a slow pan as motion rather
-  than a hold. With **Grainy source** ticked, it sees through film grain.
+  than a hold.
 - Draws the in-between frames that were never drawn with the RIFE network,
   run on your own machine, on the GPU on Windows wherever DirectML loads. Moving characters stay in
   one piece.
@@ -109,7 +109,8 @@ move it.
 
 1. Move the playhead over a clip on your timeline. Resolve does not tell
    scripts which clip is selected, so Upflow2x works on the clip under the
-   playhead, read again each time you press a button.
+   playhead. The panel follows the playhead, and in a gap it keeps the
+   last clip.
 2. Open **Workspace → Scripts → Upflow2x**.
 3. Click **Analyse**. It reads the clip, tells you what it found, for
    example `1438 frames, 719 unique drawings (719 held, 50%). Animated on 2s.`,
@@ -134,7 +135,7 @@ rendered from the drawings Upflow2x finds on its own.
 ![The Upflow2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://upflow2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
-left, so Resolve stays usable while it works. When it finishes, the rebuilt
+left, so Resolve stays usable while it works. **Stop** ends it early. When it finishes, the rebuilt
 clip is imported and placed on the track above the original, starting on the
 same frame. With Interpolate on it runs three times as long, up to the last
 marker if the clip has any. It goes on the lowest
@@ -161,14 +162,15 @@ Whole file when Resolve does not report one.
 
 ### Settings
 
+They are all on the panel, and it remembers them between sessions. Rest the
+pointer on one to see what it does.
+
 | Setting | What it does |
 |---|---|
 | **Threshold** | How big a change Analyse counts as a new drawing, 1 to 9. Lower catches small moves, like only a mouth or a slow drift. Higher counts only big ones, like the whole shot moving. It does nothing to frames you have marked. |
-| **Hold pattern** | Leave on `Auto detect`. Force `On 2s` or `On 3s` if a clip has unusual timing that trips the detector. |
 | **Output** | `Image sequence` is lossless and the most reliable to import. `MP4` is a single compact file but lossy. `MKV` is a lossless single file. All three are 8-bit RGB: transparency and 10-bit colour in the source are not kept. MP4 and MKV need an even width and height. |
-| **Upscale 2x** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
-| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off skips the in-betweens, so every drawing comes back on its original frame and the render keeps the clip's length. Use it with Upscale 2x to upscale only. |
-| **Grainy source** | For film grain, which makes every held frame differ a little, so they all look new. It raises the threshold above the clip's own grain. Leave it off for clean animation, where it can merge fine real changes. Analyse suggests it when every frame differs in a way that looks like grain. |
+| **Upscaling** | Draws every frame at 2x with Real-ESRGAN's anime video model, on the GPU through DirectML, about 0.14 s a 1080p frame on a Radeon. The model ships with Upflow2x. Without a GPU, on a Mac for one, Resolve's Super Scale is applied to the imported clip instead. Either way it only shows on a timeline bigger than the clip, such as 3840x2160 for 1080p footage. A 2x render has four times the pixels. As an image sequence, a 4K frame of anime is about 6 to 7 MB, four to five times its 1080p size. |
+| **Interpolate** | On, the RIFE network draws every missing in-between. On Windows it runs on the GPU through DirectML, about 0.13 s an in-between at 2K on a Radeon, and falls back to the CPU, about ten times slower. If its Python already has ONNX Runtime without DirectML, that one is used, on the CPU. Its first run installs ONNX Runtime and downloads the model, about 50 MB, so it needs a connection once; without one, every drawing is kept as drawn and the panel says why. On, the render is three times longer, so it takes three times as long to render and an image sequence takes three times the disk. Off skips the in-betweens, so every drawing comes back on its original frame and the render keeps the clip's length. With Upscaling on, that only upscales. |
 
 Settings are remembered between sessions.
 
@@ -220,9 +222,9 @@ afterwards.
 | Resolve says you need Studio | Since 19.1 the free edition blocks script panels. Upflow2x needs Studio. |
 | Clicking Upflow2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
-| "No clip under the playhead" | Move the playhead over the clip, then press **Use Clip at Playhead**. |
+| "No clip under the playhead" | Move the playhead over the clip, and the panel picks it up. |
 | "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
-| "Every frame differs, but the differences look like grain" | Tick **Grainy source** and analyse again. Heavy grain on a clip with long holds can still hide the duplicates. |
+| "Every frame differs, but the differences look like grain" | Mark the drawings with M, then press **Render**. From the command line, `--grain` raises the threshold above the grain. |
 | "...has a variable frame rate" | Render the clip to a constant frame rate first, from Resolve or with ffmpeg, as the message says. |
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` usually avoids this. |

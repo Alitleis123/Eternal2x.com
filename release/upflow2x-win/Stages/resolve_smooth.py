@@ -29,6 +29,10 @@ else:
     IMPORT_ERROR = None
 
 
+class Stopped(BaseException):
+    """The panel's Stop. Not an Exception, so nothing on the way out catches it."""
+
+
 class StatusFile:
     """Progress the panel can poll while the render runs in the background.
 
@@ -40,6 +44,11 @@ class StatusFile:
 
     def __init__(self, path: Optional[str]) -> None:
         self.path = Path(path) if path else None
+        # The panel's Stop creates this, and the run ends at its next frame.
+        self.stop_path = self.path.with_suffix(".stop") if self.path else None
+        # Set once the result is going into Resolve. Stopped halfway there it
+        # would be imported but not placed, so from then on the run finishes.
+        self.committed = False
         self.stage = ""
         self.fraction = 0.0
         self.message = ""
@@ -96,6 +105,11 @@ class StatusFile:
         # but losing the final write leaves the panel waiting forever.
         attempts = 100 if done else 3
         for attempt in range(attempts):
+            # A Stop pressed after the last frame, while the writes finished
+            # or while this waits for the panel to let go of the file, still
+            # counts: the run reports Stopped, not a result to import.
+            if done and ok:
+                self.check_stop()
             try:
                 temp.replace(self.path)
                 return
@@ -103,7 +117,13 @@ class StatusFile:
                 if attempt + 1 < attempts:
                     time.sleep(0.02)
 
+    def check_stop(self) -> None:
+        """Raise Stopped if the panel's Stop was pressed in time."""
+        if not self.committed and self.stop_path is not None and self.stop_path.exists():
+            raise Stopped()
+
     def progress(self, stage: str, fraction: float) -> None:
+        self.check_stop()
         self.stage = stage
         self.fraction = fraction
         self.write()
@@ -397,10 +417,10 @@ def _run(args, summary: dict) -> int:
             summary["skipped"] = "no duplicate frames"
             if plan.grain_suspected:
                 why = ("Every frame differs, but by about the same small amount, as grain "
-                       "makes held frames differ. If the clip is grainy, turn on Grainy "
-                       "source (--grain) and try again.")
-                short = ("Every frame differs, but the differences look like grain. If the "
-                         "clip is grainy, turn on Grainy source and analyse again.")
+                       "makes held frames differ. If the clip is grainy, mark the drawings "
+                       "with M, or run with --grain and try again.")
+                short = ("Every frame differs, but the differences look like grain. Mark the "
+                         "drawings with M, then press Render.")
         print(f"Nothing to do. {why}")
         summary["ok"] = True
         status.write(done=True, ok=True, message=short)
@@ -424,6 +444,8 @@ def _run(args, summary: dict) -> int:
         summary["error"] = str(exc)
         status.write(done=True, ok=False, message=str(exc))
         return 2
+    # Stopped while the last frames were written: nothing goes into Resolve.
+    status.check_stop()
 
     print(f"Wrote {result.frames_written} frames at {result.fps:.3f} fps.")
     if result.note:
@@ -456,41 +478,50 @@ def _run(args, summary: dict) -> int:
         status.write(done=True, ok=True, message=_finished(plan, result))
         return 0
 
-    media_item, imported = bridge.import_media(project, result.output,
-                                               frame_count=result.frames_written,
-                                               fps=result.fps)
-    print(("Imported: " if imported else "Import failed: ") + imported.detail)
-    summary["import"] = {"ok": imported.ok, "detail": imported.detail}
+    # Too late to stop from here, or the clip would be left half placed.
+    status.committed = True
+    try:
+        media_item, imported = bridge.import_media(project, result.output,
+                                                   frame_count=result.frames_written,
+                                                   fps=result.fps)
+        print(("Imported: " if imported else "Import failed: ") + imported.detail)
+        summary["import"] = {"ok": imported.ok, "detail": imported.detail}
 
-    if not imported:
-        print(f"The render is fine and is waiting at: {result.output}")
-        print("Drag it into your media pool to finish.")
+        if not imported:
+            print(f"The render is fine and is waiting at: {result.output}")
+            print("Drag it into your media pool to finish.")
+            summary["ok"] = True
+            status.write(done=True, ok=True,
+                         message=f"Rendered, but Resolve would not import it. "
+                                 f"Drag in {result.output.name} to finish.")
+            return 0
+
+        if result.upscaled:
+            summary["upscale"] = {"ok": True, "detail": "Drawn 2x by Real-ESRGAN."}
+        elif cfg.upscale_factor > 1:
+            studio = bridge.is_studio(resolve)
+            if studio is False:
+                print("Skipping upscale: Super Scale needs DaVinci Resolve Studio.")
+                summary["upscale"] = {"ok": False, "detail": "not Studio"}
+            else:
+                scaled = bridge.set_super_scale(media_item, cfg.upscale_factor)
+                print(("Upscale: " if scaled else "Upscale not applied: ") + scaled.detail)
+                summary["upscale"] = {"ok": scaled.ok, "detail": scaled.detail}
+
+        appended = bridge.append_to_timeline(project, media_item)
+        print(("Timeline: " if appended else "Timeline not updated: ") + appended.detail)
+        summary["append"] = {"ok": appended.ok, "detail": appended.detail}
+
         summary["ok"] = True
-        status.write(done=True, ok=True,
-                     message=f"Rendered, but Resolve would not import it. "
-                             f"Drag in {result.output.name} to finish.")
+        print("Done.")
+        status.write(done=True, ok=True, message=_finished(plan, result))
         return 0
-
-    if result.upscaled:
-        summary["upscale"] = {"ok": True, "detail": "Drawn 2x by Real-ESRGAN."}
-    elif cfg.upscale_factor > 1:
-        studio = bridge.is_studio(resolve)
-        if studio is False:
-            print("Skipping upscale: Super Scale needs DaVinci Resolve Studio.")
-            summary["upscale"] = {"ok": False, "detail": "not Studio"}
-        else:
-            scaled = bridge.set_super_scale(media_item, cfg.upscale_factor)
-            print(("Upscale: " if scaled else "Upscale not applied: ") + scaled.detail)
-            summary["upscale"] = {"ok": scaled.ok, "detail": scaled.detail}
-
-    appended = bridge.append_to_timeline(project, media_item)
-    print(("Timeline: " if appended else "Timeline not updated: ") + appended.detail)
-    summary["append"] = {"ok": appended.ok, "detail": appended.detail}
-
-    summary["ok"] = True
-    print("Done.")
-    status.write(done=True, ok=True, message=_finished(plan, result))
-    return 0
+    finally:
+        # However this ends, a Stop that came now was not used, and would end
+        # the next run.
+        if status.stop_path is not None:
+            with contextlib.suppress(OSError):
+                status.stop_path.unlink()
 
 
 def _run_reporting(args, summary: dict) -> int:
@@ -505,6 +536,17 @@ def _run_reporting(args, summary: dict) -> int:
         return 3
     try:
         return _run(args, summary)
+    except Stopped:
+        print("Stopped.")
+        # It may have stopped after the summary already said it worked.
+        summary["ok"] = False
+        summary.pop("import_path", None)
+        summary["error"] = "Stopped."
+        status = StatusFile(args.status_file)
+        with contextlib.suppress(OSError):
+            status.stop_path.unlink()
+        status.write(done=True, ok=False, message="Stopped.")
+        return 1
     except Exception as exc:
         traceback.print_exc()
         message = f"Upflow2x hit an unexpected error: {exc}"

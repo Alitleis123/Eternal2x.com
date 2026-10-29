@@ -63,6 +63,76 @@ def test_many_times_in_one_call(texture):
     assert all(f.dtype == np.uint8 for f in out)
 
 
+class SnappingRife(StandInRife):
+    """Like the network: asked for a frame close to a drawing, it hands the
+    drawing back. Counts what it is asked for."""
+
+    def __init__(self):
+        super().__init__()
+        self.asked = []
+
+    def _run(self, a, b, t):
+        self.asked.append(t)
+        if t <= 0.1:
+            return a.copy()
+        if t >= 0.9:
+            return b.copy()
+        return super()._run(a, b, t)
+
+
+SLOWED = [k / 24 for k in range(1, 24)]  # a gap of 8 frames, slowed 3 times
+
+
+def test_no_in_between_is_a_copy_of_a_drawing(texture):
+    """Each drawing was held for a few extra frames, a pause at every one."""
+    b = shifted(texture, 12)
+    for t, frame in zip(SLOWED, SnappingRife().interpolate_pair(texture, b, SLOWED)):
+        assert not np.array_equal(frame, texture), f"t={t:.3f} is the first drawing"
+        assert not np.array_equal(frame, b), f"t={t:.3f} is the second drawing"
+
+
+def test_the_network_is_only_asked_for_the_middle_of_a_pair(texture):
+    rife = SnappingRife()
+    rife.interpolate_pair(texture, shifted(texture, 12), SLOWED)
+    assert all(0.25 <= t <= 0.75 for t in rife.asked), rife.asked
+
+
+def test_a_long_gap_never_asks_the_network_for_its_ends(texture):
+    """600 frames between two markers, slowed 3 times, start at t = 1/1800. A
+    blend that close to a drawing rounds to it, so what counts is that the
+    network is never asked for its snapping ends."""
+    times = [1 / 1800, 2 / 1800, 1 - 2 / 1800, 1 - 1 / 1800]
+    rife = SnappingRife()
+    rife.interpolate_pair(texture, shifted(texture, 12), times)
+    assert all(0.25 <= t <= 0.75 for t in rife.asked), rife.asked
+
+
+def test_rounding_in_the_time_map_is_not_drawn(texture):
+    """7.000000000000001 in the time map is drawing 7, not an in-between."""
+    b = shifted(texture, 12)
+    rife = SnappingRife()
+    first, last = rife.interpolate_pair(texture, b, [8.881784197001252e-16, 1 - 1e-12])
+    assert np.array_equal(first, texture) and np.array_equal(last, b)
+    assert rife.asked == []
+
+
+def test_a_pair_asked_for_a_few_at_a_time_draws_its_halfway_frames_once(texture):
+    b = shifted(texture, 12)
+    rife = SnappingRife()
+    for at in range(0, len(SLOWED), 8):
+        rife.interpolate_pair(texture, b, SLOWED[at:at + 8])
+    # 0.5, 0.25, 0.125, 0.75 and 0.875, then one frame for each time.
+    assert len(rife.asked) == len(SLOWED) + 5
+
+
+def test_in_betweens_near_a_drawing_still_move_evenly(texture):
+    """With a plain blend standing in, each frame should sit where it was asked."""
+    b = shifted(texture, 12)
+    for t, frame in zip(SLOWED, SnappingRife().interpolate_pair(texture, b, SLOWED)):
+        want = cv2.addWeighted(texture, 1.0 - t, b, t, 0)
+        assert np.abs(frame.astype(int) - want).max() <= 2, f"t={t:.3f}"
+
+
 # --------------------------------------------------------------------------
 # stills and cuts: the failure modes that matter
 # --------------------------------------------------------------------------
