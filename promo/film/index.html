@@ -3,31 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
-    <title>Eternal2x</title>
+    <title>Upflow2x</title>
     <script src="assets/js/gsap.min.js"></script>
     <style>
-      @font-face { font-family: "Inter"; font-weight: 400; src: url("assets/fonts/inter-latin-400-normal.woff2") format("woff2"); }
-      @font-face { font-family: "Inter"; font-weight: 500; src: url("assets/fonts/inter-latin-500-normal.woff2") format("woff2"); }
-      @font-face { font-family: "Inter"; font-weight: 600; src: url("assets/fonts/inter-latin-600-normal.woff2") format("woff2"); }
-      @font-face { font-family: "Inter"; font-weight: 800; src: url("assets/fonts/inter-latin-800-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Geist"; font-weight: 400; src: url("assets/fonts/geist-latin-400-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Geist"; font-weight: 500; src: url("assets/fonts/geist-latin-500-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Geist"; font-weight: 600; src: url("assets/fonts/geist-latin-600-normal.woff2") format("woff2"); }
+      @font-face { font-family: "Geist Mono"; font-weight: 500; src: url("assets/fonts/geist-mono-latin-500-normal.woff2") format("woff2"); }
+      /* The site's colours, from docs/css/site.css. */
       :root {
-        --bg: #080808;
-        --card: #0e0e0e;
-        --border: #1a1a1a;
-        --text: #e0e0e0;
-        --dim: #8c8c8c;
-        --accent: #7c6fef;
+        --bg: #101013;
+        --panel: #191a1e;
+        --line: rgba(255, 255, 255, 0.08);
+        --text: #f4f4f1;
+        --soft: #b9b9b6;
+        --mute: #999996;
+        --amber: #f2a93b;
+        --on-amber: #17171a;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
       html, body { width: 1920px; height: 1080px; overflow: hidden; background: var(--bg); }
       #root {
         position: relative; width: 100%; height: 100%; overflow: hidden;
-        background: var(--bg); color: var(--text); font-family: "Inter", sans-serif;
+        background: var(--bg); color: var(--text); font-family: "Geist", sans-serif;
       }
       .scene { position: absolute; inset: 0; }
       .fill { position: absolute; inset: 0; }
 
-      /* scene A: the walk, as drawn and from Eternal2x */
+      /* The walk: as drawn, and from Upflow2x */
       .footage { position: absolute; left: 0; top: 138px; width: 1920px; height: 804px; }
       .footage video { position: absolute; left: 0; top: 0; width: 1920px; height: 804px; display: block; }
       #divider { position: absolute; left: 0; top: 138px; width: 4px; height: 804px; background: #fff; }
@@ -36,240 +39,312 @@
       .bar-bottom { position: absolute; left: 0; top: 942px; width: 1920px; height: 138px;
                     display: flex; align-items: center; justify-content: center; }
       .headline { position: absolute; font-size: 60px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
-      .subline { position: absolute; font-size: 30px; font-weight: 400; color: var(--dim); white-space: nowrap; }
-      .pill { position: absolute; top: 862px; height: 60px; padding: 0 24px; border-radius: 30px; line-height: 1;
+      .subline { position: absolute; font-size: 30px; font-weight: 400; color: var(--soft); white-space: nowrap; }
+      .pill { position: absolute; top: 862px; height: 60px; padding: 0 26px; border-radius: 30px; line-height: 1;
               display: flex; align-items: center; justify-content: center; white-space: nowrap; font-size: 28px; font-weight: 600;
-              background: rgba(8, 8, 8, 0.82); border: 1px solid #2a2a2a; }
-      #pillDrawn { left: 40px; width: 190px; }
-      #pillE2x { left: 1712px; width: 168px; color: #fff; background: var(--accent); border-color: var(--accent); }
+              background: rgba(16, 16, 19, 0.84); border: 1px solid rgba(255, 255, 255, 0.14); }
+      #pillDrawn { left: 40px; }
+      #pillUp { right: 40px; color: var(--on-amber); background: var(--amber); border-color: var(--amber); }
+      #pillFull { right: 40px; color: var(--on-amber); background: var(--amber); border-color: var(--amber); }
 
-      /* scene B: the panel */
-      #bgShot { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; object-fit: cover;
-                }
-      .panel { position: absolute; left: 250px; top: 84px; width: 578px; height: 913px;
-               border-radius: 10px; border: 1px solid #2a2a2a; box-shadow: 0 30px 80px rgba(0,0,0,0.7); }
-      #cursor { position: absolute; left: 0; top: 0; width: 40px; height: 40px; }
-      .ring { position: absolute; left: 0; top: 0; width: 80px; height: 80px; border-radius: 40px;
-              border: 3px solid var(--accent); }
-      .step { position: absolute; left: 990px; width: 840px; height: 170px; }
-      .step-num { position: absolute; left: 0; top: 4px; width: 56px; height: 56px; border-radius: 28px;
-                  background: var(--accent); color: #fff; font-size: 30px; font-weight: 800;
-                  display: flex; align-items: center; justify-content: center; }
-      .step-title { position: absolute; left: 84px; top: 0; font-size: 54px; font-weight: 600; letter-spacing: -0.02em; }
-      .step-sub { position: absolute; left: 84px; top: 82px; width: 760px; font-size: 32px; color: var(--dim); line-height: 1.35; }
+      /* The steps, on one screenshot of Resolve that the camera moves over */
+      #cam { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; }
+      #shot { position: absolute; left: 0; top: 24px; width: 1920px; height: 1032px; }
+      .cover { position: absolute; }
+      #panel { position: absolute; width: 396px; height: 545px; border-radius: 8px;
+               box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65); }
+      .box { position: absolute; border: 3px solid var(--amber); border-radius: 8px; }
+      .ring { position: absolute; left: 0; top: 0; width: 70px; height: 70px; border-radius: 35px;
+              border: 3px solid var(--amber); }
+      #cursor { position: absolute; left: 0; top: 0; width: 24px; height: 24px; }
+      #scrim { position: absolute; inset: 0; background: rgba(16, 16, 19, 0.8); }
+      /* Above the middle, where the site's play button sits on the poster. */
+      #chapter { position: absolute; left: 0; top: 250px; width: 1920px; text-align: center;
+                 font-size: 84px; font-weight: 600; letter-spacing: -0.03em; }
+      .card { position: absolute; left: 1220px; top: 330px; width: 640px; padding: 44px 46px 48px;
+              border-radius: 18px; background: rgba(25, 26, 30, 0.97); border: 1px solid var(--line);
+              box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55); }
+      .num { width: 52px; height: 52px; border-radius: 26px; background: var(--amber); color: var(--on-amber);
+             font-size: 28px; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+      .card h2 { margin-top: 26px; font-size: 54px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.1; }
+      .card p { margin-top: 18px; font-size: 30px; line-height: 1.38; color: var(--soft); }
+      .chip { display: inline-block; margin-top: 24px; padding: 12px 18px; border-radius: 10px;
+              background: #0c0c0f; border: 1px solid var(--line); font-family: "Geist Mono", monospace;
+              font-size: 28px; font-weight: 500; color: var(--text); white-space: nowrap; }
+      .chip b { color: var(--amber); font-weight: 500; }
+      .key { display: inline-flex; align-items: center; justify-content: center; width: 46px; height: 46px;
+             margin: 0 4px; border-radius: 9px; background: #0c0c0f; border: 1px solid rgba(255, 255, 255, 0.2);
+             border-bottom-width: 4px; font-family: "Geist Mono", monospace; font-size: 28px; font-weight: 500;
+             color: var(--text); vertical-align: -6px; }
 
-      /* scene C: the frames */
-      .tile { position: absolute; top: 330px; width: 230px; height: 412px; border-radius: 6px; overflow: hidden;
-              border: 2px solid var(--border); }
-      .tile img { position: absolute; left: 0; top: 0; width: 230px; height: 412px; }
-      .tile-ring { position: absolute; top: 330px; width: 230px; height: 412px; border-radius: 6px;
-                   border: 3px solid var(--accent); }
-      .tile-label { position: absolute; top: 764px; width: 230px; height: 44px; text-align: center;
-                    font-size: 30px; font-weight: 500; }
-      .frame-num { position: absolute; top: 280px; width: 230px; text-align: center; font-size: 28px; color: #9a9a9a; }
-
-      /* scene D: the timeline */
-      #shotWrap { position: absolute; left: 0; top: 23px; width: 1920px; height: 1034px; transform-origin: 693px 792px; }
-      #shotWrap img { position: absolute; left: 0; top: 0; width: 1920px; height: 1034px; }
-      #v2box { position: absolute; left: 514px; top: 766px; width: 359px; height: 52px;
-               border: 4px solid var(--accent); border-radius: 4px; }
-      #capCard { position: absolute; left: 1060px; top: 110px; width: 800px; height: 210px; padding: 36px 44px;
-                 border-radius: 12px; background: rgba(8, 8, 8, 0.94); border: 1px solid #2a2a2a; }
-      #capCard .t { font-size: 48px; font-weight: 600; letter-spacing: -0.02em; white-space: nowrap; }
-      #capCard .s { margin-top: 18px; font-size: 28px; color: var(--dim); white-space: nowrap; }
-
-      /* scene E: outro */
-      #logo { position: absolute; left: 735px; top: 130px; width: 450px; height: 300px; mix-blend-mode: screen; }
-      #brand { position: absolute; left: 0; top: 440px; width: 1920px; text-align: center;
-               font-size: 120px; font-weight: 800; letter-spacing: -0.03em; }
-      #tagline { position: absolute; left: 0; top: 610px; width: 1920px; text-align: center; font-size: 36px; color: var(--dim); }
-      #url { position: absolute; left: 0; top: 690px; width: 1920px; text-align: center; font-size: 40px;
-             font-weight: 600; color: var(--accent); }
-      #credits { position: absolute; left: 0; top: 986px; width: 1920px; text-align: center; font-size: 22px; color: var(--dim); }
+      /* End card */
+      #logo { position: absolute; left: 870px; top: 250px; width: 180px; height: 180px; }
+      #brand { position: absolute; left: 0; top: 462px; width: 1920px; text-align: center;
+               font-size: 112px; font-weight: 600; letter-spacing: -0.035em; }
+      #tagline { position: absolute; left: 0; top: 612px; width: 1920px; text-align: center; font-size: 36px; color: var(--soft); }
+      #url { position: absolute; left: 0; top: 684px; width: 1920px; text-align: center; font-size: 40px;
+             font-weight: 500; color: var(--amber); }
+      #credits { position: absolute; left: 0; top: 986px; width: 1920px; text-align: center; font-size: 22px; color: var(--mute); }
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="21.5" data-fps="24"
+    <div data-hf-id="hf-q0t4" id="root" data-composition-id="main" data-start="0" data-duration="34" data-fps="24"
          data-width="1920" data-height="1080">
 
-      <!-- Scene A: the same Hero walk, as drawn and from Eternal2x, both at half speed -->
-      <div id="aDrawn" class="footage">
-        <video id="walkDrawn" src="assets/media/walk_drawn.mp4" data-start="0" data-duration="6"
+      <!-- Scene A: the Hero walk as drawn, then Upflow2x's render on the right half. Both
+           play at the clip's own speed: the render is every third frame of the 3x result. -->
+      <div data-hf-id="hf-r2j4" id="aDrawn" class="footage">
+        <video data-hf-id="hf-aox9" id="walkDrawn" src="assets/media/walk_drawn.mp4" data-start="0" data-duration="4.708"
                data-track-index="0" muted playsinline></video>
       </div>
-      <div id="aE2x" class="footage">
-        <video id="walkE2x" src="assets/media/walk_e2x.mp4" data-start="0" data-duration="6"
+      <div data-hf-id="hf-unm3" id="aUp" class="footage">
+        <video data-hf-id="hf-yy6e" id="walkUp" src="assets/media/walk_upflow.mp4" data-start="0" data-duration="4.708"
                data-track-index="1" muted playsinline></video>
       </div>
-      <section id="sA" class="scene clip" data-start="0" data-duration="6" data-track-index="2">
-        <div id="aText" class="fill">
-          <div id="divider"></div>
-          <div class="bar-top">
-            <div id="hookLine" class="headline">Drawn on 2s.</div>
-            <div id="revealLine" class="headline">Eternal2x draws the frames in between.</div>
+      <section data-hf-id="hf-4oid" id="sA" class="scene clip" data-start="0" data-duration="4.9" data-track-index="2">
+        <div data-hf-id="hf-2tez" id="aText" class="fill">
+          <div data-hf-id="hf-5i2k" id="divider"></div>
+          <div data-hf-id="hf-fg0p" class="bar-top">
+            <div data-hf-id="hf-uiy1" id="hookLine" class="headline">Drawn on 4s.</div>
+            <div data-hf-id="hf-dlzp" id="revealLine" class="headline">Upflow2x draws the frames in between.</div>
           </div>
-          <div class="bar-bottom">
-            <div id="hookSub" class="subline">Every drawing is held for two frames.</div>
-            <div id="revealSub" class="subline">Shown at half speed.</div>
+          <div data-hf-id="hf-f1bl" class="bar-bottom">
+            <div data-hf-id="hf-tawm" id="hookSub" class="subline">Each drawing holds four frames.</div>
+            <div data-hf-id="hf-5xdx" id="revealSub" class="subline">Same clip, full speed.</div>
           </div>
-          <div id="pillDrawn" class="pill">As drawn</div>
-          <div id="pillE2x" class="pill">Eternal2x</div>
+          <div data-hf-id="hf-ghoa" id="pillDrawn" class="pill">As drawn</div>
+          <div data-hf-id="hf-odpi" id="pillUp" class="pill">Upflow2x</div>
         </div>
       </section>
 
-      <!-- Scene B: the real panel, from Resolve Studio 20.3.1 -->
-      <section id="sB" class="scene clip" data-start="5.6" data-duration="5.1" data-track-index="3">
-        <div id="bIn" class="fill">
-          <img id="bgShot" src="assets/img/resolve_bg.jpg" alt="" />
-          <img id="panelReady" class="panel" src="assets/img/panel_ready.png" alt="The Eternal2x panel" />
-          <img id="panelDone" class="panel" src="assets/img/panel_done.png" alt="The Eternal2x panel after a render" />
-          <div id="ringA" class="ring"></div>
-          <div id="ringS" class="ring"></div>
-          <div id="step1" class="step" style="top: 300px">
-            <div class="step-num">1</div>
-            <div class="step-title">Analyse</div>
-            <div class="step-sub">66 frames, 34 unique drawings. Animated on 2s.</div>
+      <!-- Scene B: the four steps, on a screenshot of DaVinci Resolve Studio 20.3.1 after
+           the render. Covers hide the markers and the render until their steps. -->
+      <section data-hf-id="hf-mpmo" id="sB" class="scene clip" data-start="4.4" data-duration="21.3" data-track-index="3">
+        <div data-hf-id="hf-uq6s" id="bIn" class="fill">
+          <div data-hf-id="hf-frxh" id="cam" data-layout-allow-overflow>
+            <img data-hf-id="hf-o0fx" id="shot" src="assets/img/resolve.jpg" alt="DaVinci Resolve with the Hero walk on V1 and the Upflow2x render on V2" />
+            <img data-hf-id="hf-lnzs" id="coverMarks" class="cover" src="assets/img/cover_markers.png" alt=""
+                 style="left: 260px; top: 840px; width: 304px; height: 17px" />
+            <img data-hf-id="hf-c7ee" id="coverV2" class="cover" src="assets/img/cover_v2.png" alt=""
+                 style="left: 668px; top: 790px; width: 900px; height: 52px" />
+            <div data-hf-id="hf-w0b2" id="boxWork" class="box" style="left: 679px; top: 26px; width: 81px; height: 28px"></div>
+            <div data-hf-id="hf-acye" id="boxV2" class="box" style="left: 668px; top: 789px; width: 900px; height: 54px"></div>
+            <img data-hf-id="hf-wfh3" id="panel" src="assets/img/panel.png" alt="The Upflow2x panel" />
+            <div data-hf-id="hf-4uaz" id="boxAnalyse" class="box"></div>
+            <div data-hf-id="hf-wifz" id="boxUp" class="box"></div>
+            <div data-hf-id="hf-9vs2" id="boxInterp" class="box"></div>
+            <div data-hf-id="hf-ssmq" id="ringWork" class="ring"></div>
+            <div id="ringRender" class="ring"></div>
+            <svg data-hf-id="hf-wsq9" id="cursor" viewBox="0 0 24 24">
+              <path data-hf-id="hf-pw23" d="M3 2 L3 19 L7.5 15 L10.5 22 L13.5 20.8 L10.6 14 L17 14 Z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>
+            </svg>
           </div>
-          <div id="step2" class="step" style="top: 560px">
-            <div class="step-num">2</div>
-            <div class="step-title">Smooth Clip</div>
-            <div class="step-sub">Rendered 34 drawings into 66 smooth frames.</div>
-          </div>
-          <svg id="cursor" viewBox="0 0 24 24">
-            <path d="M3 2 L3 19 L7.5 15 L10.5 22 L13.5 20.8 L10.6 14 L17 14 Z" fill="#fff" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </section>
+          <div data-hf-id="hf-wmg9" id="scrim"></div>
+          <div data-hf-id="hf-16mc" id="chapter">How to use it in Resolve</div>
 
-      <!-- Scene C: six frames of the walk; the held repeats become new in-betweens -->
-      <section id="sC" class="scene clip" data-start="10.3" data-duration="4.3" data-track-index="4">
-        <div id="cIn" class="fill">
-          <div class="bar-top" style="top: 66px">
-            <div id="cLine" class="headline">The repeats become new in-betweens.</div>
+          <div data-hf-id="hf-izo5" id="card1" class="card" data-layout-allow-overlap>
+            <div data-hf-id="hf-1dhv" class="num">1</div>
+            <h2 data-hf-id="hf-kvj2">Open Upflow2x</h2>
+            <div data-hf-id="hf-173e" id="c1chip" class="chip">Workspace <b data-hf-id="hf-niml">›</b> Scripts <b data-hf-id="hf-5mwx">›</b> Upflow2x</div>
+            <p data-hf-id="hf-8gcl" id="c1a">It works on the clip under the playhead.</p>
           </div>
-          <div class="bar-top" style="top: 196px; height: 50px">
-            <div id="cSub" class="subline">Drawn by the RIFE network, which keeps a moving character in one piece.</div>
+          <div data-hf-id="hf-qzra" id="card2" class="card" data-layout-allow-overlap>
+            <div data-hf-id="hf-0z6u" class="num">2</div>
+            <h2 data-hf-id="hf-zrxm">Mark the new drawings</h2>
+            <p data-hf-id="hf-afyn" id="c2a">Select the clip, then press <span data-hf-id="hf-ngp1" class="key">M</span> on each frame where a new drawing starts.</p>
+            <p data-hf-id="hf-5dm8" id="c2b">Or press Analyse, and it marks them for you.</p>
           </div>
-          <div class="frame-num" style="left: 220px">frame 1</div>
-          <div class="frame-num" style="left: 470px">frame 2</div>
-          <div class="frame-num" style="left: 720px">frame 3</div>
-          <div class="frame-num" style="left: 970px">frame 4</div>
-          <div class="frame-num" style="left: 1220px">frame 5</div>
-          <div class="frame-num" style="left: 1470px">frame 6</div>
-          <div class="tile" style="left: 220px"><img src="assets/img/out0.jpg" alt="" /></div>
-          <div class="tile" style="left: 470px"><img src="assets/img/src1.jpg" alt="" /><img id="new1" data-layout-allow-overflow src="assets/img/out1.jpg" alt="" /></div>
-          <div class="tile" style="left: 720px"><img src="assets/img/out2.jpg" alt="" /></div>
-          <div class="tile" style="left: 970px"><img src="assets/img/src3.jpg" alt="" /><img id="new3" data-layout-allow-overflow src="assets/img/out3.jpg" alt="" /></div>
-          <div class="tile" style="left: 1220px"><img src="assets/img/out4.jpg" alt="" /></div>
-          <div class="tile" style="left: 1470px"><img src="assets/img/src5.jpg" alt="" /><img id="new5" data-layout-allow-overflow src="assets/img/out5.jpg" alt="" /></div>
-          <div id="ring1" class="tile-ring" style="left: 470px"></div>
-          <div id="ring3" class="tile-ring" style="left: 970px"></div>
-          <div id="ring5" class="tile-ring" style="left: 1470px"></div>
-          <div class="tile-label" style="left: 220px">drawing 1</div>
-          <div id="held1" data-layout-allow-overlap class="tile-label" style="left: 470px; color: var(--dim)">held</div>
-          <div id="lab1" data-layout-allow-overlap class="tile-label" style="left: 470px; color: var(--accent); font-weight: 800">new</div>
-          <div class="tile-label" style="left: 720px">drawing 2</div>
-          <div id="held3" data-layout-allow-overlap class="tile-label" style="left: 970px; color: var(--dim)">held</div>
-          <div id="lab3" data-layout-allow-overlap class="tile-label" style="left: 970px; color: var(--accent); font-weight: 800">new</div>
-          <div class="tile-label" style="left: 1220px">drawing 3</div>
-          <div id="held5" data-layout-allow-overlap class="tile-label" style="left: 1470px; color: var(--dim)">held</div>
-          <div id="lab5" data-layout-allow-overlap class="tile-label" style="left: 1470px; color: var(--accent); font-weight: 800">new</div>
-        </div>
-      </section>
-
-      <!-- Scene D: the render on V2, above the original, in Resolve -->
-      <section id="sD" class="scene clip" data-start="14.2" data-duration="3.9" data-track-index="5">
-        <div id="dIn" class="fill">
-          <div id="shotWrap">
-            <img src="assets/img/resolve_result.png" alt="DaVinci Resolve with the Eternal2x render on V2 above the original" />
-            <div id="v2box"></div>
+          <div data-hf-id="hf-uxvb" id="card3" class="card" data-layout-allow-overlap>
+            <div data-hf-id="hf-0kvt" class="num">3</div>
+            <h2 data-hf-id="hf-bhx3">Pick, then Render</h2>
+            <p data-hf-id="hf-kq83" id="c3a">Upscaling draws every frame at 2x.</p>
+            <p data-hf-id="hf-36z6" id="c3b">Interpolate draws the in-betweens.</p>
+            <p data-hf-id="hf-u7gr" id="c3c">Resolve stays usable while it runs.</p>
           </div>
-          <div id="capCard">
-            <div class="t">Placed on V2 above the original.</div>
-            <div class="s">Same length and frame rate, with Super Scale 2x on.</div>
+          <div data-hf-id="hf-3iaa" id="card4" class="card" data-layout-allow-overlap style="top: 96px">
+            <div data-hf-id="hf-06ks" class="num">4</div>
+            <h2 data-hf-id="hf-1kpg">Then it lands on the track above</h2>
+            <p data-hf-id="hf-bj9o" id="c4a">At a third of the speed, ready to time remap.</p>
           </div>
         </div>
       </section>
 
-      <!-- Scene E: outro -->
-      <section id="sE" class="scene clip" data-start="17.7" data-duration="3.8" data-track-index="6">
-        <div id="eIn" class="fill">
-          <img id="logo" src="assets/img/logo_e2x.png" alt="Eternal2x" />
-          <div id="brand">Eternal2x</div>
-          <div id="tagline">Smooth 2x for hand-drawn animation, in DaVinci Resolve Studio.</div>
-          <div id="url">eternal2x.com</div>
-          <div id="credits" data-layout-ignore>Hero © Blender Foundation, CC BY 4.0. Sounds: Kenney, CC0.</div>
+      <!-- Scene C: the render again, full frame -->
+      <div data-hf-id="hf-vbm5" id="cUp" class="footage">
+        <video data-hf-id="hf-5meb" id="walkUp2" src="assets/media/walk_upflow.mp4" data-start="25.5" data-duration="4.708"
+               data-track-index="4" muted playsinline></video>
+      </div>
+      <section data-hf-id="hf-jbul" id="sC" class="scene clip" data-start="25.5" data-duration="4.8" data-track-index="5">
+        <div data-hf-id="hf-slht" id="cText" class="fill">
+          <div data-hf-id="hf-ewml" class="bar-top">
+            <div data-hf-id="hf-d34z" id="cLine" class="headline">Mark the drawings. Press Render.</div>
+          </div>
+          <div data-hf-id="hf-q1k5" class="bar-bottom">
+            <div data-hf-id="hf-ylyd" id="cSub" class="subline">Upflow2x's render of the walk, played at full speed.</div>
+          </div>
+          <div data-hf-id="hf-idca" id="pillFull" class="pill">Upflow2x</div>
         </div>
       </section>
 
-      <!-- Sound: desert wind, his footsteps, the two clicks and paper on the frame flips.
-           Built by promo/sound/make_sound.py. -->
-      <audio id="sound" src="assets/sound/eternal2x-sound.wav"
-             data-start="0" data-duration="21.5" data-track-index="10" data-volume="1"></audio>
+      <!-- Scene D: end card -->
+      <section data-hf-id="hf-d2kw" id="sD" class="scene clip" data-start="30.0" data-duration="4.0" data-track-index="6">
+        <div data-hf-id="hf-3g7a" id="dIn" class="fill">
+          <img data-hf-id="hf-0q75" id="logo" src="assets/img/icon.svg" alt="Upflow2x" />
+          <div data-hf-id="hf-8ntj" id="brand">Upflow2x</div>
+          <div data-hf-id="hf-mnsx" id="tagline">Upscaling and in-betweens for hand-drawn animation, in DaVinci Resolve Studio.</div>
+          <div data-hf-id="hf-krns" id="url">upflow2x.com</div>
+          <div data-hf-id="hf-gkel" id="credits" data-layout-ignore>Hero © Blender Foundation, CC BY 4.0. Sounds: Kenney, CC0.</div>
+        </div>
+      </section>
+
+      <!-- Sound: desert wind, his footsteps, the clicks, a key tap for each marker and the
+           render landing. Built by promo/sound/make_sound.py. -->
+      <audio data-hf-id="hf-t9ek" id="sound" src="assets/sound/upflow2x-sound.wav"
+             data-start="0" data-duration="34" data-track-index="10" data-volume="1"></audio>
     </div>
     <script>
       const tl = gsap.timeline({ paused: true });
       const fade = (sel, at, d = 0.4) => tl.fromTo(sel, { opacity: 0 }, { opacity: 1, duration: d, ease: "power2.out" }, at);
       const out = (sel, at, d = 0.4) => tl.to(sel, { opacity: 0, duration: d, ease: "power2.in" }, at);
+      const rise = (sel, at) => tl.fromTo(sel, { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, at);
 
-      // Scene A. Hook, then the wipe brings Eternal2x in on the right half.
-      tl.fromTo("#aE2x", { clipPath: "inset(0% 0% 0% 100%)" },
-                { clipPath: "inset(0% 0% 0% 50%)", duration: 0.7, ease: "power3.inOut" }, 2.6);
-      tl.fromTo("#divider", { x: 1920, opacity: 0 }, { x: 958, opacity: 1, duration: 0.7, ease: "power3.inOut" }, 2.6);
-      tl.fromTo("#hookLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 0.2);
-      fade("#hookSub", 0.5);
-      fade("#pillDrawn", 0.4);
-      out("#hookLine", 2.45, 0.3);
-      out("#hookSub", 2.45, 0.3);
-      tl.fromTo("#revealLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 2.9);
-      fade("#revealSub", 3.1);
-      fade("#pillE2x", 3.1);
-      // Crossfade into the panel, centred on the 5.8 s cue.  // beat-locked: 5.80s
-      out("#aDrawn", 5.6);
-      out("#aE2x", 5.6);
-      out("#aText", 5.6);
+      // Where things are in the screenshot. It sits 24 px down, so these are screenshot
+      // pixels plus 24 on y. The panel's own points are measured in panel.png.
+      const PANEL = { x: 92, y: 93, w: 396, h: 545 };
+      const IN_PANEL = {
+        analyse: [18, 127, 360, 38],
+        upscale: [18, 254, 176, 35],
+        interp: [202, 254, 176, 35],
+        render: [197, 356],
+      };
+      const WORKSPACE = [720, 40];
+      const MARKS = { left: 260, width: 304, start: 11.4, wipe: 2.6 };
+      const place = (sel, [x, y, w, h], pad = 4) => {
+        const el = document.querySelector(sel);
+        el.style.left = PANEL.x + x - pad + "px"; el.style.top = PANEL.y + y - pad + "px";
+        el.style.width = w + 2 * pad + "px"; el.style.height = h + 2 * pad + "px";
+      };
+      const panelEl = document.querySelector("#panel");
+      panelEl.style.left = PANEL.x + "px"; panelEl.style.top = PANEL.y + "px";
+      place("#boxAnalyse", IN_PANEL.analyse);
+      place("#boxUp", IN_PANEL.upscale);
+      place("#boxInterp", IN_PANEL.interp);
+      const renderAt = [PANEL.x + IN_PANEL.render[0], PANEL.y + IN_PANEL.render[1]];
 
-      // Scene B. The panel; a cursor presses Analyse, then Smooth Clip.
-      fade("#bIn", 5.6);
-      tl.fromTo("#cursor", { x: 1300, y: 900 }, { x: 676, y: 336, duration: 0.8, ease: "power2.inOut" }, 6.0);
-      tl.to("#cursor", { scale: 0.82, duration: 0.08, yoyo: true, repeat: 1 }, 6.9);
-      tl.fromTo("#ringA", { x: 636, y: 296, scale: 0.4, opacity: 0 }, { keyframes: [{ opacity: 0.9, duration: 0.01 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.out" }] }, 6.9);
-      tl.fromTo("#step1", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 7.0);
-      tl.to("#cursor", { x: 537, y: 666, duration: 0.6, ease: "power2.inOut" }, 7.8);
-      tl.to("#cursor", { scale: 0.82, duration: 0.08, yoyo: true, repeat: 1 }, 8.4);
-      tl.fromTo("#ringS", { x: 497, y: 626, scale: 0.4, opacity: 0 }, { keyframes: [{ opacity: 0.9, duration: 0.01 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.out" }] }, 8.4);
-      fade("#panelDone", 8.5, 0.5);
-      tl.fromTo("#step2", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 8.6);
-      out("#cursor", 9.4, 0.3);
-      out("#bIn", 10.3);
+      // The camera frames a point at scale s. With a card on the right, the point sits in
+      // the middle of what is left (x = 600). It never shows past the screenshot's edges.
+      const focus = (cx, cy, s, at, d = 1.0, fx = 600) => {
+        const x = Math.min(0, Math.max(1920 - 1920 * s, fx - s * cx));
+        const y = Math.min(-24 * s, Math.max(1080 - 1056 * s, 540 - s * cy));
+        tl.to("#cam", { x, y, scale: s, duration: d, ease: "power2.inOut" }, at);
+      };
+      // The pointer's tip is at (3, 2) in its 24 px box.
+      const pointTo = ([x, y], at, d = 0.7) =>
+        tl.to("#cursor", { x: x - 3, y: y - 2, duration: d, ease: "power2.inOut" }, at);
+      // Each click has its own ring, placed once, so seeking back and forth can't move it.
+      const click = (ring, [x, y], at) => {
+        gsap.set(ring, { x: x - 35, y: y - 35 });
+        tl.to("#cursor", { scale: 0.82, duration: 0.08, yoyo: true, repeat: 1 }, at);
+        tl.fromTo(ring, { scale: 0.4, opacity: 0 },
+                  { keyframes: [{ opacity: 0.95, duration: 0.01 }, { scale: 1.3, opacity: 0, duration: 0.5, ease: "power2.out" }] }, at);
+      };
 
-      // Scene C. The three held repeats become new in-betweens, one per beat.
-      fade("#cIn", 10.3);
-      tl.fromTo("#cLine", { y: 16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 10.5);
-      fade("#cSub", 10.8);
-      // beat-grid: flips at 11.60s, 12.13s, 12.65s (12.65 s is a strong cue)
-      [["1", 11.6], ["3", 12.13], ["5", 12.65]].forEach(([k, at]) => {
-        tl.fromTo("#new" + k, { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 0.35, ease: "power2.out" }, at);
-        tl.fromTo("#ring" + k, { opacity: 0 }, { opacity: 1, duration: 0.25 }, at);
-        out("#held" + k, at, 0.2);
-        tl.fromTo("#lab" + k, { opacity: 0, y: 8 }, { opacity: 1, y: 0, duration: 0.3, ease: "power2.out" }, at + 0.05);
-      });
-      out("#cIn", 14.2);
+      gsap.set("#cam", { transformOrigin: "0 0" });
+      gsap.set("#cursor", { transformOrigin: "3px 2px", opacity: 0 });
+      gsap.set([".box", ".ring", "#panel", ".card"], { opacity: 0 });
 
-      // Scene D. Close on the render above the original, then out to the whole window.
-      fade("#dIn", 14.2);
-      tl.fromTo("#shotWrap", { scale: 1.9 }, { scale: 1, duration: 2.2, ease: "power2.inOut" }, 14.5);
-      tl.fromTo("#v2box", { opacity: 0 }, { opacity: 1, duration: 0.3 }, 14.4);
-      tl.fromTo("#capCard", { y: -16, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: "power3.out" }, 14.7);
-      out("#dIn", 17.7);
+      // Scene A. Hook, then the wipe brings Upflow2x in on the right half.
+      tl.fromTo("#aUp", { clipPath: "inset(0% 0% 0% 100%)" },
+                { clipPath: "inset(0% 0% 0% 50%)", duration: 0.7, ease: "power3.inOut" }, 2.1);
+      tl.fromTo("#divider", { x: 1920, opacity: 0 }, { x: 958, opacity: 1, duration: 0.7, ease: "power3.inOut" }, 2.1);
+      rise("#hookLine", 0.15);
+      fade("#hookSub", 0.3);
+      fade("#pillDrawn", 0.3);
+      out("#hookLine", 1.95, 0.3);
+      out("#hookSub", 1.95, 0.3);
+      rise("#revealLine", 2.4);
+      fade("#revealSub", 2.55);
+      fade("#pillUp", 2.55);
+      out("#aDrawn", 4.3);
+      out("#aUp", 4.3);
+      out("#aText", 4.3);
 
-      // Scene E. Logo lands on the cue.  // beat-locked: 17.91s
-      fade("#eIn", 17.7);
-      tl.fromTo("#logo", { scale: 0.86, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 17.91);
-      tl.fromTo("#brand", { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 18.0);
-      fade("#tagline", 18.2, 0.4);
-      fade("#url", 18.4, 0.4);
-      fade("#credits", 18.6, 0.4);
+      // Scene B. The whole window, then the chapter line.
+      fade("#bIn", 4.4);
+      fade("#scrim", 4.6, 0.3);
+      rise("#chapter", 4.7);
+      out("#chapter", 6.3, 0.3);
+      out("#scrim", 6.4, 0.4);
+
+      // Step 1. Workspace, Scripts, Upflow2x, and the panel opens where Resolve put it.
+      focus(430, 380, 1.5, 6.6);
+      rise("#card1", 6.8);
+      tl.set("#cursor", { x: 980, y: 620 }, 7.0);
+      fade("#cursor", 7.0, 0.2);
+      pointTo(WORKSPACE, 7.2, 0.8);
+      click("#ringWork", WORKSPACE, 8.05);
+      fade("#boxWork", 8.05, 0.2);
+      fade("#c1chip", 8.15, 0.3);
+      tl.fromTo("#panel", { opacity: 0, scale: 0.96, transformOrigin: "50% 0%" },
+                { opacity: 1, scale: 1, duration: 0.35, ease: "power3.out" }, 8.6);
+      out("#boxWork", 8.9, 0.3);
+      pointTo([PANEL.x + 300, PANEL.y + PANEL.h + 70], 9.0, 0.8);
+      out("#cursor", 9.9, 0.2);
+      out("#card1", 10.2, 0.3);
+
+      // Step 2. Markers go on the new drawings, left to right, one tap of M each.
+      focus(420, 848, 2.1, 10.4, 0.9);
+      rise("#card2", 10.6);
+      tl.fromTo("#coverMarks", { clipPath: "inset(0% 0% 0% 0%)" },
+                { clipPath: "inset(0% 0% 0% 100%)", duration: MARKS.wipe, ease: "none" }, MARKS.start);
+      focus(PANEL.x + 198, PANEL.y + 230, 1.7, 14.2, 0.9);
+      fade("#c2b", 14.2, 0.4);
+      fade("#boxAnalyse", 14.9, 0.25);
+      out("#boxAnalyse", 16.4, 0.3);
+      out("#card2", 16.6, 0.3);
+
+      // Step 3. Both switches on, then Render.
+      focus(PANEL.x + 198, PANEL.y + PANEL.h / 2, 1.9, 16.8, 0.9);
+      rise("#card3", 17.0);
+      fade("#c3a", 17.8, 0.3);
+      fade("#boxUp", 17.8, 0.25);
+      fade("#c3b", 18.6, 0.3);
+      fade("#boxInterp", 18.6, 0.25);
+      tl.set("#cursor", { x: PANEL.x + 330, y: PANEL.y + 470 }, 19.2);
+      fade("#cursor", 19.2, 0.2);
+      pointTo(renderAt, 19.3, 0.6);
+      click("#ringRender", renderAt, 20.05);
+      out(["#boxUp", "#boxInterp"], 20.05, 0.3);
+      fade("#c3c", 20.3, 0.3);
+      // There is no capture of a render running, so the panel goes once the click
+      // is seen, and the camera waits on the timeline for the result.
+      out("#cursor", 20.6, 0.2);
+      out("#panel", 20.6, 0.4);
+      focus(1000, 830, 1.25, 20.8, 1.1, 960);
+      out("#card3", 22.1, 0.3);
+
+      // Step 4. The render lands on V2, over the original.
+      rise("#card4", 22.5);
+      tl.fromTo("#coverV2", { clipPath: "inset(0% 0% 0% 0%)" },
+                { clipPath: "inset(0% 0% 0% 100%)", duration: 0.7, ease: "power2.out" }, 23.3);
+      fade("#boxV2", 24.0, 0.25);
+      out("#bIn", 25.3);
+
+      // Scene C. The render, full frame, at full speed.
+      fade("#cUp", 25.5, 0.3);
+      rise("#cLine", 25.8);
+      fade("#cSub", 26.1);
+      fade("#pillFull", 26.1);
+      out("#cUp", 29.9, 0.3);
+      out("#cText", 29.9, 0.3);
+
+      // Scene D. End card.
+      fade("#dIn", 30.0);
+      tl.fromTo("#logo", { scale: 0.86, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.6, ease: "power3.out" }, 30.2);
+      rise("#brand", 30.3);
+      fade("#tagline", 30.5, 0.4);
+      fade("#url", 30.7, 0.4);
+      fade("#credits", 30.9, 0.4);
 
       window.__timelines["main"] = tl;
       tl.seek(0);
