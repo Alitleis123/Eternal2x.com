@@ -20,7 +20,7 @@ from typing import Optional, Tuple
 # able to tell the panel so, or the panel waits on a run that never started.
 try:
     from Pipeline import resolve_bridge as bridge
-    from Pipeline.config import Eternal2xConfig
+    from Pipeline.config import Upflow2xConfig
     from Pipeline.dedupe import plan_from_marks
     from Pipeline.render import SourceError, analyse_video, probe_video, render_plan
 except ImportError as exc:
@@ -276,8 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def config_from_args(args) -> Eternal2xConfig:
-    cfg = Eternal2xConfig()
+def config_from_args(args) -> Upflow2xConfig:
+    cfg = Upflow2xConfig()
     if args.threshold is not None:
         cfg.duplicate_threshold = args.threshold
     if args.base_hold:

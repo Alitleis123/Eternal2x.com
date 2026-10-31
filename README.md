@@ -87,7 +87,7 @@ install below, which does the same job.
 
 ```
 python -m pip install numpy opencv-python
-python Installer/install_eternal2x.py
+python Installer/install_upflow2x.py
 ```
 
 Use `python3` on macOS. The installer records the Python that runs it, so
@@ -220,7 +220,7 @@ afterwards.
 | Problem | Fix |
 |---|---|
 | Resolve says you need Studio | Since 19.1 the free edition blocks script panels. Upflow2x needs Studio. |
-| Clicking Upflow2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_eternal2x.py` from where it is now. |
+| Clicking Upflow2x does nothing, or "Plugin folder not configured" | The plugin folder moved after installing, and Workspace → Console says `UI script not found`. Re-run `python Installer/install_upflow2x.py` from where it is now. |
 | "Could not reach Resolve" | Open the panel from Workspace → Scripts, not from a terminal. |
 | "No clip under the playhead" | Move the playhead over the clip, and the panel picks it up. |
 | "No duplicate frames. This clip is already on 1s." | The clip has no duplicated frames. It is live action, or already on 1s. |
@@ -229,7 +229,7 @@ afterwards.
 | Progress seems stuck | Press **Refresh Progress**. If Python stopped, the panel says so and shows its last error. If a run was interrupted, press **Reset**. |
 | Resolve would not import the render | The render still finished. The panel prints where it is, so drag it into your media pool. Switching Output to `Image sequence` usually avoids this. |
 | Upscale skipped | Without a GPU the upscale is Super Scale, which needs Resolve Studio. |
-| Something else | Email the panel's status text and the `.eternal2x_last_run.log` file from the plugin folder. |
+| Something else | Email the panel's status text and the `.upflow2x_last_run.log` file from the plugin folder. |
 
 ## Development
 

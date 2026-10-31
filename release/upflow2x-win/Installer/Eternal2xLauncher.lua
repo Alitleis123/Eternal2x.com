@@ -50,7 +50,7 @@ local function file_exists(path)
     return true
 end
 
--- Where Installer/install_eternal2x.py puts this script, for when Resolve
+-- Where Installer/install_upflow2x.py puts this script, for when Resolve
 -- reports the running script under a path map such as Scripts: that io.open
 -- cannot follow.
 local function installed_dir()

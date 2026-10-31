@@ -392,7 +392,7 @@ def test_the_command_the_panel_builds_actually_runs(lua, direct):
     cmd = H.last_command()
 
     subprocess.run(cmd, shell=True, capture_output=True, text=True)
-    log = (direct / ".eternal2x_last_run.log")
+    log = (direct / ".upflow2x_last_run.log")
     assert log.exists(), "the panel's command produced no log"
     text = log.read_text()
     for missing in ("No module named 'Stages'", "No module named 'Pipeline'"):
@@ -604,7 +604,7 @@ def test_the_background_command_redirects_into_the_log(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
     cmd = H.last_command()
-    assert ".eternal2x_last_run.log" in cmd
+    assert ".upflow2x_last_run.log" in cmd
     assert "2>&1" in cmd
 
 
@@ -1408,7 +1408,7 @@ def test_a_throwing_api_does_not_stop_the_panel_opening(lua, direct):
 def test_a_run_that_died_without_a_status_is_reported(lua, direct):
     H = load(lua, ui_script(direct))
     H.click("SmoothBtn")
-    (direct / ".eternal2x_last_run.log").write_text(
+    (direct / ".upflow2x_last_run.log").write_text(
         "Traceback (most recent call last):\nModuleNotFoundError: No module named 'cv2'\n")
     (direct / ".eternal2x_exit").write_text("1\n")
     H.click("RefreshStatusBtn")
@@ -1544,7 +1544,7 @@ def test_opening_the_panel_keeps_the_render_log(lua, direct):
     H = load(lua, ui_script(direct))
     cmd = H.last_command()
     assert "Stages.resolve_update" in cmd
-    assert ".eternal2x_update.log" in cmd and ".eternal2x_last_run.log" not in cmd
+    assert ".eternal2x_update.log" in cmd and ".upflow2x_last_run.log" not in cmd
 
 
 @pytest.mark.parametrize("old", [

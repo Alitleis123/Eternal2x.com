@@ -11,7 +11,7 @@ import numpy as np
 import pytest
 
 from Pipeline import upscaler
-from Pipeline.config import Eternal2xConfig
+from Pipeline.config import Upflow2xConfig
 from Pipeline.render import SourceError, analyse_video, render_plan
 from Pipeline.rife import AIUnavailable
 from tests.drawings import cel
@@ -176,8 +176,8 @@ def twice_as_big(monkeypatch):
 
 def _render(make_anime, tmp_path, **cfg):
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
-    return render_plan(src, plan, tmp_path / "out", Eternal2xConfig(**cfg), sequence=True)
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
+    return render_plan(src, plan, tmp_path / "out", Upflow2xConfig(**cfg), sequence=True)
 
 
 def test_the_render_comes_out_at_2x(twice_as_big, make_anime, tmp_path, read_frames):
@@ -191,7 +191,7 @@ def test_the_network_and_lanczos_never_both_scale(twice_as_big, monkeypatch, mak
                                                 tmp_path):
     """Lanczos is on by default, and on top of the network it made 4x. Where
     the network cannot run, the render stays 1x for Super Scale."""
-    assert Eternal2xConfig().upscale_enabled
+    assert Upflow2xConfig().upscale_enabled
     assert _render(make_anime, tmp_path / "a", network_upscale=True).width == 400
 
     def no_gpu(progress=None):
@@ -223,8 +223,8 @@ def test_the_progress_says_when_the_cpu_takes_over(monkeypatch, make_anime, tmp_
     monkeypatch.setattr(upscaler, "Upscaler", GivesOut)
     stages = []
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
-    render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
+    render_plan(src, plan, tmp_path / "out", Upflow2xConfig(network_upscale=True,
                 upscale_enabled=False), sequence=True,
                 progress=lambda stage, fraction: stages.append(stage))
     assert stages[:3] == ["Interpolating and upscaling"] * 3
@@ -235,8 +235,8 @@ def test_an_upscale_alone_says_upscaling(monkeypatch, make_anime, tmp_path):
     monkeypatch.setattr(upscaler, "Upscaler", _TwiceAsBig)
     stages = []
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
-    render_plan(src, plan, tmp_path / "out", Eternal2xConfig(network_upscale=True,
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
+    render_plan(src, plan, tmp_path / "out", Upflow2xConfig(network_upscale=True,
                 upscale_enabled=False, interpolate_enabled=False), sequence=True,
                 progress=lambda stage, fraction: stages.append(stage))
     assert set(stages) == {"Upscaling"}

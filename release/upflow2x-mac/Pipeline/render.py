@@ -26,7 +26,7 @@ from typing import Callable, Deque, Iterator, List, Optional, Sequence, Tuple
 import cv2
 import numpy as np
 
-from Pipeline.config import Eternal2xConfig
+from Pipeline.config import Upflow2xConfig
 from Pipeline.dedupe import DedupePlan, noise_threshold, plan_from_scores, output_time_map
 from Pipeline.interpolate import frames_are_a_cut, is_a_cut, shot_change, upscale
 
@@ -246,7 +246,7 @@ def _require_constant_rate(cap: _ClipReader, fps: float, path: Path) -> None:
 
 def frame_difference_scores(
     path: Path,
-    cfg: Eternal2xConfig,
+    cfg: Upflow2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
@@ -303,7 +303,7 @@ def frame_difference_scores(
 
 def analyse_video(
     path: Path,
-    cfg: Eternal2xConfig,
+    cfg: Upflow2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
     frames: FrameRange = None,
@@ -407,7 +407,7 @@ def render_plan(
     source: Path,
     plan: DedupePlan,
     output: Path,
-    cfg: Eternal2xConfig,
+    cfg: Upflow2xConfig,
     *,
     progress: Optional[ProgressFn] = None,
     sequence: Optional[bool] = None,

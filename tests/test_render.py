@@ -5,12 +5,12 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from Pipeline.config import Eternal2xConfig
+from Pipeline.config import Upflow2xConfig
 from Pipeline.render import SourceError, analyse_video, render_plan
 
 
-def cfg(**kw) -> Eternal2xConfig:
-    c = Eternal2xConfig(upscale_enabled=False)
+def cfg(**kw) -> Upflow2xConfig:
+    c = Upflow2xConfig(upscale_enabled=False)
     for k, v in kw.items():
         setattr(c, k, v)
     return c
@@ -633,8 +633,8 @@ def test_a_long_gap_between_markers_is_drawn_a_few_frames_at_a_time(monkeypatch,
 
     monkeypatch.setattr(rife.Rife, "interpolate_pair", spy)
     src = make_anime(holds=(30, 2))
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
     marked = plan_from_marks([0, 30], plan.source_frames, plan.fps)
-    result = render_plan(src, marked, tmp_path / "out", Eternal2xConfig(), sequence=True)
+    result = render_plan(src, marked, tmp_path / "out", Upflow2xConfig(), sequence=True)
     assert result.frames_written == 32
     assert max(asked) <= BATCH and sum(asked) >= 29
