@@ -132,7 +132,7 @@ Markers on the timeline's ruler do not, so beat markers are safe there. You can
 skip Analyse and mark the frames yourself. A clip with no markers at all is
 rendered from the drawings Upflow2x finds on its own.
 
-![The Upflow2x panel in DaVinci Resolve Studio after a render. The rebuilt clip sits on V2, lined up above the original on V1.](https://upflow2x.com/assets/demo/resolve.jpg)
+![The Upflow2x panel open in DaVinci Resolve Studio, with Hero walk.mp4 on V1 and its render on V2.](https://upflow2x.com/assets/demo/resolve.jpg)
 
 The render runs in the background and the panel shows progress and the time
 left, so Resolve stays usable while it works. **Stop** ends it early. When it finishes, the rebuilt
