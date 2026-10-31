@@ -1,11 +1,11 @@
 {
-  "version": "0.4.0",
+  "version": "0.5.0",
   "macos": {
-    "url": "https://github.com/sidebandstudio/Eternal2x.com/releases/download/v0.4.0/eternal2x-mac.zip",
-    "sha256": "55f1eaf316bee084ee76556d3b91aab961309e4879b0d6bf9d3d05a240179065"
+    "url": "https://github.com/sidebandstudio/Upflow2x/releases/download/v0.5.0/upflow2x-mac.zip",
+    "sha256": "8c981de096b9638aec83855a6a0957cc49bdc739d80c7d868275529e999cd8f2"
   },
   "windows": {
-    "url": "https://github.com/sidebandstudio/Eternal2x.com/releases/download/v0.4.0/eternal2x-win.zip",
-    "sha256": "bcbf832eb967c72b3aadcb418d5a477b788c22213d009f8f853626274bad371c"
+    "url": "https://github.com/sidebandstudio/Upflow2x/releases/download/v0.5.0/upflow2x-win.zip",
+    "sha256": "ad2a458879ad972d2026ba4c65978ae9b3aed1b759ba5d769bf2031fc8b92440"
   }
 }
