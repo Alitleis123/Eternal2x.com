@@ -251,7 +251,7 @@ the environment variables from Blackmagic's scripting README, then run
 To cut a release, bump `VERSION` and push a matching tag:
 
 ```
-git tag v0.3.1 && git push origin v0.3.1
+git tag v0.5.0 && git push origin v0.5.0
 ```
 
 The release workflow builds the archives, publishes them, checks the published
