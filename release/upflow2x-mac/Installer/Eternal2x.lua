@@ -207,7 +207,7 @@ local STOP_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_s
 -- The frames marked on the clip go to the stage in this file. A long clip's
 -- list does not fit on a Windows command line.
 local MARKS_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_marks.txt")
-local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_last_run.log")
+local LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".upflow2x_last_run.log")
 -- The update check runs each time the panel opens, so it logs apart from
 -- renders. Sharing a log wiped the render's, the one worth sending in.
 local UPDATE_LOG_PATH = join_path(REPO_ROOT ~= "" and REPO_ROOT or root, ".eternal2x_update.log")
@@ -323,7 +323,7 @@ local function stem_of(path)
 end
 
 -- What a render is called: its folder for a sequence of frames, its file
--- name for one file. nil for a path Eternal2x does not write.
+-- name for one file. nil for a path Upflow2x does not write.
 local function render_name(path)
     return path:match("([^/\\]+)[/\\]frame_[%d%[%]%-]+%.png$")
         or path:match("([^/\\]+)%.mkv$") or path:match("([^/\\]+)%.mp4$")
@@ -459,7 +459,7 @@ local function find_clip_path()
     if not timeline then return nil, "No timeline is open." end
 
     -- Resolve's API has no timeline selection. GetCurrentVideoItem is the clip
-    -- under the playhead, so that is the one Eternal2x works on.
+    -- under the playhead, so that is the one Upflow2x works on.
     local item = nil
     if timeline.GetCurrentVideoItem then
         item = timeline:GetCurrentVideoItem()
@@ -1130,7 +1130,7 @@ local function refresh_source(keep)
     return true
 end
 
--- Eternal2x's own markers carry this, so analysing again replaces them and
+-- Upflow2x's own markers carry this, so analysing again replaces them and
 -- leaves every marker the editor placed.
 local MARK_TAG = "eternal2x"
 
@@ -1978,7 +1978,7 @@ win:Show()
 
 if REPO_ROOT == "" then
     items.Meta.Text = "Plugin folder not configured."
-    set_status("Run Installer/install_eternal2x.py, then restart Resolve.")
+    set_status("Run Installer/install_upflow2x.py, then restart Resolve.")
 else
     refresh_source()
     start_polling()

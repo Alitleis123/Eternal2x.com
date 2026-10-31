@@ -20,7 +20,7 @@ import pytest
 pytest.importorskip("lupa", reason="lupa provides the Lua runtime")
 from lupa import LuaRuntime  # noqa: E402
 
-from Installer.install_eternal2x import write_config  # noqa: E402
+from Installer.install_upflow2x import write_config  # noqa: E402
 from tests import fake_rife  # noqa: E402
 
 HARNESS = Path(__file__).resolve().parent / "lua_harness.lua"
@@ -94,7 +94,7 @@ def finish(H, timeout: float = FINISH_TIMEOUT):
         time.sleep(0.05)
 
     # Say what actually happened, rather than just that time ran out.
-    log = root / ".eternal2x_last_run.log"
+    log = root / ".upflow2x_last_run.log"
     detail = log.read_text(errors="replace")[-2000:] if log.exists() else "(no log written)"
     raise AssertionError(
         f"the render did not finish within {timeout}s.\n"

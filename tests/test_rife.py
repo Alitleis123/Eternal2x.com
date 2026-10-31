@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from Pipeline import rife
-from Pipeline.config import Eternal2xConfig
+from Pipeline.config import Upflow2xConfig
 from Pipeline.interpolate import (ALWAYS_A_CUT, PALETTE_CUT, UNRELATED_DISAGREEMENT,
                                   frames_are_a_cut, frames_are_unrelated, is_a_cut,
                                   palette_change, shot_change)
@@ -358,9 +358,9 @@ def test_a_frame_of_another_size_never_reaches_the_file(monkeypatch, make_anime,
 
     monkeypatch.setattr(rife, "Rife", Shrinking)
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
     with pytest.raises(SourceError, match="came out"):
-        render_plan(src, plan, tmp_path / "out.mkv", Eternal2xConfig())
+        render_plan(src, plan, tmp_path / "out.mkv", Upflow2xConfig())
 
 
 def test_the_runtime_is_installed_into_this_python(monkeypatch):
@@ -464,14 +464,14 @@ class _FakeRife:
 def test_the_network_draws_the_in_betweens(monkeypatch, make_anime, tmp_path, read_frames):
     monkeypatch.setattr(rife, "Rife", _FakeRife)
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
 
     _FakeRife.made = 0
-    out = read_frames(render_plan(src, plan, tmp_path / "ai.avi", Eternal2xConfig()).output)
+    out = read_frames(render_plan(src, plan, tmp_path / "ai.avi", Upflow2xConfig()).output)
     assert _FakeRife.made == 1, "the model should load once per render"
     assert any(np.all(f == 77) for f in out), "the network's in-betweens were not used"
 
-    render_plan(src, plan, tmp_path / "off.avi", Eternal2xConfig(interpolate_enabled=False))
+    render_plan(src, plan, tmp_path / "off.avi", Upflow2xConfig(interpolate_enabled=False))
     assert _FakeRife.made == 1, "Interpolate off still loaded the network"
 
 
@@ -484,9 +484,9 @@ def test_without_the_network_the_drawings_are_kept_as_drawn(monkeypatch, make_an
 
     monkeypatch.setattr(rife, "Rife", broken)
     src = make_anime(holds=(2,) * 6)
-    plan, _, _ = analyse_video(src, Eternal2xConfig())
-    smooth = render_plan(src, plan, tmp_path / "out", Eternal2xConfig(), sequence=True)
-    plain = render_plan(src, plan, tmp_path / "plain", Eternal2xConfig(interpolate_enabled=False),
+    plan, _, _ = analyse_video(src, Upflow2xConfig())
+    smooth = render_plan(src, plan, tmp_path / "out", Upflow2xConfig(), sequence=True)
+    plain = render_plan(src, plan, tmp_path / "plain", Upflow2xConfig(interpolate_enabled=False),
                         sequence=True)
     assert "kept as drawn" in smooth.note and "offline" in smooth.note
     assert all(np.array_equal(x, y) for x, y in zip(read_frames(smooth.output),

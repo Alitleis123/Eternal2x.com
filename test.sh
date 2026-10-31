@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run the whole Eternal2x test suite without opening DaVinci Resolve.
+# Run the whole Upflow2x test suite without opening DaVinci Resolve.
 #
 #   ./test.sh              run everything
 #   ./test.sh -k markers   run tests matching an expression

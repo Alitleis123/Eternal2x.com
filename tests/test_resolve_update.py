@@ -62,7 +62,7 @@ def make_payload_zip(www: Path, name: str, version: str, extra_files=None) -> st
         zf.writestr("eternal2x/README.md", f"# Eternal2x {version}\n")
         zf.writestr("eternal2x/Pipeline/config.py", "# updated config\n")
         zf.writestr("eternal2x/Stages/motion_score.py", "# updated stage\n")
-        zf.writestr("eternal2x/Installer/install_eternal2x.py", "# updated installer\n")
+        zf.writestr("eternal2x/Installer/install_upflow2x.py", "# updated installer\n")
         for rel, content in (extra_files or {}).items():
             zf.writestr(f"eternal2x/{rel}", content)
     return hashlib.sha256(zip_path.read_bytes()).hexdigest()
@@ -364,7 +364,7 @@ def test_an_update_that_fails_partway_says_nothing_changed(http_server, repo, mo
     assert "nothing was changed" in capsys.readouterr().out.strip().splitlines()[-1]
     assert repo.joinpath("VERSION").read_text().strip() == "0.2.0"
     assert repo.joinpath("README.md").read_text() == "# old\n"
-    assert not repo.joinpath("Installer/install_eternal2x.py").exists()
+    assert not repo.joinpath("Installer/install_upflow2x.py").exists()
 
 
 def test_missing_platform_package_is_reported(http_server, repo, capsys):

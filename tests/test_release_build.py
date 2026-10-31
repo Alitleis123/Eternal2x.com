@@ -120,7 +120,7 @@ def test_the_payload_carries_what_the_plugin_needs(built):
                    "Pipeline/dedupe.py", "Pipeline/interpolate.py",
                    "Pipeline/render.py", "Pipeline/resolve_bridge.py",
                    "Installer/Eternal2x.lua", "Installer/Eternal2xLauncher.lua",
-                   "Installer/install_eternal2x.py", "VERSION", "requirements.txt"):
+                   "Installer/install_upflow2x.py", "VERSION", "requirements.txt"):
         assert (folder / needed).exists(), f"the release is missing {needed}"
 
 

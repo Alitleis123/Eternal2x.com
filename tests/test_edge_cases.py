@@ -8,13 +8,13 @@ import subprocess
 import numpy as np
 import pytest
 
-from Pipeline.config import Eternal2xConfig
+from Pipeline.config import Upflow2xConfig
 from Pipeline.dedupe import plan_from_scores
 from Pipeline.render import SourceError, analyse_video, render_plan
 
 
 def cfg(**kw):
-    c = Eternal2xConfig(upscale_enabled=False)
+    c = Upflow2xConfig(upscale_enabled=False)
     for k, v in kw.items():
         setattr(c, k, v)
     return c

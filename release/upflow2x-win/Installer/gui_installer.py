@@ -28,11 +28,11 @@ from tkinter import ttk
 # drift. This runs standalone and from a PyInstaller bundle, where the repo
 # root is not on the path, so fall back to importing the sibling module.
 try:
-    from Installer.install_eternal2x import (
+    from Installer.install_upflow2x import (
         _resolve_scripts_dir, remove_old_install, write_config)
 except ImportError:  # pragma: no cover - depends on how this was launched
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from install_eternal2x import (
+    from install_upflow2x import (
         _resolve_scripts_dir, remove_old_install, write_config)
 
 # ---------------------------------------------------------------------------

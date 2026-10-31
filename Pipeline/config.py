@@ -6,7 +6,7 @@ from dataclasses import dataclass, asdict
 
 
 @dataclass
-class Eternal2xConfig:
+class Upflow2xConfig:
     """Everything the pipeline needs, in one place.
 
     Defaults are tuned for hand-drawn animation, which is typically drawn on
@@ -53,10 +53,10 @@ class Eternal2xConfig:
         return asdict(self)
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Eternal2xConfig":
+    def from_dict(cls, data: dict) -> "Upflow2xConfig":
         known = {f for f in cls.__dataclass_fields__}
         return cls(**{k: v for k, v in (data or {}).items() if k in known})
 
 
 # Kept so older saved settings and the previous CLI flags still load.
-UpscaleConfig = Eternal2xConfig
+UpscaleConfig = Upflow2xConfig

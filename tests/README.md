@@ -1,4 +1,4 @@
-# Eternal2x test suite
+# Upflow2x test suite
 
 Runs the whole plugin without opening DaVinci Resolve.
 

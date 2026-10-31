@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from Installer import install_eternal2x as inst
+from Installer import install_upflow2x as inst
 
 
 def read_conf(path: Path) -> dict:
@@ -265,7 +265,7 @@ def test_falls_back_to_a_system_interpreter(tmp_path, monkeypatch):
 @pytest.mark.parametrize("platform", ["win32", "darwin"])
 def test_without_a_venv_the_python_running_the_installer_is_used(tmp_path, monkeypatch,
                                                                   platform):
-    """`py Installer\\install_eternal2x.py` must not record whatever `python` is
+    """`py Installer\\install_upflow2x.py` must not record whatever `python` is
     on PATH, which on Windows can be the Microsoft Store stub."""
     monkeypatch.setattr(sys, "platform", platform)
     monkeypatch.setattr(sys, "executable", "/chosen/python3")
@@ -336,7 +336,7 @@ def test_reinstall_is_idempotent(fake_home, monkeypatch):
     assert conf_path.read_text() == first
 
 
-@pytest.mark.parametrize("module", ["Installer.install_eternal2x",
+@pytest.mark.parametrize("module", ["Installer.install_upflow2x",
                                     "Installer.gui_installer"])
 def test_a_reinstall_keeps_the_users_settings(tmp_path, module):
     """The panel saves its settings in this file. A reinstall that put back
